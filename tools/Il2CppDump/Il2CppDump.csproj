@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Dumps native disassembly + Cpp2IL ISIL for selected IL2CPP types, using the
+       Cpp2IL build that ships with the game's BepInEx install (supports its metadata version). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <Nullable>enable</Nullable>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <GameDir Condition="'$(GameDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Supermarket Simulator</GameDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="$(GameDir)/BepInEx/core/*.dll" Exclude="$(GameDir)/BepInEx/core/BepInEx*.dll;$(GameDir)/BepInEx/core/Il2CppInterop*.dll;$(GameDir)/BepInEx/core/0Harmony.dll;$(GameDir)/BepInEx/core/MonoMod*.dll;$(GameDir)/BepInEx/core/dobby.dll" />
+  </ItemGroup>
+</Project>
