@@ -38,8 +38,8 @@
 
   <!-- After build, drop the plugin into the game's plugins folder. Disable with -p:Deploy=false -->
   <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(Deploy)' != 'false'">
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExDir)/plugins/RestockerDoubleCarry" />
-    <Message Importance="high" Text="Deployed $(TargetFileName) -> $(BepInExDir)/plugins/RestockerDoubleCarry" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExDir)/plugins" />
+    <Message Importance="high" Text="Deployed $(TargetFileName) -> $(BepInExDir)/plugins" />
   </Target>
 
 </Project>

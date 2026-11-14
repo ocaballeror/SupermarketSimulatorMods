@@ -33,7 +33,7 @@ The work list lives in [`TODO`](TODO): the bugs and improvements requested, and 
 
 1. Install BepInEx 6 bleeding edge, **IL2CPP** flavour, for your platform into the game folder. On Linux/Proton, use the Windows build and set the Steam launch option `WINEDLLOVERRIDES="winhttp=n,b" %command%`.
 2. Start the game once so BepInEx generates its interop assemblies. The first start takes a while.
-3. Copy the mod's folder (for example `SupermarketFixes/`, containing the `.dll`) into `BepInEx/plugins/`.
+3. Copy the mod's `.dll` (for example `SupermarketFixes.dll`) straight into `BepInEx/plugins/`, not into a subfolder.
 4. Settings are created on first launch in `BepInEx/config/<mod guid>.cfg`. They can also be edited in-game with BepInExConfigManager.
 
 **Multiplayer note:** some fixes only work if the machine where the bug happens runs the mod. For example, Bug #1 happens on the guest. Each mod's description says whether the host, the guest, or both need it.
@@ -44,7 +44,7 @@ Requires the .NET SDK (any recent version; projects target `net6.0`) and the gam
 
 ```sh
 cd SupermarketFixes
-dotnet build -c Release                  # builds and copies the dll into the game's BepInEx/plugins/SupermarketFixes/
+dotnet build -c Release                  # builds and copies the dll into the game's BepInEx/plugins/ (the folder root, no subfolder)
 dotnet build -c Release -p:Deploy=false  # build only
 dotnet build -c Release -p:GameDir="/path/to/Supermarket Simulator"   # non-default install
 ```

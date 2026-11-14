@@ -149,6 +149,7 @@ Typical loop for a task:
 ## 6. Plugin conventions
 
 - A `[General] Enabled` config entry is the master switch. Its `SettingChanged` handler unpatches or re-applies everything live, so the mod can be hot-unloaded from a config manager without a restart (see `SupermarketFixes/src/Plugin.cs` for a reference implementation). Reset any static patch state when toggling.
+- **Deploy the compiled dll into the root of `BepInEx/plugins/`, not a per-mod subfolder.** The csproj `DeployToGame` target copies to `$(BepInExDir)/plugins`; keep it that way in every mod, and tell players to do the same in the README. A leftover copy in a subfolder would load twice.
 - Apply each `[HarmonyPatch]` class individually and log failures, so one broken patch (for example after a game update) doesn't disable the others.
 - Give every fix or feature its own config entry, with a description that a player can understand.
 - Configurable numbers (e.g. speed multipliers) use `ConfigEntry<float>` with an `AcceptableValueRange` so config managers render them properly. Settings show up in BepInExConfigManager automatically.
