@@ -48,6 +48,17 @@ Once you have finished implementing a fix or an improvement (it builds, and the 
 - **Act on the result.** Read the review critically, then apply the changes that are justified. If you disagree with a finding, say so in your final report to the user with your reason; don't silently drop it. Rebuild after applying changes.
 - Mention in your final report that the review happened and what changed because of it.
 
+## 2c. Commit often
+
+The repo is a git repo; commit as you go so every step is recoverable and the history shows what changed and why.
+
+- **Commit at each stable point:** a fix or improvement that builds, a review round applied, a docs or `TODO`/`STATUS.md` update, a new tool. Don't batch unrelated work into one commit.
+- **One logical change per commit.** Keep a mod's code and its README/CLAUDE.md update in the same commit; keep changes to different mods in separate commits.
+- **Commit messages are a brief title only:** one short imperative line (for example `Fix rack move desync when guest joins`). No body, no trailers or attribution lines, and no type tags or prefixes such as `feat:`, `fix:` or `chore:`.
+- **Stage explicitly** (`git add <paths>`), never `git add -A` blindly. Don't commit `bin/`, `obj/`, `decompiled/` (all gitignored) or log files such as `bug-1/`.
+- Commit before starting a risky refactor and after the review loop (section 2b) applies its changes, so a bad change can be reverted cleanly.
+- Don't push, amend or rewrite history unless the user asks.
+
 ## 3. Environment
 
 | Item | Value |
