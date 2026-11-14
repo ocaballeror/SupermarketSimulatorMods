@@ -1,0 +1,38 @@
+# Restocker Double Carry
+
+Experienced restockers carry **two boxes per trip**. A restocker at level 10 or higher (configurable) works like this:
+
+1. It picks up a box for a product that needs restocking, from a storage rack or from the outside area where deliveries are dropped.
+2. If a **different** product also needs restocking and a box of it is available, the restocker fetches that box too. The second box rides on top of the first.
+3. It restocks the first product, then the second.
+4. It takes whatever is left back to storage (racks), one box at a time. Empty boxes go in the trash as usual, if the restocker is set to do that.
+
+If there's no second job when it picks up the first box, or the second box is gone by the time it gets there, the restocker just carries on with one box. Lower-level restockers aren't affected.
+
+All the restocker's own settings (use unlabeled racks, pick up boxes from the ground, drop empty boxes, restock shelves) are respected. The second box is chosen the same way the game chooses the first.
+
+## Settings
+
+`BepInEx/config/oscar.restockerdoublecarry.cfg`, or in-game with BepInExConfigManager:
+
+| Section | Setting | Default | What it does |
+|---|---|---|---|
+| General | `Enabled` | `true` | Master switch. Turning it off takes effect right away; no restart needed. A restocker carrying two boxes at that moment puts the second one on the floor. |
+| Restockers | `MinimumLevel` | `10` | Restockers at this level or higher carry two boxes (1 to 100). |
+| Restockers | `StackSecondBox` | `true` | Shows the second box stacked on top of the first in the restocker's hands. |
+| Diagnostics | `VerboseLogging` | `true` | Writes each step of a two-box trip to `BepInEx/LogOutput.log` (tag `[DoubleCarry]`). |
+
+## Who needs it (multiplayer)
+
+**The host.** Restockers are run by the host, so the host's settings decide everything.
+
+Guests don't need the mod: every pick-up, product placement and box put-away uses the game's normal network messages, so everyone stays in sync. Without the mod, a guest sees the two boxes in the same spot, one inside the other, so it looks like the restocker carries only one. A guest with the mod installed sees them stacked.
+
+## Notes
+
+- If a restocker is fired or deactivated while carrying two boxes, both are put down on the floor.
+- With several restockers, another restocker may refill one of the two products in the meantime. Nothing breaks: the extra stock just goes back to storage.
+- A guest who joins in the middle of a two-box trip may see the second box floating near the restocker until the restocker next handles it.
+- A restocker that can't find anywhere to put a leftover box behaves as in the normal game: it waits, then puts the box on the floor. It then deals with the other box.
+- Saving while a restocker carries two boxes saves both boxes where they are, just as the game does for the single box a restocker carries.
+- Compatible with MoreEmployees. It may conflict with other mods that change how restockers choose their work.
