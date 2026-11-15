@@ -29,7 +29,7 @@
  * Multiplayer: purchases are spawned by the host (SpawnBox only spawns on the master client) and the
  * BucketData, including the paint amount, is sent to guests, so only the HOST needs the mod for the
  * extra paint. A guest without the mod computes the fill from the prefab max (10): a 16-paint can shows
- * full until it has used 6 paint (display only). A guest-only install changes nothing about painting
+ * full until the 7th wall (paint drops below 10; display only). A guest-only install changes nothing about painting
  * amounts, but its own Initialize prefix makes vanilla 8-paint cans show 40% instead of 80%.
  *
  * Existing cans are not topped up: their saved amount is kept. If the mod is removed later, cans that

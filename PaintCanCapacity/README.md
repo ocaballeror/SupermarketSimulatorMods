@@ -2,7 +2,7 @@
 
 Makes wall paint cans last longer. By default each can paints **twice as many walls**. The multiplier can be set anywhere from 1x to 10x.
 
-The liquid level shown inside the can is scaled too: a new can shows the same fill as a normal new can (about 80%) and empties gradually, just over twice as many walls.
+The liquid level shown inside the can is scaled too: a new can shows the same fill as a normal new can (about 80%) and empties gradually, over as many walls as the multiplier says (twice as many at the default 2x).
 
 ## Settings
 
@@ -17,7 +17,7 @@ The liquid level shown inside the can is scaled too: a new can shows the same fi
 ## Who needs it (multiplayer)
 
 - **Host: required.** The host spawns purchased cans, and the paint amount travels with the can to every player.
-- **Guests: optional.** A guest without the mod still gets the extra paint. Their can just shows as completely full until the paint left drops below a normal can's capacity (with the default 2x, after about 6 walls).
+- **Guests: optional.** A guest without the mod still gets the extra paint. Their can just shows as completely full until the paint left drops below a normal can's capacity (with the default 2x, it first drops at the 7th wall).
 - If only a **guest** has the mod and the host doesn't, the cans still hold the normal amount of paint and paint the normal number of walls. The only effect is cosmetic: the liquid level looks lower on that guest (a normal can shows about 40% instead of 80% at 2x). A guest-only install is pointless.
 
 ## Notes
