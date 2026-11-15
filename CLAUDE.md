@@ -4,7 +4,7 @@ Read [README.md](README.md) for the project overview. This file covers how to wo
 
 ## 1. Always start with `TODO`
 
-[`TODO`](TODO) (repo root) is the source of truth for what to work on. The user updates it over time, so **read it fresh at the start of every session**; don't rely on memory or older notes.
+[`TODO`](TODO.md) (repo root) is the source of truth for what to work on. The user updates it over time, so **read it fresh at the start of every session**; don't rely on memory or older notes.
 
 - Each entry is `Bug #N` or `Improvement #N` followed by the request.
 - **Skip entries marked `[DONE]`.**
@@ -40,7 +40,7 @@ Knowledge about one mod or one code path doesn't belong here; it goes in that mo
 
 ## 2b. Independent review after every fix or improvement
 
-Once you have finished implementing a fix or an improvement (it builds, and the mod's README, its CLAUDE.md and the TODO are updated), **launch a review subagent** with the Agent tool before you report back to the user.
+Once you have finished implementing a fix or an improvement (it builds, and the mod's README, its CLAUDE.md and the TODO.md are updated), **launch a review subagent** with the Agent tool before you report back to the user.
 
 - **Brief it with the intent only.** Describe *what the change was meant to achieve*: the bug symptom or the feature, and the expected behaviour (including multiplayer expectations, if relevant). Name the mod or folder it lives in so the reviewer knows where to look.
 - **Don't include implementation details or your reasoning.** No root-cause theory, no explanation of why you chose this approach, no list of the methods you patched, no "I think this is fine because...". The reviewer must form its own opinion from the code, not inherit your assumptions.
@@ -52,7 +52,7 @@ Once you have finished implementing a fix or an improvement (it builds, and the 
 
 The repo is a git repo; commit as you go so every step is recoverable and the history shows what changed and why.
 
-- **Commit at each stable point:** a fix or improvement that builds, a review round applied, a docs or `TODO`/`STATUS.md` update, a new tool. Don't batch unrelated work into one commit.
+- **Commit at each stable point:** a fix or improvement that builds, a review round applied, a docs or `TODO.md`/`STATUS.md` update, a new tool. Don't batch unrelated work into one commit.
 - **One logical change per commit.** Keep a mod's code and its README/CLAUDE.md update in the same commit; keep changes to different mods in separate commits.
 - **Commit messages are a brief title only:** one short imperative line (for example `Fix rack move desync when guest joins`). No body, no trailers or attribution lines, and no type tags or prefixes such as `feat:`, `fix:` or `chore:`.
 - **Stage explicitly** (`git add <paths>`), never `git add -A` blindly. Don't commit `bin/`, `obj/`, `decompiled/` (all gitignored) or log files such as `bug-1/`.

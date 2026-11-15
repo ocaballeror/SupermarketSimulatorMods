@@ -1,6 +1,6 @@
 # Status of TODO items
 
-`TODO` is the user's request list. This file tracks where each item stands. Agents own it; the user can edit it too.
+`TODO.md` is the user's request list. This file tracks where each item stands. Agents own it; the user can edit it too.
 
 ## States
 
@@ -18,7 +18,7 @@ Rules:
 
 - `reviewed` is never `done`. A build or a code review isn't an in-game test.
 - **Stale reviews:** a `reviewed` row stores a hash of the code that was reviewed (`tools/modhash.sh <paths in "Code">`). If the current hash differs, the code changed after the review: set the state back to `in-progress`.
-- The `TODO` line carries **one** status prefix that mirrors the state here: `[IN PROGRESS: <pointer>]`, `[REVIEWED YYYY-MM-DD: <pointer>]`, `[DONE YYYY-MM-DD]` (none for `open`). Never stack prefixes. Update this table and the prefix in the same change.
+- The `TODO.md` line carries **one** status prefix that mirrors the state here: `[IN PROGRESS: <pointer>]`, `[REVIEWED YYYY-MM-DD: <pointer>]`, `[DONE YYYY-MM-DD]` (none for `open`). Never stack prefixes. Update this table and the prefix in the same change.
 - Bug items live in `SupermarketFixes/`; their hash covers only the patch file named in "Code" (shared files such as `Plugin.cs` aren't hashed).
 
 ## Items
