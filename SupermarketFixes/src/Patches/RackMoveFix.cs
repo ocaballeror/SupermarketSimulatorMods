@@ -42,7 +42,10 @@ namespace SupermarketFixes.Patches;
 ///     a local copy for every record as well. Moving the rack carries the copy and leaves the networked
 ///     box floating, still pickable. Fix: a guest-only sweep (Tick, for 60 s after the store loads,
 ///     extended after each adoption) adopts each such box into the slot in place of its copy, matched
-///     by UID + ProductID + position.
+///     by UID + ProductID + position. A copy that exists but is further than 0.3 m is logged.
+///  A') A networked box the rebuild released (host data didn't list it yet) stays a child of the slot,
+///     outside m_Boxes. The RackSlot.Initialize prefix also captures such children, so a later rebuild
+///     that lists it adopts it instead of spawning a copy next to it.
 ///  D) Picking a racked networked box up directly (clicking the box, not the slot) goes through
 ///     Box.InstantInteract / NetworkBox.AskAvailability -> PickUP_RPC (to all) -> Box.PickUp, which never
 ///     calls RackSlot.RemoveBox (only TakeBoxFromRack / RemoveLocalRackedBoxByUID / Dematerialize / clerk
@@ -58,8 +61,26 @@ namespace SupermarketFixes.Patches;
 ///     Fallback, every client: a Box.PickUp prefix calls RackSlot.RemoveBox if the box is still in its
 ///     slot (host without the mod, offline). On a guest, a loose networked box picked up next to its rack
 ///     copy has that copy removed.
-///     Not changed: vanilla never re-enables network transform sync on this path (only TakeBoxFromRack_RPC
-///     does), so a box grabbed off a rack keeps sync off; a possible lead for Bug #6.
+///     RemoveBox drops every record with the box's UID (DisplayClass76_0.b__1 compares BoxData.m_UID), and
+///     clears the slot (RackSlotData.Clear: records + BoxID = -1, RackManager.RemoveRackSlot) once no record
+///     is left. When another box in the slot shares the UID, the fallback (RemoveFromSlot) re-adds the records
+///     of the boxes still in m_Boxes and undoes a wrongful clear (BoxID, AddRackSlot, label count). The host
+///     still skips its broadcast then (clients remove the first UID match); unmodded guests keep vanilla.
+///     Vanilla never re-enables network transform sync on this path (only TakeBoxFromRack_RPC does), so the
+///     fallback does it, as TakeBoxFromRack_RPC would, on every client running the mod.
+///
+///  E) Opt-in, host: take networked boxes off racks altogether. The game has a complete host-driven path
+///     that unmodded guests handle: NetworkRack.DematerializeBox_Broadcast(slot, uid) (RpcTarget.All) ->
+///     RackSlot.DematerializeNetworkedBox(uid) on every client: first box in m_Boxes with that UID; if it
+///     is networked and not m_IsBoxOccupied -> RemoveBox, InventoryManager.RemoveBox, DetachDataBeforeDespawn,
+///     master PhotonNetwork.Destroy, SpawnLocalRackedBox(data). On a client whose slot holds a local copy
+///     instead (late joiner, or a guest after cause A) it does nothing locally, and the master's Destroy
+///     removes the loose/orphaned networked copy (Box.OnDisable unregisters its instanced snapshot,
+///     Box.OnDestroy removes the instance). The game's own caller (AddBox b__2, ENABLE_DEMATERIALIZE_ON_PLACE)
+///     is compiled out. Verified hazard: for the only box of a slot, RemoveBox clears the slot (BoxID = -1)
+///     and SpawnLocalRackedBox then finds no BoxSO(-1) and returns null: the box is lost on every client.
+///     So the host sweep only dematerializes settled, unclaimed, master-owned boxes whose UID is unique in a
+///     slot that keeps other boxes and records. Off by default (DematerializeRackedBoxesOnHost).
 ///
 /// Box UIDs are NOT unique: IDManager.BoxUniqueIdCount restarts every session and guests keep the
 /// host's UIDs (one guest scan had uid=5 for products 139 and 157). Always match on UID + ProductID.
@@ -71,6 +92,7 @@ internal static class RackMoveFix
     internal static ConfigEntry<bool> FinishTweensBeforePickup;
     internal static ConfigEntry<bool> AdoptOrphansAfterJoin;
     internal static ConfigEntry<bool> UnrackOnDirectPickup;
+    internal static ConfigEntry<bool> DematerializeOnHost;
 
     /// <summary>How far (m) a loose networked box may be from the rack's copy of it to be adopted.
     /// A joining guest receives it at exactly the copy's position.</summary>
@@ -86,6 +108,12 @@ internal static class RackMoveFix
             "When a box is picked up straight off a rack (by clicking the box itself), remove it from the rack " +
             "properly. Otherwise the rack keeps a record of it, which shows up as a ghost box for players who " +
             "join later and as a duplicate box after the save is loaded. Most useful on the host.");
+        DematerializeOnHost = cfg.Bind("RackMove", "DematerializeRackedBoxesOnHost", false,
+            "Host only, experimental. Some seconds after a box is put on a rack, turn it into an ordinary racked box " +
+            "(like the ones loaded from a save) for every player, using the game's own network message. Guests " +
+            "without this mod then no longer get floating copies of it when they join or when employees restock " +
+            "racks. A box that is alone in its rack slot is left as it is. Off by default: the game ships with " +
+            "this path switched off.");
         AdoptNetworkedBoxes = cfg.Bind("RackMove", "AdoptNetworkedBoxesOnRebuild", true,
             "When a rack slot is rebuilt from network data (multiplayer guest), keep its networked boxes " +
             "in the slot instead of orphaning them and spawning local duplicates. Main fix for ghost boxes.");
@@ -105,6 +133,10 @@ internal static class RackMoveFix
         s_nextSweep = 0f;
         s_sweepUntil = -1f;
         s_reported.Clear();
+        s_nextHostSweep = 0f;
+        s_settledSince.Clear();
+        s_rackPickupAt.Clear();
+        s_hostReported.Clear();
     }
 
     // ------------------------------------------------------------------ helpers
@@ -174,7 +206,8 @@ internal static class RackMoveFix
     [HarmonyPatch(typeof(RackSlot), nameof(RackSlot.Initialize), new Type[0])]
     private static class RackSlotInitializePatch
     {
-        private static void Prefix(RackSlot __instance, out List<Box> __state)
+        /// <summary>__state: networked boxes to keep, with the slot whose highlight lists them (null: none).</summary>
+        private static void Prefix(RackSlot __instance, out List<(Box box, RackSlot origin)> __state)
         {
             __state = null;
             try
@@ -185,7 +218,17 @@ internal static class RackMoveFix
                 {
                     var b = boxes[i];
                     if (b != null && b.NetworkBox != null)
-                        (__state ??= new List<Box>()).Add(b);
+                        (__state ??= new()).Add((b, __instance));
+                }
+                // Networked boxes an earlier rebuild released (Release): still children of the slot but not in
+                // m_Boxes. If this rebuild lists them again, adopt them instead of spawning a copy beside them.
+                var t = __instance.transform;
+                for (int i = 0; i < t.childCount; i++)
+                {
+                    var b = t.GetChild(i).GetComponent<Box>();
+                    if (b == null || b.NetworkBox == null || ListContains(boxes, b)) continue;
+                    if (IsClaimed(b) || DOTween.IsTweening(b.transform)) continue; // being handled by someone
+                    (__state ??= new()).Add((b, null));
                 }
             }
             catch (Exception e)
@@ -195,7 +238,7 @@ internal static class RackMoveFix
             }
         }
 
-        private static void Postfix(RackSlot __instance, List<Box> __state)
+        private static void Postfix(RackSlot __instance, List<(Box box, RackSlot origin)> __state)
         {
             if (__state == null) return;
             try { AdoptIntoSlot(__instance, __state); }
@@ -222,22 +265,28 @@ internal static class RackMoveFix
         return -1;
     }
 
-    private static void AdoptIntoSlot(RackSlot slot, List<Box> networked)
+    private static void AdoptIntoSlot(RackSlot slot, List<(Box box, RackSlot origin)> networked)
     {
-        int adopted = 0, released = 0, deferred = 0;
-        foreach (var nb in networked)
+        int adopted = 0, released = 0, deferred = 0, strays = 0;
+        foreach (var (nb, origin) in networked)
         {
             if (nb == null || nb.NetworkBox == null || ListContains(slot.m_Boxes, nb)) continue;
             // Someone holds it or is picking it up: never pull it back into the rack.
-            if (IsClaimed(nb)) { Release(slot, nb); released++; continue; }
+            if (IsClaimed(nb)) { Release(origin, nb); released++; continue; }
             int idx = FindLocalDuplicate(slot, nb);
-            if (idx >= 0) { Swap(slot, idx, nb, slot); adopted++; }
-            else if (s_rackLeftovers != null) { s_rackLeftovers.Add((nb, slot)); deferred++; }
-            else { Release(slot, nb); released++; }
+            if (idx >= 0)
+            {
+                Swap(slot, idx, nb, origin);
+                adopted++;
+                if (origin == null) strays++;
+            }
+            else if (s_rackLeftovers != null) { s_rackLeftovers.Add((nb, origin)); deferred++; }
+            else { Release(origin, nb); released++; }
         }
         if (adopted + released + deferred > 0)
             Plugin.Logger.LogInfo($"[RackMove] Slot rebuild on rack {slot.OwnRack?.ID}: kept {adopted} networked box(es) " +
-                                  $"in place of local duplicates, released {released}, checking {deferred} rack-wide");
+                                  $"in place of local duplicates ({strays} released by an earlier rebuild), released {released}, " +
+                                  $"checking {deferred} rack-wide");
     }
 
     /// <summary>A box the host moved to another slot of the same rack: match against every slot.</summary>
@@ -308,10 +357,11 @@ internal static class RackMoveFix
     }
 
     /// <summary>Host data no longer has this box on the rack: stop drawing its stale snapshot.
-    /// The box is a networked object; its owner keeps controlling where it goes.</summary>
+    /// The box is a networked object; its owner keeps controlling where it goes. If it stays a child of the
+    /// slot, the next rebuild of the slot looks at it again (RackSlotInitializePatch).</summary>
     private static void Release(RackSlot origin, Box nb)
     {
-        origin.m_Highlightable?.AddOrRemoveRenderer(nb.RenderersToHighlight, false);
+        origin?.m_Highlightable?.AddOrRemoveRenderer(nb.RenderersToHighlight, false);
         nb.KillAllInstancingAnimations();
         nb.ToggleInstanced(false);
     }
@@ -322,6 +372,8 @@ internal static class RackMoveFix
     private const float SweepWindow = 60f;
     /// <summary>...and keep going this long after the last adoption.</summary>
     private const float SweepExtension = 20f;
+    /// <summary>How often a guest checks whether racks exist yet, while none do.</summary>
+    private const float NoRackProbeInterval = 10f;
 
     private static float s_nextSweep;
     /// <summary>End of the sweep window; -1 = not started for the current room.</summary>
@@ -339,6 +391,7 @@ internal static class RackMoveFix
     /// <summary>Called every frame from DiagnosticsBehaviour.</summary>
     internal static void Tick(float now)
     {
+        TickHost(now);
         if (now < s_nextSweep) return;
         s_nextSweep = now + SweepInterval;
         if (!PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient) { s_sweepUntil = -1f; return; }
@@ -346,8 +399,9 @@ internal static class RackMoveFix
 
         if (s_sweepUntil < 0f)
         {
-            // Start when the store has loaded (racks exist), not when the room was joined.
-            if (Object.FindObjectsOfType(Il2CppType.Of<Rack>()).Length == 0) return;
+            // Start when the store has loaded (racks exist), not when the room was joined. A store without
+            // racks needs no sweep, so probe for racks less often.
+            if (Object.FindObjectsOfType(Il2CppType.Of<Rack>()).Length == 0) { s_nextSweep = now + NoRackProbeInterval; return; }
             s_sweepUntil = now + SweepWindow;
             s_reported.Clear();
             if (RackDiagnostics.Enabled.Value)
@@ -387,17 +441,21 @@ internal static class RackMoveFix
     }
 
     /// <summary>The single rack copy of <paramref name="nb"/> within AdoptMaxDistance; null if there is none
-    /// (<paramref name="found"/> = 0) or more than one.</summary>
-    private static RackCopy FindCopy(Dictionary<(int, int), List<RackCopy>> index, Box nb, out int found)
+    /// (<paramref name="found"/> = 0) or more than one. <paramref name="nearest"/> is the distance to the
+    /// closest copy with the same UID + ProductID at any distance (infinity if there is none).</summary>
+    private static RackCopy FindCopy(Dictionary<(int, int), List<RackCopy>> index, Box nb, out int found, out float nearest)
     {
         found = 0;
+        nearest = float.PositiveInfinity;
         var d = nb.Data;
         if (d == null || !index.TryGetValue((d.UID, d.ProductID), out var list)) return null;
         var pos = nb.transform.position;
         RackCopy match = null;
         foreach (var c in list)
         {
-            if (Vector3.Distance(c.Box.transform.position, pos) > AdoptMaxDistance) continue;
+            float dist = Vector3.Distance(c.Box.transform.position, pos);
+            if (dist < nearest) nearest = dist;
+            if (dist > AdoptMaxDistance) continue;
             found++;
             match = c;
         }
@@ -442,8 +500,15 @@ internal static class RackMoveFix
             var key = (d.UID, d.ProductID);
             if (perRecord[key] > 1) { Reject(nb, "another live networked box has the same UID and product"); continue; }
 
-            var copy = FindCopy(index, nb, out int found);
-            if (found == 0) continue; // an ordinary loose box: no rack copy of it here
+            var copy = FindCopy(index, nb, out int found, out float nearest);
+            if (found == 0)
+            {
+                // An ordinary loose box, unless a rack has a copy of it further away (received late, or that
+                // rack moved on the host): log that, so a failed match can be told apart in a test.
+                if (!float.IsPositiveInfinity(nearest))
+                    Reject(nb, $"the rack copy with the same UID and product is {nearest:F2} m away (limit {AdoptMaxDistance} m)");
+                continue;
+            }
             if (copy == null) { Reject(nb, $"{found} rack copies match it"); continue; }
             int idx = IndexOf(copy.Slot.m_Boxes, copy.Box);
             if (idx < 0) continue;
@@ -541,12 +606,17 @@ internal static class RackMoveFix
         {
             var d = box.Data;
             var slot = box.GetComponentInParent<RackSlot>(true);
+            // Vanilla re-enables transform sync only when a box is taken through the slot (TakeBoxFromRack_RPC).
+            // A box grabbed straight off a rack (removed here, or already by the host's RemoveLocalRackedBox)
+            // would otherwise keep sync off, so other players could see it hang where it was after a drop.
+            if (slot != null && box.NetworkBox != null && PhotonNetwork.InRoom)
+                box.NetworkBox.DisableNetworkTransformSync(true); // true = sync on (the name is inverted)
             if (slot != null && ListContains(slot.m_Boxes, box))
             {
                 if (RackDiagnostics.Enabled.Value)
                     Plugin.Logger.LogInfo($"[RackMove] Box uid={d?.UID} product={d?.ProductID} picked up straight off rack " +
                                           $"{slot.OwnRack?.ID}: removing it from the rack slot first");
-                slot.RemoveBox(box);
+                RemoveFromSlot(slot, box);
                 return;
             }
 
@@ -554,16 +624,171 @@ internal static class RackMoveFix
             // the rack still has a local copy of it. Remove that copy the way RemoveLocalRackedBoxByUID does.
             if (box.NetworkBox == null || box.transform.parent != null || !PhotonNetwork.InRoom || PhotonNetwork.IsMasterClient)
                 return;
-            var copy = FindCopy(IndexLocalCopies(null), box, out _);
+            var copy = FindCopy(IndexLocalCopies(null), box, out _, out _);
             if (copy == null) return;
             if (RackDiagnostics.Enabled.Value)
                 Plugin.Logger.LogInfo($"[RackMove] Loose box uid={d?.UID} product={d?.ProductID} picked up next to its copy on rack " +
                                       $"{copy.Slot.OwnRack?.ID}: removing the copy");
-            copy.Slot.RemoveBox(copy.Box);
+            RemoveFromSlot(copy.Slot, copy.Box);
             copy.Box.DetachDataBeforeDespawn();
             LeanPool.Despawn(copy.Box);
         }
         catch (Exception e) { Plugin.Logger.LogError($"[RackMove] Removing a picked-up box from its rack failed: {e}"); }
+    }
+
+    /// <summary>RackSlot.RemoveBox, minus the damage it does when another box in the slot shares the UID:
+    /// it drops that box's record too, and if no record is left it clears the slot (BoxID = -1,
+    /// RackManager.RemoveRackSlot) although a box is still in it.</summary>
+    private static void RemoveFromSlot(RackSlot slot, Box box)
+    {
+        var d = box.Data;
+        bool shared = d != null && CountUid(slot.m_Boxes, d.UID) > 1;
+        var data = slot.m_Data;
+        int boxId = data?.BoxID ?? -1;
+        slot.RemoveBox(box);
+        if (!shared || data == null) return;
+
+        // Put back the records of the boxes still in the slot (same BoxData instances, as UpdateRackedBoxDatas
+        // would; done by hand so a null entry or an unrelated record doesn't matter).
+        var records = data.RackedBoxDatas;
+        int readded = 0;
+        for (int i = 0; records != null && slot.m_Boxes != null && i < slot.m_Boxes.Count; i++)
+        {
+            var bd = slot.m_Boxes[i]?.Data;
+            if (bd == null) continue;
+            bool listed = false;
+            for (int j = 0; j < records.Count && !listed; j++)
+                listed = records[j] != null && records[j].Pointer == bd.Pointer;
+            if (!listed) { records.Add(bd); readded++; }
+        }
+        bool restored = false;
+        if (slot.m_Boxes != null && slot.m_Boxes.Count > 0 && data.BoxID == -1 && boxId != -1)
+        {
+            data.BoxID = boxId;
+            if (NoktaSingleton<RackManager>.HasInstance)
+                NoktaSingleton<RackManager>.Instance.AddRackSlot(data.ProductID, slot);
+            restored = true;
+        }
+        if (slot.m_Label != null) slot.m_Label.ProductCount = data.TotalProductCount;
+        Plugin.Logger.LogInfo($"[RackMove] Box uid={d.UID} shared its UID with another box in rack {slot.OwnRack?.ID}: " +
+                              $"put back {readded} record(s) of the other box(es) ({records?.Count ?? 0} left)" +
+                              (restored ? ", and undid the slot being cleared" : ""));
+    }
+
+    // ------------------------------------------------------------------ E) host: dematerialize racked boxes (opt-in)
+
+    /// <summary>A networked box must sit untouched in its slot this long before it is dematerialized.</summary>
+    private const float SettleSeconds = 10f;
+    /// <summary>After the host accepts a guest's request to carry a rack, leave that rack alone this long:
+    /// the guest is already carrying it before the host's copy enters placing mode.</summary>
+    private const float RackPickupGrace = 10f;
+    /// <summary>Limits the RPC burst in a store with many networked racked boxes.</summary>
+    private const int MaxDematerializePerSweep = 8;
+
+    private static float s_nextHostSweep;
+    /// <summary>Networked box in a slot of a resting rack -> when it was first seen there.</summary>
+    private static readonly Dictionary<IntPtr, float> s_settledSince = new();
+    /// <summary>NetworkRack -> when the host last answered a guest's request to carry it.</summary>
+    private static readonly Dictionary<IntPtr, float> s_rackPickupAt = new();
+    /// <summary>Boxes whose "left networked" reason was already logged.</summary>
+    private static readonly HashSet<IntPtr> s_hostReported = new();
+
+    [HarmonyPatch(typeof(NetworkRack), nameof(NetworkRack.StartRackPlacingMode_Response))]
+    private static class RackPickupResponsePatch
+    {
+        private static void Prefix(NetworkRack __instance)
+        {
+            try { if (__instance != null) s_rackPickupAt[__instance.Pointer] = Time.unscaledTime; }
+            catch (Exception e) { Plugin.Logger.LogError($"[RackMove] Recording a rack pickup request failed: {e}"); }
+        }
+    }
+
+    private static void TickHost(float now)
+    {
+        if (now < s_nextHostSweep) return;
+        s_nextHostSweep = now + SweepInterval;
+        if (!DematerializeOnHost.Value || !PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient)
+        {
+            s_settledSince.Clear();
+            return;
+        }
+
+        var seen = new HashSet<IntPtr>();
+        int done = 0;
+        foreach (var o in Object.FindObjectsOfType(Il2CppType.Of<Rack>()))
+        {
+            var rack = o.TryCast<Rack>();
+            if (rack == null || rack.IsPlacingMode) continue; // carried: settle again once it is placed
+            var net = rack.OwnNetworkRack;
+            if (net == null) continue;
+            if (s_rackPickupAt.TryGetValue(net.Pointer, out var askedAt) && now - askedAt < RackPickupGrace) continue;
+
+            foreach (var slot in Slots(rack))
+            {
+                if (slot.m_ColliderEnabler != null && slot.m_ColliderEnabler.IsActive()) continue; // a box just went in
+                var boxes = slot.m_Boxes;
+                for (int i = 0; boxes != null && i < boxes.Count; i++)
+                {
+                    var b = boxes[i];
+                    if (b == null || b.NetworkBox == null) continue;
+                    seen.Add(b.Pointer);
+                    if (!s_settledSince.TryGetValue(b.Pointer, out var since)) { s_settledSince[b.Pointer] = now; continue; }
+                    if (now - since < SettleSeconds || done >= MaxDematerializePerSweep) continue;
+
+                    var why = WhyNotDematerialize(slot, b, out bool lasting);
+                    if (why != null)
+                    {
+                        if (!lasting) s_settledSince[b.Pointer] = now; // busy: wait for it to settle again
+                        else if (RackDiagnostics.Enabled.Value && s_hostReported.Add(b.Pointer))
+                            Plugin.Logger.LogInfo($"[RackMove] Host: leaving racked box networked ({why}): {RackDiagnostics.Describe(b)}");
+                        continue;
+                    }
+
+                    var d = b.Data;
+                    if (RackDiagnostics.Enabled.Value)
+                        Plugin.Logger.LogInfo($"[RackMove] Host: turning networked box uid={d.UID} product={d.ProductID} on rack " +
+                                              $"{rack.ID} into an ordinary racked box for everyone");
+                    s_settledSince.Remove(b.Pointer);
+                    s_hostReported.Remove(b.Pointer);
+                    seen.Remove(b.Pointer);
+                    done++;
+                    // RpcTarget.All: runs here at once (the slot's lists change), then on every guest.
+                    net.DematerializeBox_Broadcast(slot.GetIndexFromRack(), d.UID);
+                    break; // m_Boxes changed; the slot's other boxes are looked at again next sweep
+                }
+            }
+        }
+
+        if (s_settledSince.Count > seen.Count)
+            foreach (var k in new List<IntPtr>(s_settledSince.Keys))
+                if (!seen.Contains(k)) s_settledSince.Remove(k);
+        if (s_rackPickupAt.Count > 0)
+            foreach (var k in new List<IntPtr>(s_rackPickupAt.Keys))
+                if (now - s_rackPickupAt[k] >= RackPickupGrace) s_rackPickupAt.Remove(k);
+    }
+
+    /// <summary>Null if the game's dematerialize RPC is safe for this box. <paramref name="lasting"/> is false
+    /// for a passing state (someone is handling the box), true for one that won't change by itself.</summary>
+    private static string WhyNotDematerialize(RackSlot slot, Box b, out bool lasting)
+    {
+        lasting = false;
+        if (!b.gameObject.activeInHierarchy || IsClaimed(b) || DOTween.IsTweening(b.transform) || !b.Racked)
+            return "busy";
+        lasting = true;
+        var d = b.Data;
+        if (d == null || d.UID <= 0) return "no box data";
+        var view = b.NetworkBox.PhotonView;
+        if (view == null || !view.IsMine) return "owned by another player, so the host can't destroy it";
+        // Every client takes the first box in the slot with this UID.
+        if (CountUid(slot.m_Boxes, d.UID) != 1) return "another box in the slot has the same UID";
+        // RemoveBox clears the slot when no record is left, and the box can then no longer be respawned:
+        // it would be lost for everyone. Only go ahead if other boxes and records stay in the slot.
+        int otherRecords = 0;
+        var records = slot.m_Data?.RackedBoxDatas;
+        for (int i = 0; records != null && i < records.Count; i++)
+            if (records[i] != null && records[i].UID != d.UID) otherRecords++;
+        if (slot.m_Boxes.Count < 2 || otherRecords < 1) return "it is the only box in its slot";
+        return null;
     }
 
     // ------------------------------------------------------------------ B) delayed instancing guard
