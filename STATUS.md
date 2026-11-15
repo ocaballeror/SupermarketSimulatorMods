@@ -27,7 +27,7 @@ Rules:
 |---|---|---|---|---|
 | Bug #1 | reviewed | `SupermarketFixes/src/Patches/RackMoveFix.cs` | 2026-11-15, 1 round (follow-up review of v0.7.0), 0a5ff690803c | In-game test + host F8 log; `DematerializeRackedBoxesOnHost` stays off until tested with an unmodded guest |
 | Bug #2 | reviewed | `SupermarketFixes/src/Patches/GhostHeldItemFix.cs` | 2026-11-15, 1 round (follow-up review), d48d7436015a | In-game test + logs, incl. the host's `[BoxDiag] DropBox_RPC` lines |
-| Bug #3 | in-progress | `SupermarketFixes/src/Patches/StuckBoxFix.cs` | — | Review follow-ups being applied, awaiting review; then in-game test + logs |
+| Bug #3 | reviewed | `SupermarketFixes/src/Patches/StuckBoxFix.cs` | 2026-11-15, 1 round (follow-up review), 2858032d1b39 | In-game test + logs |
 | Bug #4 | open | — | — | Question, not a code task: answer how to collect guest crash logs |
 | Bug #5 | reviewed | `SupermarketFixes/src/Patches/BoxPlaceFix.cs` | 2026-11-15, 1 round, 5066b4084b02 | In-game test + logs. Trigger path unproven; delete the stale `plugins/SupermarketFixes/` subfolder dll and set `[General] Enabled = true` before testing |
 | Bug #6 | open | — | — | No data to reproduce; may be related to Bug #1 |

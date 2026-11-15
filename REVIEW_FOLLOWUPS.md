@@ -50,36 +50,9 @@ Code: `SupermarketFixes/src/Patches/GhostHeldItemFix.cs`. Reviewed at hash `d48d
 
 ## Bug #3: stuck controlling a box after buying it in a market
 
-Code: `SupermarketFixes/src/Patches/StuckBoxFix.cs`. Reviewed at hash `13bfc34905b6` (1 round).
+Code: `SupermarketFixes/src/Patches/StuckBoxFix.cs`. Reviewed at hash `2858032d1b39` (follow-up review, approved). Remaining minor findings:
 
-**1. Minor: the per-box recovery cap and the retry guard never reset, and they're keyed by object pointer.** See `StuckBoxFix.cs` lines 64, 147-160 (`s_recoveredBox`/`s_recoveries`) and 205-215 (`s_retried`).
-- **Why the cap protects nothing:** there is no automatic loop for it to stop. The retry already happens only once per box, and any later stuck state needs the player to click the box again.
-- **Failure scenario:** a box gets stuck in three separate incidents. From then on, the player is left stuck again with exactly the reported symptom, unless they know about F9.
-- **Also:** after one retry, that box object never gets a retry again for the whole session. Offline, LeanPool reuses Box objects for new purchases, so a later purchase can be denied its retry.
-- **README gap:** the README promises "after 2 seconds... your controls are freed" and doesn't mention the cap.
-- **Suggested direction:** drop the cap, or reset both counters once the box is properly held or a different box is bound. If you keep the cap, document it in the README.
-
-**2. Minor: a guest's recovery without a modded host leaves host-side state behind** (lines 186-193).
-- The host keeps `IsNetworkOccupied` set, with the guest as occupant.
-- If the host's pickup grant did run on the other clients, they still see the box in the guest avatar's hands.
-- Nobody can pick that box up until the session reloads. This isn't worse than vanilla, where the player is stuck anyway.
-- **Suggested direction:** the README's "Who needs it" section should say this explicitly: without the mod on the host, the stuck box may stay un-pickable and may look carried to the other players.
-
-**3. Minor: the waiting-branch recovery changes what a late host answer does** (line 181).
-- `EndAvailabilityWait()` also resets `m_AvailabilityTimedOut`.
-- If `PickUP_RPC` arrives after that, vanilla's late-grant rebinding path (`SetCurrentInteraction`) is skipped, but `Box.PickUp` still puts the box in the hands. The box ends up held with no interaction, the Bug #2 state, which is left to GhostHeldItemFix to drop.
-- This only happens when the game's own 3 s timeout coroutine never ran, so it's rare.
-- **Suggested direction:** accept it and note it in the mod's CLAUDE.md, or skip `EndAvailabilityWait` and the retry in the waiting case.
-
-**4. Minor: F9 during a normal pickup wait cancels a valid pending pickup** (`ForceCheck`, line 136, `force: true`).
-- The retry then asks the host again.
-- With an unmodded host, the first grant puts the box in the hands, and the second request is refused, which ends the interaction. The result is a box in the hands with no interaction.
-- **Suggested direction:** in force mode, still require the wait to have exceeded the game's 3 s timeout, or don't retry when the box was in the waiting state.
-
-**5. Nit: two statements in the doc comment are inaccurate.**
-- Path (a) (NetworkBox Unity-null on a guest) can't happen on the purchase path while online. `Purchase` dereferences `box.NetworkBox` for `Setup_Broadcast` before it calls `Interact`, so a null NetworkBox would throw first. The path only applies to other clicks.
-- "m_CurrentObject is only ever written by HoldObject" isn't strictly true: `SetNullCurrentObject` and `set_CurrentObject` exist, though no native callers were found.
-
-**6. Nit: the docs give the wrong timeout.** The mod's CLAUDE.md and the doc comment say a host answer that never arrives is handled "within 6 seconds". It is actually 6 s plus `StuckSeconds`, so 8 s by default.
-
-**7. Nit: the `Diagnostics` entry gates almost nothing.** It controls a single log line ("Retried pickup"). All the other `[StuckBox]` warnings and info lines are logged regardless, which contradicts the config and README descriptions. Either gate them or reword the descriptions.
+1. **Minor:** the `held` shortcut `holder.m_PlacingMode` (`StuckBoxFix.cs:137-138`) can mask a stuck state. `m_CurrentObject` is never cleared and LeanPool reuses `Box` objects, so a stale `m_CurrentObject` equal to the stuck box plus a Drop press sets `holder.m_PlacingMode`, and the watchdog stays quiet. Require the box to be occupied by this player in that branch. `Recover` doesn't reset `holder.m_PlacingMode`; consider logging it and `m_CurrentObject` in the recovery line.
+2. **Minor:** a destroyed bound box is never handled (`StuckBoxFix.cs:120-122`): `bi.Enable` true with a Unity-null `m_Box` returns null from `FindStuckBox`, so the player stays locked. Treat it as stuck, or at least log it once.
+3. **Minor:** `StuckBoxFix.Tick` logs at Error level every frame if `FindStuckBox` throws persistently. Rate-limit it. `ForceCheck` (F9) has no try/catch.
+4. **Nit:** the README's "A guest without the mod is not affected by it" is imprecise: a modded host's `RegrantToSameHolder` also helps an unmodded guest (their manual re-click after the 3 s timeout is granted). Say so. The doc comment's "the same calls Purchase makes" omits `SetCurrentInteraction(PRODUCT)`. The Bug #3 headings in the README and `CLAUDE.md` still say v0.4.0.
