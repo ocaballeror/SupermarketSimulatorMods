@@ -12,10 +12,12 @@
  *     can: fill = clamp01(paintCount / m_MaxPaintCount) in Initialize / PaintWall / GetPaintRatio.
  *
  * So "last N times longer" = start new cans with N x paintAmount, and scale m_MaxPaintCount by the
- * same factor so the liquid level still reads full -> empty. The vanilla max is always read from the
- * can type's prefab (IDManager.BucketSo(bucketID).BucketPrefab), which is never modified, and the
- * shown max is never below the can's current paint, so a can never looks emptier than it is (cans
- * from before the mod, or from a higher multiplier, show full and drain at their own rate).
+ * same factor so the liquid level keeps the same proportion of a new can's capacity. The vanilla max is
+ * always read from the can type's prefab (IDManager.BucketSo(bucketID).BucketPrefab), which is never
+ * modified, and the shown max is never below the can's current paint (max(Scale(vanilla), paint)).
+ * Vanilla cans hold 8 paint against a prefab max of 10 (80%), so at x2 a new can (16 paint) shows 16/20
+ * = 80%, as in vanilla, and a pre-mod can (8 paint) shows 8/20 = 40%. Both drain at the same per-wall
+ * rate (1/20 of the display per wall); old cans just start lower.
  *
  * Patches:
  *   - IDManager.BucketSo(id) postfix: scale the returned can type's starting amount (every purchase
@@ -26,8 +28,9 @@
  *
  * Multiplayer: purchases are spawned by the host (SpawnBox only spawns on the master client) and the
  * BucketData, including the paint amount, is sent to guests, so only the HOST needs the mod for the
- * extra paint. A guest without the mod sees the liquid level stay full until the can is below the
- * normal capacity (display only).
+ * extra paint. A guest without the mod computes the fill from the prefab max (10): a 16-paint can shows
+ * full until it has used 6 paint (display only). A guest-only install changes nothing about painting
+ * amounts, but its own Initialize prefix makes vanilla 8-paint cans show 40% instead of 80%.
  *
  * Existing cans are not topped up: their saved amount is kept. If the mod is removed later, cans that
  * hold more than the vanilla capacity just show as full until they drop below it.
@@ -105,7 +108,12 @@ internal static class PaintPatches
         if (bucket.m_MaxPaintCount != max) bucket.m_MaxPaintCount = max;
     }
 
-    /// <summary>Called on live config changes (game running): rescale every loaded can type and can.</summary>
+    /// <summary>
+    /// Called on live config changes (game running): rescale every loaded can type and can. Inactive cans
+    /// (LeanPool-despawned ones) are included, because Initialize never writes m_MaxPaintCount itself and a
+    /// reused pooled can would otherwise keep the old maximum. FindObjectsOfType returns scene objects only,
+    /// never prefab assets.
+    /// </summary>
     internal static void ApplyToAll()
     {
         if (!GameReady()) return;
@@ -113,12 +121,12 @@ internal static class PaintPatches
         {
             foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppType.Of<BucketSo>()))
                 EnsureScaled(o.TryCast<BucketSo>());
-            foreach (var o in UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<PaintBucket>()))
+            foreach (var o in UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<PaintBucket>(), true))
             {
                 var b = o.TryCast<PaintBucket>();
                 if (b == null) continue;
                 EnsureScaled(b, b.bucketData, b.paintCount);
-                RefreshFill(b);
+                if (b.gameObject.activeInHierarchy) RefreshFill(b);
             }
         }
         catch (Exception e) { Plugin.Logger.LogError($"[PaintCan] ApplyToAll failed: {e}"); }
@@ -137,7 +145,7 @@ internal static class PaintPatches
                 if (SoAmounts.TryGetValue(so.Pointer, out var s) && so.bucketData.paintAmount == s.Applied)
                     so.bucketData.paintAmount = s.Original;
             }
-            foreach (var o in UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<PaintBucket>()))
+            foreach (var o in UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<PaintBucket>(), true))
             {
                 var b = o.TryCast<PaintBucket>();
                 if (b == null) continue;
@@ -145,7 +153,7 @@ internal static class PaintPatches
                 if (vanilla > 0 && b.m_MaxPaintCount != vanilla)
                 {
                     b.m_MaxPaintCount = vanilla;
-                    RefreshFill(b);
+                    if (b.gameObject.activeInHierarchy) RefreshFill(b);
                 }
             }
         }
@@ -158,7 +166,11 @@ internal static class PaintPatches
         // Same formula the game uses; TweenMaterial just sets the shader's _Fill value.
         if (b.paintCount <= 0 || b.m_MaxPaintCount <= 0) return;
         try { b.TweenMaterial(Mathf.Clamp01((float)b.paintCount / b.m_MaxPaintCount)); }
-        catch { /* renderer not ready (pooled/inactive); Initialize will set it */ }
+        catch (Exception e)
+        {
+            // renderer not ready (pooled/inactive); Initialize will set the fill on reuse
+            if (Plugin.Verbose.Value) Plugin.Logger.LogInfo($"[PaintCan] RefreshFill skipped: {e.Message}");
+        }
     }
 
     // Plugin.Load runs before the game has started; never touch Unity objects from there.
