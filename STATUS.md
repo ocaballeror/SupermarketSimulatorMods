@@ -31,14 +31,14 @@ Rules:
 | Bug #4 | open | — | — | Question, not a code task: answer how to collect guest crash logs |
 | Bug #5 | reviewed | `SupermarketFixes/src/Patches/BoxPlaceFix.cs` | 2026-11-15, 1 round, 5066b4084b02 | In-game test + logs. Trigger path unproven; delete the stale `plugins/SupermarketFixes/` subfolder dll and set `[General] Enabled = true` before testing |
 | Bug #6 | open | — | — | No data to reproduce; may be related to Bug #1 |
-| Improvement #1 | reviewed | `PriceMarkupKeeper/` | 2026-11-15, 2 rounds, 67292843335b | In-game test (steps in the mod's CLAUDE.md "How to test in-game"): the `[Markup] New day: ...` summary line proves the detour fired; check guest price tags refresh; check `OnlyProductsFollowingMarkup` off override |
+| Improvement #1 | done 2026-11-15 | `PriceMarkupKeeper/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
 | Improvement #2 | done 2026-11-14 | — | — | |
-| Improvement #3 | reviewed | `PlayerCrouch/` | 2026-11-15, 2 rounds, 2a49cccf09cd | In-game test + `[Crouch]` log lines (`VCam follows:`, `human=`, `legIK(...)`, `Camera offset target`). Unverified: vcam follows `CinemachineCameraTarget`, humanoid Animator, leg IK weights outside vehicles |
+| Improvement #3 | done 2026-11-15 | `PlayerCrouch/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
 | Improvement #4 | done 2026-11-14 | — | — | |
 | Improvement #5 | reviewed | `RestockerDoubleCarry/` | 2026-11-15, 3 rounds, d632e95a4b9f | In-game test (steps in the mod's CLAUDE.md "In-game test steps", `[DoubleCarry]` lines): stack placement, carry animation with two boxes, unmodded guest sync over a whole trip, `IBoxTarget` wrapping, interrupts |
-| Improvement #6 | reviewed | `FurnitureMoveCancel/` | 2026-11-15, 2 rounds, bfe4f8234204 | In-game test, incl. multiplayer (exact-position sync before the place RPC, unmodded guest); steps and `[MoveCancel]` lines in the mod's CLAUDE.md. Unconfirmed: surface probe calibration on offset-pivot pieces |
+| Improvement #6 | done 2026-11-15 | `FurnitureMoveCancel/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
 | Improvement #7 | reviewed | `ExtraComputers/` | 2026-11-15, 4 rounds, 4426fb32469d | In-game test: follow "First in-game test" in the mod's CLAUDE.md (host alone, modded guest, unmodded guest, config toggle). Much of it can't be verified from the dumps: donor furniture choice and prefab building, collider/placing behaviour, Photon property reads, shop hiding, box icon, save/load. Send back the `[ExtraComputers]` log lines |
-| Improvement #8 | reviewed | `GridModeDefault/` | 2026-11-15, 2 rounds, aaa2ae1d9e15 | In-game test (steps in the mod's CLAUDE.md). Look for the `[GridMode] placement started` line (proves the delegate-only patch is hit), and report which furniture types showed no grid. Grid toggle is X, not Ctrl |
+| Improvement #8 | done 2026-11-15 | `GridModeDefault/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
 | Improvement #9 | in-progress | `BulkShelfTransfer/` | — | Being implemented |
 | Improvement #10 | in-progress | `PlayerDoubleCarry/` | — | Being implemented |
 
