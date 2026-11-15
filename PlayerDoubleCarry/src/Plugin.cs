@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.playerdoublecarry";
     public const string Name = "Player Double Carry";
-    public const string Version = "0.1.0";
+    public const string Version = "0.1.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -36,7 +36,8 @@ public class Plugin : BasePlugin
         Enabled = Config.Bind("General", "Enabled", true,
             "Master switch. While holding a closed box, left-click (Use) another box to pick it up too. " +
             "Turning it off takes effect immediately (no restart); if you are carrying two boxes at that moment, " +
-            "the second box still comes back to your hands when you put the first one down.");
+            "the second box still comes back to your hands when you put the first one down. Players leaving while carrying two " +
+            "boxes are also handled only while it is on.");
         RemoteStackVisuals = Config.Bind("Carry", "ShowOtherPlayersStack", true,
             "Show the two boxes another player is carrying stacked (one under the other) instead of inside each other. " +
             "Cosmetic, only affects what you see.");
@@ -61,12 +62,13 @@ public class Plugin : BasePlugin
             Active = true;
             return;
         }
-        if (DoubleCarry.Busy)
+        if (DoubleCarry.HasWork)
         {
-            // The patches are what hands the second box back; keep them until that has happened.
+            // The patches are what hands the second box back (and keep a pending pickup from ending the first
+            // box's interaction); keep them until that is over.
             s_disableWhenIdle = true;
-            Log.LogInfo("[PlayerCarry] Disabled: no new second boxes. The mod turns off fully once the box you are carrying " +
-                        "under the first one is back in your hands.");
+            Log.LogInfo("[PlayerCarry] Disabled: no new second boxes. The mod turns off fully once the second box is back " +
+                        "in your hands (or a pending second-box pickup has been answered).");
             return;
         }
         Unpatch();
@@ -85,7 +87,7 @@ public class Plugin : BasePlugin
     {
         if (!Active) return;
         DoubleCarry.Tick();
-        if (s_disableWhenIdle && !DoubleCarry.Busy && !Enabled.Value)
+        if (s_disableWhenIdle && !DoubleCarry.HasWork && !Enabled.Value)
         {
             s_disableWhenIdle = false;
             s_instance?.Unpatch();
