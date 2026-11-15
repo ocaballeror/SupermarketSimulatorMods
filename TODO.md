@@ -154,7 +154,7 @@ The mod works, but there is no animation for the player crouching, so it does no
 
 ## Improvement #4: Make Self-Checkout Machines Faster
 
-**Status:** IN PROGRESS — Rework v1.1.0 in `SelfCheckoutSpeed/`, under review  
+**Status:** REVIEWED 2026-11-15 — Rework v1.1.1 in `SelfCheckoutSpeed/`, awaiting in-game test  
 **First completed:** 2026-11-14
 
 Make customers using self-checkout machines 2x faster.

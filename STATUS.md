@@ -34,7 +34,7 @@ Rules:
 | Improvement #1 | reviewed | `PriceMarkupKeeper/` | 2026-11-15, rework v1.1.1, 1 round, b88bc963388e | In-game test of new-license pricing (steps in the mod's CLAUDE.md), send the `[Markup]` lines |
 | Improvement #2 | done 2026-11-14 | — | — | |
 | Improvement #3 | in-progress | `PlayerCrouch/` | — | v1.0.3: pose the active skin's Animator (was posing an inactive skin); review pending |
-| Improvement #4 | in-progress | `SelfCheckoutSpeed/` | — | Rework v1.1.0 written (host-authoritative speed, guest catch-up, text field, employee help); review pending |
+| Improvement #4 | reviewed | `SelfCheckoutSpeed/` | 2026-11-15, rework v1.1.1, 1 round, 768471e10bcc | In-game test (steps in the mod's CLAUDE.md): guest follows the host's speed even with its mod off, text field, employee help sped up; send both `LogOutput.log`s with `VerboseLogging` on |
 | Improvement #5 | reviewed | `RestockerDoubleCarry/` | 2026-11-15, fix v1.1.3, 1 round, 6275ff6766f1 | In-game test: the remaining box drops into the hands when the other is put down, racked or trashed (host and guest); plus the earlier open questions in the mod's CLAUDE.md |
 | Improvement #6 | done 2026-11-15 | `FurnitureMoveCancel/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
 | Improvement #7 | in-progress | `ExtraComputers/` | — | v1.2.1 (review round 4 applied). v1.2.0 after the first in-game test (2026-11-15): the furniture prefab failed to build (no donor furniture), so the box opened into nothing and the icon was the drawn placeholder. Rebuilt from a copy of the store computer; boxes refuse to open if the build still fails. Needs review, then in-game test per the mod's CLAUDE.md |
