@@ -35,7 +35,7 @@ Rules:
 | Improvement #2 | done 2026-11-14 | — | — | |
 | Improvement #3 | needs-rework | `PlayerCrouch/` | — | Confirmed in-game 2026-11-15; rework: other players see no crouch pose (mod on both machines) |
 | Improvement #4 | in-progress | `SelfCheckoutSpeed/` | — | Rework v1.1.0 written (host-authoritative speed, guest catch-up, text field, employee help); review pending |
-| Improvement #5 | needs-rework | `RestockerDoubleCarry/` | 2026-11-15, rework v1.1.1, 1 round, be2d923dd34d | In-game 2026-11-15: top box floats when the bottom one is set down |
+| Improvement #5 | in-progress | `RestockerDoubleCarry/` | — | v1.1.2: remaining box moves down into the hands when the other leaves; review pending |
 | Improvement #6 | done 2026-11-15 | `FurnitureMoveCancel/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
 | Improvement #7 | in-progress | `ExtraComputers/` | — | v1.2.1 (review round 4 applied). v1.2.0 after the first in-game test (2026-11-15): the furniture prefab failed to build (no donor furniture), so the box opened into nothing and the icon was the drawn placeholder. Rebuilt from a copy of the store computer; boxes refuse to open if the build still fails. Needs review, then in-game test per the mod's CLAUDE.md |
 | Improvement #8 | done 2026-11-15 | `GridModeDefault/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |

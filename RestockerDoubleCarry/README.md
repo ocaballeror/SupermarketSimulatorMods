@@ -26,7 +26,7 @@ All the restocker's own settings (use unlabeled racks, pick up boxes from the gr
 |---|---|---|---|
 | General | `Enabled` | `true` | Master switch. Turning it off takes effect right away; no restart needed. A restocker carrying two boxes at that moment puts the second one down, or takes it in hand if its hands are empty. |
 | Restockers | `MinimumLevel` | `10` | Restockers at this level or higher carry two boxes (1 to 100). |
-| Restockers | `StackSecondBox` | `true` | Shows the second box stacked on top of the first in the restocker's hands (on the way from storage to the shelves). |
+| Restockers | `StackSecondBox` | `true` | Shows the second box stacked on top of the first in the restocker's hands (on the way from storage to the shelves). When one of the two boxes leaves the hands, the other one moves down into the hands. |
 | Diagnostics | `VerboseLogging` | `true` | Writes each step of a two-box trip to `BepInEx/LogOutput.log` (tag `[DoubleCarry]`). |
 
 ## Who needs it (multiplayer)

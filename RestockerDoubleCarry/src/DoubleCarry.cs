@@ -682,35 +682,65 @@ internal static class DoubleCarry
 
     // ---------------------------------------------------------------- visuals
 
-    /// <summary>Stacks every box in the clerk's hands that isn't the current one on top of it.</summary>
-    internal static void ArrangeStack(ClerkT clerk)
+    /// <summary>
+    /// Stacks every box in the clerk's hands that isn't the current one on top of it.
+    /// <paramref name="previous"/> is the box that was current before this CarryBox call (or Zero).
+    /// </summary>
+    internal static void ArrangeStack(ClerkT clerk, IntPtr previous)
     {
         var holder = clerk.BoxHolder;
         if (holder == null || holder.childCount < 1) return;
-        // Hands emptied (CarryBox(null)): leave everything where it is. The box being let go may still be
-        // parented here for a moment (GoToTrash clears the hands before despawning it), and the host
-        // hands the stashed box over on the clerk's next search anyway.
         var cur = clerk.m_CurrentBox;
-        if (cur == null || cur.transform.parent == null || cur.transform.parent.Pointer != holder.Pointer) return;
-        // CarryBox_Internal tweens the current box to local zero / identity.
-        Extent(cur, Vector3.zero, out float top, out float cx, out float cz);
+        bool holding = cur != null && cur.transform.parent != null && cur.transform.parent.Pointer == holder.Pointer;
+
+        float top = 0f, cx = 0f, cz = 0f;
+        bool haveBase = false;
+        if (holding)
+        {
+            // CarryBox_Internal tweens the current box to local zero / identity. But when the top box is
+            // put down, the box that stays was lifted onto the stack a moment earlier (CarryBox(top) made
+            // the other one a stacked box), and that lift tween may still be running: on guests nothing
+            // kills it, so it fights the game's tween and the box can end up floating where the stack was
+            // (in-game 2026-11-15). Kill whatever runs on the current box and move it into the hands.
+            MoveTo(cur.transform, Vector3.zero);
+            Extent(cur, Vector3.zero, out top, out cx, out cz);
+            haveBase = true;
+        }
+        else
+        {
+            // Hands emptied (CarryBox(null)). Racking re-parents the box into the rack before this
+            // (RackBox.PlaceBox: RackSlot.AddBox, then CarryBox(null)); GoToTrash clears the hands while
+            // the trashed box is still parented here, about to be despawned. Either way the bottom box is
+            // leaving: lower whatever else is still held (the stacked box) into the hands instead of
+            // leaving it floating until the host hands it over at the next search. The leaving box is
+            // `previous`; if it isn't known, don't touch anything.
+            if (previous == IntPtr.Zero) return;
+        }
 
         for (int i = 0; i < holder.childCount; i++)
         {
             var child = holder.GetChild(i);
             if (child == null || !child.gameObject.activeSelf) continue;
             var box = child.GetComponent<Box>();
-            if (box == null || Same(box, cur)) continue;
+            if (box == null) continue;
+            if (holding && Same(box, cur)) continue;
+            if (!holding && box.Pointer == previous) continue;
 
             var b = Bounds(box, out var s);
-            var pos = new Vector3(cx - b.center.x * s.x,
-                top - (b.center.y - b.extents.y) * s.y + 0.005f,
-                cz - b.center.z * s.z);
-            child.DOKill(false);
-            child.DOLocalMove(pos, StackTweenTime, false);
-            child.DOLocalRotate(Vector3.zero, StackTweenTime, RotateMode.Fast);
+            Vector3 pos = haveBase
+                ? new Vector3(cx - b.center.x * s.x, top - (b.center.y - b.extents.y) * s.y + 0.005f, cz - b.center.z * s.z)
+                : Vector3.zero; // lowest remaining box goes where the hands are
+            MoveTo(child, pos);
             Extent(box, pos, out top, out cx, out cz);
+            haveBase = true;
         }
+    }
+
+    private static void MoveTo(Transform t, Vector3 localPos)
+    {
+        t.DOKill(false);
+        t.DOLocalMove(localPos, StackTweenTime, false);
+        t.DOLocalRotate(Vector3.zero, StackTweenTime, RotateMode.Fast);
     }
 
     private static UnityEngine.Bounds Bounds(Box box, out Vector3 scale)
@@ -904,10 +934,17 @@ internal static class RestockDisplayBeginPatch
 [HarmonyPatch(typeof(ClerkT), nameof(ClerkT.CarryBox_Internal))]
 internal static class CarryBoxPatch
 {
-    private static void Postfix(ClerkT __instance)
+    private static void Prefix(ClerkT __instance, out IntPtr __state)
+    {
+        __state = IntPtr.Zero;
+        try { var cur = __instance.m_CurrentBox; if (cur != null) __state = cur.Pointer; }
+        catch (Exception) { }
+    }
+
+    private static void Postfix(ClerkT __instance, IntPtr __state)
     {
         if (!Plugin.StackVisuals.Value) return;
-        try { DoubleCarry.ArrangeStack(__instance); }
+        try { DoubleCarry.ArrangeStack(__instance, __state); }
         catch (Exception e) { Plugin.Logger.LogError($"[DoubleCarry] stacking boxes failed: {e}"); }
     }
 }

@@ -171,7 +171,7 @@ Allow values up to `10x`.
 
 ## Improvement #5: Allow Level 10 Restockers to Carry Two Boxes
 
-**Status:** NEEDS REWORK — See the rework request below (2026-11-15)  
+**Status:** IN PROGRESS — Fix v1.1.2 in `RestockerDoubleCarry/src/DoubleCarry.cs` (`ArrangeStack`), under review  
 **Last reviewed:** 2026-11-15  
 **Project:** `RestockerDoubleCarry/`
 
