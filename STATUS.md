@@ -38,7 +38,7 @@ Rules:
 | Improvement #5 | reviewed | `RestockerDoubleCarry/` | 2026-11-15, 3 rounds, d632e95a4b9f | In-game test (steps in the mod's CLAUDE.md "In-game test steps", `[DoubleCarry]` lines): stack placement, carry animation with two boxes, unmodded guest sync over a whole trip, `IBoxTarget` wrapping, interrupts |
 | Improvement #6 | in-progress | `FurnitureMoveCancel/` | — | In-game test |
 | Improvement #7 | in-progress | `ExtraComputers/` | — | In-game test |
-| Improvement #8 | open | — | — | |
+| Improvement #8 | in-progress | `GridModeDefault/` | — | Implemented (f66ae85), awaiting review, then in-game test. Unconfirmed: that the patch on the delegate-only `GridManager.OnFurnitureStartPlacingMode` is hit |
 | Improvement #9 | open | — | — | |
 | Improvement #10 | open | — | — | |
 
