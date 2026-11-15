@@ -35,7 +35,7 @@ Rules:
 | Improvement #2 | done 2026-11-14 | — | — | |
 | Improvement #3 | done 2026-11-15 | `PlayerCrouch/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
 | Improvement #4 | done 2026-11-14 | — | — | |
-| Improvement #5 | reviewed | `RestockerDoubleCarry/` | 2026-11-15, 3 rounds, d632e95a4b9f | In-game test (steps in the mod's CLAUDE.md "In-game test steps", `[DoubleCarry]` lines): stack placement, carry animation with two boxes, unmodded guest sync over a whole trip, `IBoxTarget` wrapping, interrupts |
+| Improvement #5 | in-progress | `RestockerDoubleCarry/` | — | Rework after in-game test (2026-11-15): restockers unpacked while holding two boxes. Must set the top box on the floor at the shelf, unpack the other, trash/rack it, then come back for the floor box |
 | Improvement #6 | done 2026-11-15 | `FurnitureMoveCancel/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
 | Improvement #7 | reviewed | `ExtraComputers/` | 2026-11-15, 4 rounds, 4426fb32469d | In-game test: follow "First in-game test" in the mod's CLAUDE.md (host alone, modded guest, unmodded guest, config toggle). Much of it can't be verified from the dumps: donor furniture choice and prefab building, collider/placing behaviour, Photon property reads, shop hiding, box icon, save/load. Send back the `[ExtraComputers]` log lines |
 | Improvement #8 | done 2026-11-15 | `GridModeDefault/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
