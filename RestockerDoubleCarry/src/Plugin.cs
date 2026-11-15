@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.restockerdoublecarry";
     public const string Name = "Restocker Double Carry";
-    public const string Version = "1.1.2";
+    public const string Version = "1.1.3";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

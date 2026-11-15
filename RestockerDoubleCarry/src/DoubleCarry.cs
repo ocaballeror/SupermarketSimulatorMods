@@ -71,7 +71,11 @@
  * EndPlan / ReleaseAll release those slots by hand.
  *
  * Visuals: a Clerk.CarryBox_Internal postfix stacks every non-current Box under m_BoxHolder on top of
- * the current one (Box.LocalBounds). It is purely cosmetic and runs wherever the mod is installed.
+ * the current one (Box.LocalBounds). When one of two boxes leaves the hands (CarryBox(null); a prefix
+ * records which box was current), the remaining one is lowered into the hands; when a box the mod had
+ * lifted becomes the current one, its lift tween is replaced by a move to the hands (on guests nothing
+ * else killed it, so it could stay floating, in-game 2026-11-15). Purely cosmetic; runs wherever the mod
+ * is installed.
  *
  * Multiplayer: the AI runs on the host, so the HOST needs the mod. Every pick-up, swap, product
  * placement, racking and trashing goes through the game's own networked calls (Clerk.CarryBox,
@@ -126,6 +130,10 @@ internal static class DoubleCarry
     private const float StackTweenTime = 0.3f;
 
     private static readonly Dictionary<IntPtr, Plan> Plans = new();
+    // Boxes this mod lifted onto a stack (not the game's own carry position). Only these get re-tweened
+    // when they become the box in hand. Stale pointers are harmless: at worst a box gets one extra
+    // re-tween to the hands.
+    private static readonly HashSet<IntPtr> Raised = new();
     // ClerkRestockingState currently running a shortened list -> (state, its full task list).
     private static readonly Dictionary<IntPtr, (ClerkRestockingState State, List<SequenceTask> Original)> Stripped = new();
 
@@ -702,7 +710,10 @@ internal static class DoubleCarry
             // the other one a stacked box), and that lift tween may still be running: on guests nothing
             // kills it, so it fights the game's tween and the box can end up floating where the stack was
             // (in-game 2026-11-15). Kill whatever runs on the current box and move it into the hands.
-            MoveTo(cur.transform, Vector3.zero);
+            // Only for a box this mod lifted onto the stack: a normal pickup keeps the game's own tween
+            // (its duration follows the employee's speed boost, and DOKill would also stop unrelated tweens
+            // such as a rack's DOScale).
+            if (Raised.Remove(cur.Pointer)) MoveTo(cur.transform, Vector3.zero, Duration(clerk));
             Extent(cur, Vector3.zero, out top, out cx, out cz);
             haveBase = true;
         }
@@ -730,17 +741,25 @@ internal static class DoubleCarry
             Vector3 pos = haveBase
                 ? new Vector3(cx - b.center.x * s.x, top - (b.center.y - b.extents.y) * s.y + 0.005f, cz - b.center.z * s.z)
                 : Vector3.zero; // lowest remaining box goes where the hands are
-            MoveTo(child, pos);
+            if (haveBase) Raised.Add(box.Pointer); else Raised.Remove(box.Pointer);
+            MoveTo(child, pos, Duration(clerk));
             Extent(box, pos, out top, out cx, out cz);
             haveBase = true;
         }
     }
 
-    private static void MoveTo(Transform t, Vector3 localPos)
+    private static void MoveTo(Transform t, Vector3 localPos, float seconds)
     {
         t.DOKill(false);
-        t.DOLocalMove(localPos, StackTweenTime, false);
-        t.DOLocalRotate(Vector3.zero, StackTweenTime, RotateMode.Fast);
+        t.DOLocalMove(localPos, seconds, false);
+        t.DOLocalRotate(Vector3.zero, seconds, RotateMode.Fast);
+    }
+
+    /// <summary>The game's carry tween time for this clerk (0.3 s, shortened by the employee's speed boost).</summary>
+    private static float Duration(ClerkT clerk)
+    {
+        try { return LevelableEmployeeExtensions.BoostScaledDuration(new ILevelableEmployee(clerk.Pointer), StackTweenTime); }
+        catch (Exception) { return StackTweenTime; }
     }
 
     private static UnityEngine.Bounds Bounds(Box box, out Vector3 scale)
@@ -859,6 +878,7 @@ internal static class DoubleCarry
     {
         Plans.Clear();
         Stripped.Clear();
+        Raised.Clear();
         InIdleTick = false;
         _dropping = false;
     }
