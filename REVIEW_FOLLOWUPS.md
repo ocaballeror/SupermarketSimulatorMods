@@ -35,16 +35,16 @@ Code: `SupermarketFixes/src/Patches/BoxPlaceFix.cs`. Reviewed at hash `5066b4084
 
 ## Bug #2: ghost of an item left in the player's hands
 
-Code: `SupermarketFixes/src/Patches/GhostHeldItemFix.cs`. Reviewed at hash `50bfe90a93e8` (2 rounds, v0.6.1).
+Code: `SupermarketFixes/src/Patches/GhostHeldItemFix.cs`. Reviewed at hash `d48d7436015a` (follow-up review, approved). Remaining minor findings:
 
-**A. Minor: the README's limitation text covers boxes but not other orphaned items** (README.md line 23; `GhostHeldItemFix.cs` lines 414-419).
-- Furniture boxes have the same host-side lock as boxes. `NetworkFurnitureBox.AvailabilityCallback_RPC` rejects while `IsNetworkOccupied` (+0x40) is set, and `PickUPFurnitureBox_Broadcast` sets it.
-- After the mod drops an orphaned furniture box from a guest's hands, the host still considers it held. `RegrantToSameHolder` only covers `NetworkBox`, so nobody, the guest included, can pick that furniture box up until a reload, even with a modded host.
-- When the affected player is the host itself, `DropOrphan` clears `IsNetworkOccupied` only for a `Box`, never for a `NetworkFurnitureBox`.
-- This isn't worse than vanilla, where the item is stuck in the hands anyway, but the README only says this for boxes.
-- **Suggested direction:** either clear `NetworkFurnitureBox.IsNetworkOccupied` too when on the host or offline, or extend the README sentence to "if it's a box or furniture box, …" and say that the regrant only helps for boxes.
+1. **Minor: interplay with `StuckBoxFix` in the main suspected scenario** (`GhostHeldItemFix.cs:222-239`). The orphan X is also `BoxInteraction.m_Box` (`PickUP_RPC` skips `SetCurrentInteraction` while the player is in an interaction). The scan drops X after 2 s while `BoxInteraction` is still bound to X; `StuckBoxFix` then clears the binding and its retry picks X up again, which makes the late box L an orphan that the ghost fix drops 2 s later. It converges, but with X held and L on the floor, and a later put-down broadcasts with `m_Box` = X, so L's host-side `IsNetworkOccupied` is never cleared by the vanilla message. Direction: rebind `m_Box` to the current box, or leave the orphan alone while it is `m_Box`; at least document the interplay in the patch comment and the mod's CLAUDE.md.
+2. **Minor: unconfirmed claim in the docs** (`GhostHeldItemFix.cs:362-386`, mod CLAUDE.md ~line 53). `DropBox_RPC` reads the dropping player's remote `BoxInteraction.m_Box` and hits an NRE jump if it is null, so the drop and the lock clear may not happen on that client. Soften the wording to "expected, to be confirmed by the host's `[BoxDiag] DropBox_RPC` lines" and ask for those lines in the test steps.
+3. **Minor:** `DropCurrentBox` (366-386) skips vanilla `DropBox`'s resets of `m_holdingUse`/`m_holdingTake`, `m_PlacingMode` and the hint clear. `StuckBoxFix.Recover` already resets the flags; copy that.
+4. **Minor:** README "Who needs it" says "the guest", but the fix runs on whichever machine shows the ghost. Say "whoever sees the ghost; in the suspected case that is a guest".
+5. **Nit:** the doc comment (37-39) says the late box ends up current "if the player was busy", but while busy `m_InInteraction` is set; it also doesn't say that when the player is not busy the game binds the late box itself (no ghost).
+6. **Nit:** `Scan` allocates a `List` and two `HashSets` every 0.25 s even with empty hands (early-out on `hold.childCount == 0`). `s_reported` is never pruned (pointer reuse after GC could silence a later report). The F9 "step back into open space" message could also say "or look up".
 
-**B. Nit: non-box `current` objects in a no-interaction state are still left alone** (line 227). The implementer flagged this. The analysis says case (b) can only produce a box, so this is acceptable as it is. Revisit only if in-game logs show a non-box case.
+(Earlier finding A, furniture boxes: the host or offline case is now cleared in `DropOrphan`; a furniture box orphaned on a guest stays unpickable until a reload even with a modded host, documented. Earlier finding B was accepted as is.)
 
 ---
 
