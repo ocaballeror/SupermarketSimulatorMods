@@ -7,7 +7,7 @@ Bug #6: When there is a pile of boxes, like after placing a big online order, so
 
 ---
 
-[IN PROGRESS: PriceMarkupKeeper/, awaiting in-game test] Improvement #1: Make prices respect the global settings that are set through the pricing tab on the computer. I normally set it to 5% above market value, but on the next day, some prices will change, and they will not follow the previous rule. I want to make it so that, when the user set a global value for prices and discounts, they are still applied to those items whose prices went up or down at the beginning of the next day.
+[REVIEWED 2026-11-15: PriceMarkupKeeper/, awaiting in-game test] Improvement #1: Make prices respect the global settings that are set through the pricing tab on the computer. I normally set it to 5% above market value, but on the next day, some prices will change, and they will not follow the previous rule. I want to make it so that, when the user set a global value for prices and discounts, they are still applied to those items whose prices went up or down at the beginning of the next day.
 [DONE 2026-11-14] Improvement #2: Make paint cans last twice as long.
 [IN PROGRESS: PlayerCrouch/, awaiting in-game test] Improvement #3: Add the ability of players to crouch, pressing Ctrl. Animate the characters to crouch when this happens.
 [DONE 2026-11-14] Improvement #4: Make customers using self checkout machines 2x faster. Make the speed configurable as a float in the mod setings (i.e. 1.5x should be valid), up to 10x.

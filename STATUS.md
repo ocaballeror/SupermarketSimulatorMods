@@ -31,7 +31,7 @@ Rules:
 | Bug #4 | open | — | — | Question, not a code task: answer how to collect guest crash logs |
 | Bug #5 | reviewed | `SupermarketFixes/src/Patches/BoxPlaceFix.cs` | 2026-11-15, 1 round, 5066b4084b02 | In-game test + logs. Trigger path unproven; delete the stale `plugins/SupermarketFixes/` subfolder dll and set `[General] Enabled = true` before testing |
 | Bug #6 | open | — | — | No data to reproduce; may be related to Bug #1 |
-| Improvement #1 | in-progress | `PriceMarkupKeeper/` | — | Approved with open minor/nit findings; fixing them, then re-review. In-game test after |
+| Improvement #1 | reviewed | `PriceMarkupKeeper/` | 2026-11-15, 2 rounds, 67292843335b | In-game test (steps in the mod's CLAUDE.md "How to test in-game"): the `[Markup] New day: ...` summary line proves the detour fired; check guest price tags refresh; check `OnlyProductsFollowingMarkup` off override |
 | Improvement #2 | done 2026-11-14 | — | — | |
 | Improvement #3 | in-progress | `PlayerCrouch/` | — | Approved with open minor/nit findings; fixing them, then re-review. In-game test after (`[Crouch]` log lines) |
 | Improvement #4 | done 2026-11-14 | — | — | |
