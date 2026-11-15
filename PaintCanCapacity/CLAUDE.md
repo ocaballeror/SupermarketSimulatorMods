@@ -4,7 +4,7 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
-v1.0.2: done, confirmed in-game (1.0.0). 1.0.1/1.0.2 are retrospective-review pass: docs corrected, hot-toggle reset now includes inactive (pooled) cans; host behaviour unchanged.
+v1.0.2: done, confirmed in-game (1.0.0). 1.0.1 and 1.0.2 are retrospective-review passes: docs corrected, hot-toggle reset now includes inactive (pooled) cans; host behaviour unchanged.
 
 ## How it works
 
