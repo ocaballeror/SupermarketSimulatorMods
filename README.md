@@ -19,6 +19,7 @@ The work list lives in [`TODO`](TODO): the bugs and improvements requested, and 
 | Price Markup Keeper | [`PriceMarkupKeeper/`](PriceMarkupKeeper) | Improvement #1: prices keep the bulk markup when market prices change | Written, awaiting in-game test |
 | Player Crouch | [`PlayerCrouch/`](PlayerCrouch) | Improvement #3: hold Ctrl to crouch, character model crouches (synced to modded players) | Written, awaiting in-game test |
 | Extra Computers | [`ExtraComputers/`](ExtraComputers) | Improvement #7: buyable extra computers, each with its own screen | Written, awaiting in-game test |
+| Grid Mode Default | [`GridModeDefault/`](GridModeDefault) | Improvement #8: grid mode is on by default when placing furniture | Written, awaiting in-game test |
 
 ## Game and platform
 
@@ -67,6 +68,7 @@ PriceMarkupKeeper/
 RestockerDoubleCarry/
 ExtraComputers/
 PlayerCrouch/
+GridModeDefault/
 tools/
   Il2CppDump/        dumps native code (disassembly + Cpp2IL ISIL) for chosen game types
   isil.sh            prints one method's ISIL from a dump, condensed
