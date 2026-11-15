@@ -12,14 +12,15 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.selfcheckoutspeed";
     public const string Name = "Self Checkout Speed";
-    public const string Version = "1.0.1";
+    public const string Version = "1.1.0";
+
+    internal const float MaxMultiplier = 10f;
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<float> SpeedMultiplier;
+    internal static ConfigEntry<bool> SpeedUpEmployeeHelp;
     internal static ConfigEntry<bool> Verbose;
-
-    private static bool Active { get; set; }
 
     private Harmony _harmony;
 
@@ -29,44 +30,47 @@ public class Plugin : BasePlugin
         _harmony = new Harmony(Guid);
 
         Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off removes all patches immediately (no restart needed).");
+            "Speeds up self checkouts when you host or play solo. As a guest in multiplayer you always run " +
+            "at the host's speed (so both games stay in step), whatever this and the other settings say.");
+        // ClampedFloat instead of AcceptableValueRange: config managers draw a text field, not a slider.
         SpeedMultiplier = Config.Bind("SelfCheckout", "SpeedMultiplier", 2f,
             new ConfigDescription(
                 "How much faster customers get through self checkout machines (scanning each item and paying). " +
-                "1 = normal speed, 2 = twice as fast, up to 10.",
-                new AcceptableValueRange<float>(1f, 10f)));
+                "Type a number: 1 = normal speed, 2 = twice as fast, 1.5 = one and a half times, up to 10.",
+                new ClampedFloat(1f, MaxMultiplier)));
+        SpeedUpEmployeeHelp = Config.Bind("SelfCheckout", "SpeedUpEmployeeHelp", true,
+            "Also speed up scanning when an employee (customer helper) helps a customer at a self checkout, " +
+            "by the same multiplier.");
         Verbose = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Log every shortened self checkout wait (tag [SelfCheckout] in LogOutput.log). Very chatty.");
 
-        Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
+        Enabled.SettingChanged += (_, _) => OnSettingsChanged();
+        SpeedMultiplier.SettingChanged += (_, _) => OnSettingsChanged();
+        SpeedUpEmployeeHelp.SettingChanged += (_, _) => OnSettingsChanged();
 
-        SetActive(Enabled.Value);
-        Log.LogInfo($"{Name} {Version} loaded ({(Active ? "enabled" : "disabled")}, x{SpeedMultiplier.Value})");
-    }
-
-    private void SetActive(bool on)
-    {
-        if (on == Active) return;
-        if (on) ApplyPatches();
-        else
-        {
-            _harmony.UnpatchSelf();
-            Log.LogInfo("All patches removed (disabled)");
-        }
-        Active = on;
-    }
-
-    private void ApplyPatches()
-    {
-        // The coroutine classes are compiler generated and get obfuscated names in the interop
-        // assembly, so they are located by their native names at runtime.
+        // The patches stay installed even when Enabled is off: a guest must follow the host's speed
+        // whatever its own settings say (see SelfCheckoutPatches.cs). With nothing to speed up they
+        // return straight away.
         int n = SelfCheckoutPatches.Apply(_harmony);
-        Log.LogInfo($"Patches applied ({n}/{SelfCheckoutPatches.Targets.Length} self checkout coroutines)");
+        Log.LogInfo($"Patches applied ({n}/{SelfCheckoutPatches.TargetCount} checkout coroutines)");
+        AddComponent<SyncBehaviour>();
+
+        Log.LogInfo($"{Name} {Version} loaded ({(Enabled.Value ? "enabled" : "disabled when hosting/solo")}, " +
+                    $"x{SpeedMultiplier.Value}, employee help {(SpeedUpEmployeeHelp.Value ? "on" : "off")})");
+    }
+
+    private static void OnSettingsChanged()
+    {
+        HostSync.Invalidate();
+        Logger.LogInfo($"Settings: {(Enabled.Value ? "enabled" : "disabled")}, x{SpeedMultiplier.Value}, " +
+                       $"employee help {(SpeedUpEmployeeHelp.Value ? "on" : "off")}" +
+                       (HostSync.IsGuest ? " (you are a guest: the host's speed is used)" : ""));
     }
 
     public override bool Unload()
     {
-        SetActive(false);
+        _harmony.UnpatchSelf();
+        HostSync.Reset();
         return true;
     }
 }

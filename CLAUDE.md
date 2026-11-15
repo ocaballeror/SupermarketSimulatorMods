@@ -156,7 +156,8 @@ Typical loop for a task:
 - **Deploy the compiled dll into the root of `BepInEx/plugins/`, not a per-mod subfolder.** The csproj `DeployToGame` target copies to `$(BepInExDir)/plugins`; keep it that way in every mod, and tell players to do the same in the README. A leftover copy in a subfolder would load twice.
 - Apply each `[HarmonyPatch]` class individually and log failures, so one broken patch (for example after a game update) doesn't disable the others.
 - Give every fix or feature its own config entry, with a description that a player can understand.
-- Configurable numbers (e.g. speed multipliers) use `ConfigEntry<float>` with an `AcceptableValueRange` so config managers render them properly. Settings show up in BepInExConfigManager automatically.
+- Configurable numbers (e.g. speed multipliers) use `ConfigEntry<float>` with a range. Settings show up in BepInExConfigManager and in Mod Settings Tool (the in-game "Mods" tab) automatically.
+  - Mod Settings Tool picks the control by reflection: an `AcceptableValues` property → dropdown; `MinValue`/`MaxValue` properties (i.e. `AcceptableValueRange`) → **slider**; no acceptable values → text field. The user wants typed numbers, not sliders (2026-11-15): use a clamp-only `AcceptableValueBase` subclass without those property names (`SelfCheckoutSpeed/src/ClampedFloat.cs`). BepInEx still clamps typed values through `Clamp`.
 - Diagnostics/logging can default to on while a fix is unconfirmed. **Default it to off once the user confirms the fix works.** Prefix log lines with a tag such as `[RackMove]`.
 - Don't break vanilla behaviour when a feature is turned off: every patch checks its config entry and falls through to the original.
 

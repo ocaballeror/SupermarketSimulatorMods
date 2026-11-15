@@ -13,7 +13,7 @@ The work list lives in [`TODO.md`](TODO.md): the bugs and improvements requested
 |---|---|---|---|
 | Supermarket Fixes | [`SupermarketFixes/`](SupermarketFixes) | All bug fixes from `TODO` | In progress (Bugs #1–#3 and #5 written, awaiting in-game confirmation) |
 | Paint Can Capacity | [`PaintCanCapacity/`](PaintCanCapacity) | Improvement #2: paint cans last 2x (configurable) | Done (confirmed in-game) |
-| Self Checkout Speed | [`SelfCheckoutSpeed/`](SelfCheckoutSpeed) | Improvement #4: faster self checkout customers (configurable) | Done (confirmed in-game) |
+| Self Checkout Speed | [`SelfCheckoutSpeed/`](SelfCheckoutSpeed) | Improvement #4: faster self checkout customers and employee help (configurable, follows the host) | Rework written (v1.1.0), awaiting in-game test |
 | Furniture Move Cancel | [`FurnitureMoveCancel/`](FurnitureMoveCancel) | Improvement #6: Escape puts moved furniture back | Done (confirmed in-game) |
 | Restocker Double Carry | [`RestockerDoubleCarry/`](RestockerDoubleCarry) | Improvement #5: level 10+ restockers fetch two boxes per trip | Written, awaiting in-game test |
 | Price Markup Keeper | [`PriceMarkupKeeper/`](PriceMarkupKeeper) | Improvement #1: prices keep the bulk markup when market prices change | Done (confirmed in-game) |

@@ -4,28 +4,35 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
-v1.0.1: host behaviour (coroutine speed-up) confirmed in-game with v1.0.0. 1.0.1 is a retrospective review cleanup (clear `CurrentProp` on re-apply, log a persistent postfix failure only once, doc tidy); no behaviour change.
+v1.1.0 (rework after the 2026-11-15 in-game test), not yet tested in-game:
+- The user saw customers leave before their items were scanned on the guest. The guest had switched the mod **off** mid-session (its log: "All patches removed (disabled)"), so it scanned at 1x behind a 2x host.
+- The multiplier must be a text field in the in-game mod settings, not a slider.
+- Employee-assisted checkouts must be sped up too.
 
-Open: the unmodded-guest case is still untested (see "Unmodded guest test" below).
+v1.0.x host behaviour (coroutine speed-up) was confirmed in-game.
 
 ## How it works
 
-- A customer's whole stay at a self checkout is spent in two coroutines on `SelfCheckout`:
-  - `<<StartSelfCheckout>g__Scanning|23_0>d` waits `m_CustomerScanningInterval` per item. The last scan starts payment immediately; the 1 s wait it yields on an empty belt delays nothing.
-  - `<<FinishSelfCheckout>g__Payment|26_0>d` waits 2 s.
-- The mod postfixes both coroutines' `MoveNext` and divides the yielded `WaitForSeconds.m_Seconds` by the multiplier. Unity reads the wait time after `MoveNext` returns, so this shortens every wait.
-- The coroutine classes have obfuscated names in the interop assembly. They're found at startup by their native IL2CPP names instead, so if the game renames them the log reports `n/2` patched.
-- The host drives the checkout: `Checkout.FinishedScanning` and the finish broadcast only run on the master client. That's why the host needs the mod.
-- Guests run their own copy of the scanning coroutine (`StartSelfCheckout_RPC`). The host's finish message (`FinishSelfCheckout_RPC` → `CashierCompletedCheckout`) neither stops it nor clears `CheckoutBelt.m_Products`. That's why an unmodded guest keeps scanning after a sped-up checkout has finished.
-- Possible follow-up if that turns out to cause problems: on modded guests, stop the leftover scanning coroutine in a `SelfCheckout.FinishSelfCheckout_Order` prefix.
+- Four coroutines on `SelfCheckout` are postfixed (`MoveNext`); the yielded `WaitForSeconds.m_Seconds` is divided by the multiplier. Unity reads it after `MoveNext` returns.
+  - `<<StartSelfCheckout>g__Scanning|23_0>d`: customer scanning, per item `m_CustomerScanningInterval` (host and guests).
+  - `<<FinishSelfCheckout>g__Payment|26_0>d`: 2 s payment (host).
+  - `<<StartCustomerHelperCheckout>g__Scanning|24_0>d`: employee scanning (host), per item `CustomerHelper.CurrentScanInterval`.
+  - `<<StartCustomerHelperCheckoutOrder>g__ScanningOrder|51_0>d`: the guest copy of employee scanning.
+- The classes have obfuscated interop names; they're found at startup by native name. The log reports `n/4` patched.
+- **Host-authoritative speed (`HostSync.cs`).** The master client publishes the multipliers it uses as player custom properties `oscar.scs.self` / `oscar.scs.help` (floats), checked once a second by `SyncBehaviour`, re-sent if the room's copy differs. Guests (`InRoom && !IsMasterClient`) read them from `PhotonNetwork.MasterClient`; missing key (unmodded host) means 1x. Local settings only apply when hosting or solo.
+- Because of that, **the patches stay installed when `[General] Enabled` is off** (a deliberate exception to the root master-switch convention): a guest that switched the mod off must still follow the host. Enabled only feeds the host/solo multiplier. `Unload()` still unpatches.
+- **Guest catch-up.** The host's finish messages (`SelfCheckout.FinishSelfCheckout_Order` via `Checkout.FinishSelfCheckoutOrder`, and `NetworkCheckout.FinishHelperCheckout_RPC`) don't stop the guest's scanning coroutine or clear the belt. On guests the postfix records running coroutines (pointer → `__4__this.m_Checkout` pointer); prefixes on those two methods mark that checkout's running coroutines as rushed, and their remaining waits become 0 (one item per frame). Entries drop when `MoveNext` returns false; the map is cleared above 256 entries in case a coroutine is stopped from outside.
+- **Text field instead of slider.** `ClampedFloat` is an `AcceptableValueBase` without `MinValue`/`MaxValue`/`AcceptableValues` properties; Mod Settings Tool picks its control by reflecting on those names (see root CLAUDE.md section 6). BepInEx still clamps through `Clamp`.
 
-## Unmodded guest test (still open)
+## Test plan (v1.1.0)
 
-Dumps confirm the risk: `SelfCheckout.FinishSelfCheckout_Order` (what the host's finish RPC runs on the guest) only does `HandCard`, despawns the card, calls `Checkout.CashierCompletedCheckout`, hides an object and clears two flags. It doesn't stop the guest's scanning coroutine or clear `CheckoutBelt.m_Products`. The host-side mod can't change the guest's coroutine speed, so there's no host-side fix. Only a modded guest could stop the leftover scanner.
+1. Mod settings: `SpeedMultiplier` is a text field; typing 1.5 sticks, 50 becomes 10.
+2. Host 2x, guest with the mod **switched off**: watch a self checkout from the guest. Items should finish before the customer walks away. Host log: `[SelfCheckout] Told guests to use x2 ...` once per session/change.
+3. Host changes the multiplier mid-session: guest follows within ~1 s (with `VerboseLogging` on the guest, waits show the host's value).
+4. A customer needing help at a self checkout: the employee scans 2x faster on both machines.
+5. Send both `LogOutput.log`s with `VerboseLogging = true` if anything is off; look for `catching up with the host` lines on the guest.
 
-Test: host with the mod, guest **without** it, a self checkout in use by a customer with several items (6+).
-1. Run at the default 2x, then at 10x. Watch the machine from the guest.
-2. Look for: scan beeps or items still being scanned after the customer paid and left; the checkout screen total growing or showing stale entries after the customer is gone; two scans overlapping when the next customer starts at the same machine; belt items left over.
-3. Report: which multiplier, how many items, what was seen or heard and for how long, plus the guest's `Player.log` if a stale state persisted. A host `LogOutput.log` with `VerboseLogging = true` shows the shortened waits (`[SelfCheckout] wait ...`) for timing correlation.
+## Pitfalls
 
-If it shows up, implement the follow-up: on modded guests, stop the leftover scanner (and clear the belt) in a `SelfCheckout.FinishSelfCheckout_Order` prefix or postfix. For unmodded guests the only mitigation is a lower multiplier (the lag is about items x interval x (1 - 1/N)).
+- An unmodded guest still scans at 1x behind a sped-up host; nothing host-side can change that.
+- Custom-property floats come back through `Unbox<float>()`; values are clamped to [1, 10] on read.
