@@ -15,7 +15,7 @@ When you place or move furniture (shelves, fridges, freezers, racks, checkouts, 
 |---|---|---|---|
 | General | `Enabled` | `true` | Master switch. Turning it off restores the game's own grid setting from the next piece you pick up; no restart needed. |
 | GridMode | `RememberToggle` | `true` | `true`: the grid starts on, and if you turn it off with the grid key it stays off until you turn it back on (or restart the game). `false`: every piece you pick up or place starts with the grid on again. |
-| Diagnostics | `VerboseLogging` | `true` | Writes `[GridMode]` lines to `BepInEx/LogOutput.log` each time placement starts. |
+| Diagnostics | `VerboseLogging` | `false` | Writes `[GridMode]` lines to `BepInEx/LogOutput.log` each time placement starts. |
 
 ## Who needs it (multiplayer)
 

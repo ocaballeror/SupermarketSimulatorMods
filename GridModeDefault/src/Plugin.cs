@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.gridmodedefault";
     public const string Name = "Grid Mode Default";
-    public const string Version = "1.0.1";
+    public const string Version = "1.0.2";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -35,7 +35,7 @@ public class Plugin : BasePlugin
             "true: the grid starts on, and if you turn it off with the grid key (X by default) it stays off " +
             "until you turn it on again or restart the game (the game's own behaviour). " +
             "false: every time you pick up or place furniture the grid starts on again.");
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
+        Verbose = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Log what the mod does when furniture placement starts (tag [GridMode] in LogOutput.log).");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
