@@ -4,12 +4,26 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
-v1.0.0: written and builds, **awaiting in-game test** (TODO Improvement #5). `VerboseLogging` defaults to on until confirmed.
+v1.0.1: written and builds, **awaiting in-game test** (TODO Improvement #5). `VerboseLogging` defaults to on until confirmed.
+
+Review round 1 applied in 1.0.1: the second-job probe no longer leaves display slots reserved (`TryFindSecondJob(reserve: false)` snapshots and restores `DisplaySlot.m_OccupiedRestocker`); reservations of the real box-2 job (`Plan.ReservedSecond`) are released in `EndPlan`/`ReleaseAll` if the trip dies before the fetch run's `Exit`; stash hand-overs go through `HandOver` (`DOKill` first, so stacking and carry tweens don't fight).
 
 Open questions to confirm in-game:
 - Does the stacked box sit correctly on top (uses `Box.LocalBounds`, i.e. the main `BoxCollider`)?
 - Is the restocker's walk/carry animation fine with the second box?
 - Does an unmodded guest stay in sync through a whole trip (both products appear on the guest's shelves, leftovers end up in the guest's racks)?
+
+## In-game test steps
+
+Setup: a restocker at level 10+ (or lower `MinimumLevel`), two products needing restock with boxes available (storage racks and/or the outside delivery area), `VerboseLogging` on. Report the `[DoubleCarry]` lines from `BepInEx/LogOutput.log` (a normal trip logs: two-box trip, has box 1, has both boxes, product done, taking the remaining box back, trip finished).
+
+1. Watch a whole trip: box 1, box 2, restock product 1, restock product 2, leftovers back to a rack. Check the stack looks right (box 2 sits on top of box 1, not inside it or floating).
+2. Carry animation: expected cosmetic quirk: the carry pose may turn off while a box is only stashed (e.g. after `GoToTrash` clears the hands), until the next search. Report whether the animation looks wrong while two boxes are carried.
+3. Guest (unmodded): both products appear on the guest's shelves, leftovers end up in the guest's racks, no box stays floating. A guest with the mod should see the stack.
+4. Second box from the delivery area and from a rack; box 1 from a vehicle.
+5. Interrupts: fire or deactivate a restocker mid-trip (both boxes put down, no `[DoubleCarry]` errors); switch `Enabled` off mid-trip; another restocker taking box 2 first.
+6. Reservations: after a trip (and after an interrupted one), other restockers still refill both products' displays (no display stays "taken" by the first clerk). Log lines `probe reservation of N display slot(s) undone` and `released N reserved display slot(s)` are expected occasionally.
+7. `new IBoxTarget(ptr)` wrapping of `StreetBoxTarget` and `RackSlotBoxTarget` is untested in-game; any exception from the search postfix or prefix (`[DoubleCarry] search ... failed`) means it failed. Send those lines.
 
 ## How it works
 
@@ -33,7 +47,7 @@ Open questions to confirm in-game:
 
 - Host-only logic. Guests get the game's own RPCs (`ClerkCarryBox_RPC`, `ClerkPickupRack_RPC`, place product, place box, destroy), so they stay in sync.
 - `CarryBox_Internal` on a guest never un-parents the previous box either. Without the mod, both boxes sit at the hands' origin, one inside the other. With the mod, the postfix stacks them.
-- Display slots are reserved (`DisplaySlot+0x70`) only for the duration of one restocking run, as in vanilla. Between legs of the trip another restocker may take the same product's displays. The result is a wasted box trip, not a desync.
+- Display slots are reserved (`DisplaySlot+0x70`) only for the duration of one restocking run, as in vanilla. Both `SearchBestFitDisplaySlotsForRestock` overloads write the field on every returned slot and only `ClerkRestockingState.Exit` clears it (unconditionally, for its dependency list), so the trip-start probe undoes its own reservations. Between legs of the trip another restocker may take the same product's displays. The result is a wasted box trip, not a desync.
 - Not handled: a guest joining mid-trip gets the stashed box at its synced world position. It isn't re-parented, because the sync only knows the current box (`NetworkClerk.OnSyncRequested`). It could even be picked up there. The next host `CarryBox` RPC for that box fixes it. If it was taken, `IsStashed` turns false and the trip goes on without it.
 
 ## Pitfalls / follow-ups

@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.restockerdoublecarry";
     public const string Name = "Restocker Double Carry";
-    public const string Version = "1.0.0";
+    public const string Version = "1.0.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -32,7 +32,7 @@ public class Plugin : BasePlugin
 
         Enabled = Config.Bind("General", "Enabled", true,
             "Master switch. Turning it off removes the feature immediately (no restart needed). " +
-            "A restocker that is carrying two boxes at that moment puts the second one down on the floor.");
+            "A restocker that is carrying two boxes at that moment puts the second one down on the floor, or takes it in hand if its hands are empty.");
         MinimumLevel = Config.Bind("Restockers", "MinimumLevel", 10,
             new ConfigDescription(
                 "Restockers at this level or higher fetch two boxes per trip: they pick up two boxes of different " +

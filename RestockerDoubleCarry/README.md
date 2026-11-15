@@ -9,7 +9,7 @@ Experienced restockers carry **two boxes per trip**. A restocker at level 10 or 
 
 If there's no second job when it picks up the first box, or the second box is gone by the time it gets there, the restocker just carries on with one box. Lower-level restockers aren't affected.
 
-All the restocker's own settings (use unlabeled racks, pick up boxes from the ground, drop empty boxes, restock shelves) are respected. The second box is chosen the same way the game chooses the first.
+All the restocker's own settings (use unlabeled racks, pick up boxes from the ground, drop empty boxes, restock shelves) are respected. The second box is chosen the same way the game chooses the first, except that it is always a box from the outside area or from a storage rack: a box in a delivery vehicle can be the first box but never the second.
 
 ## Settings
 
@@ -17,7 +17,7 @@ All the restocker's own settings (use unlabeled racks, pick up boxes from the gr
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch. Turning it off takes effect right away; no restart needed. A restocker carrying two boxes at that moment puts the second one on the floor. |
+| General | `Enabled` | `true` | Master switch. Turning it off takes effect right away; no restart needed. A restocker carrying two boxes at that moment puts the second one down, or takes it in hand if its hands are empty. |
 | Restockers | `MinimumLevel` | `10` | Restockers at this level or higher carry two boxes (1 to 100). |
 | Restockers | `StackSecondBox` | `true` | Shows the second box stacked on top of the first in the restocker's hands. |
 | Diagnostics | `VerboseLogging` | `true` | Writes each step of a two-box trip to `BepInEx/LogOutput.log` (tag `[DoubleCarry]`). |

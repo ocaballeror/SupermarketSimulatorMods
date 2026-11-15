@@ -46,6 +46,13 @@
  *   The stash is dropped to the floor when the game drops the clerk's box for any reason other than the
  *   idle "nowhere to put it" timer (firing, deactivation), and when the mod is switched off.
  *
+ * Display reservations: both SearchBestFitDisplaySlotsForRestock overloads write DisplaySlot.m_OccupiedRestocker
+ * (+0x70) on every slot they return, and only ClerkRestockingState.Exit clears them (for the run's own
+ * dependency list). The probe that decides whether to start a trip therefore restores the previous owners
+ * (a vanilla run would have reserved them anyway, but a trip would hold them for much longer). The real
+ * box-2 search keeps its reservation (the fetch-only run's Exit clears it); if the trip dies before that,
+ * EndPlan / ReleaseAll release those slots by hand.
+ *
  * Visuals: a Clerk.CarryBox_Internal postfix stacks every non-current Box under m_BoxHolder on top of
  * the current one (Box.LocalBounds). It is purely cosmetic and runs wherever the mod is installed.
  *
@@ -81,6 +88,11 @@ internal static class DoubleCarry
         public bool FetchOnlyNext;
         public Box First, Second;
         public int FirstProduct = -1, SecondProduct = -1;
+        /// <summary>
+        /// Display slots reserved for the clerk by the box-2 search. The fetch-only run's Exit clears
+        /// them; they are released by hand if the plan dies before that.
+        /// </summary>
+        public List<DisplaySlot> ReservedSecond;
     }
 
     private const float StackTweenTime = 0.3f;
@@ -153,7 +165,70 @@ internal static class DoubleCarry
 
     internal static void EndPlan(ClerkT clerk, string why)
     {
-        if (Plans.Remove(clerk.Pointer) && why != null) Info($"{Name(clerk)}: {why}");
+        if (Plans.Remove(clerk.Pointer, out var plan))
+        {
+            ReleaseReserved(clerk, plan);
+            if (why != null) Info($"{Name(clerk)}: {why}");
+        }
+    }
+
+    /// <summary>Gives back the box-2 display reservations that this clerk still holds.</summary>
+    private static void ReleaseReserved(ClerkT clerk, Plan plan)
+    {
+        var list = plan.ReservedSecond;
+        plan.ReservedSecond = null;
+        if (list == null) return;
+        try
+        {
+            int n = 0;
+            foreach (var slot in list)
+            {
+                if (slot == null) continue;
+                if (!Same(slot.m_OccupiedRestocker, clerk)) continue;
+                slot.m_OccupiedRestocker = null;
+                n++;
+            }
+            if (n > 0) Info($"{Name(clerk)}: released {n} reserved display slot(s) of the cancelled second job");
+        }
+        catch (Exception e)
+        {
+            Plugin.Logger.LogWarning($"[DoubleCarry] releasing display reservations failed: {e.Message}");
+        }
+    }
+
+    /// <summary>Puts the box in the clerk's hands. Kills a stacking tween first so two tweens don't fight.</summary>
+    private static void HandOver(ClerkT clerk, Box box)
+    {
+        box.transform.DOKill(false);
+        clerk.CarryBox(box);
+    }
+
+    /// <summary>
+    /// Both game search overloads write DisplaySlot.m_OccupiedRestocker on every slot they return. A probe
+    /// must not keep that, so remember the owners of the candidate slots and put them back.
+    /// </summary>
+    private static List<(DisplaySlot Slot, ClerkT Owner)> SnapshotOwners(DisplaySlotList candidates)
+    {
+        var snap = new List<(DisplaySlot, ClerkT)>();
+        if (candidates == null) return snap;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            var slot = candidates[i];
+            if (slot != null) snap.Add((slot, slot.m_OccupiedRestocker));
+        }
+        return snap;
+    }
+
+    private static void RestoreOwners(ClerkT clerk, List<(DisplaySlot Slot, ClerkT Owner)> snap)
+    {
+        int n = 0;
+        foreach (var (slot, owner) in snap)
+        {
+            if (slot == null || Same(slot.m_OccupiedRestocker, owner)) continue;
+            slot.m_OccupiedRestocker = owner;
+            n++;
+        }
+        if (n > 0) Info($"{Name(clerk)}: probe reservation of {n} display slot(s) undone");
     }
 
     private static void PruneDeadPlans()
@@ -167,9 +242,10 @@ internal static class DoubleCarry
 
     /// <summary>
     /// Finds a restock job for a product other than <paramref name="excludedProduct"/>, the way the
-    /// game's own search does (street boxes first if allowed, then racks).
+    /// game's own search does (street boxes first if allowed, then racks). With <paramref name="reserve"/>
+    /// false it is a pure probe: the display reservations the game's search makes are undone.
     /// </summary>
-    internal static bool TryFindSecondJob(SearchHandler h, ClerkT clerk, int excludedProduct,
+    internal static bool TryFindSecondJob(SearchHandler h, ClerkT clerk, int excludedProduct, bool reserve,
         out IBoxTarget target, out DisplaySlotList displays, out int productId, out string source)
     {
         target = null; displays = null; productId = -1; source = null;
@@ -197,7 +273,10 @@ internal static class DoubleCarry
                 {
                     if (!h.CheckStreetForRequiredProduct(pid, out Box streetBox) || streetBox == null) continue;
                     if (streetBox.IsOccupiedByAnother(self) || streetBox.IsTargeted) continue;
-                    var list = h.SearchBestFitDisplaySlotsForRestock(streetBox, h.GetDisplaySlotsRequiredRefill(pid));
+                    var cand = h.GetDisplaySlotsRequiredRefill(pid);
+                    var snap = reserve ? null : SnapshotOwners(cand);
+                    var list = h.SearchBestFitDisplaySlotsForRestock(streetBox, cand);
+                    if (snap != null) RestoreOwners(clerk, snap);
                     if (list == null || list.Count == 0) continue;
                     target = new IBoxTarget(new StreetBoxTarget(streetBox).Pointer);
                     displays = list; productId = pid; source = "street";
@@ -206,7 +285,10 @@ internal static class DoubleCarry
                 else
                 {
                     if (!h.HasRackSlotForRequiredProduct(pid, out RackSlot rackSlot) || rackSlot == null) continue;
-                    var list = h.SearchBestFitDisplaySlotsForRestock(rackSlot, h.GetDisplaySlotsRequiredRefill(pid));
+                    var cand = h.GetDisplaySlotsRequiredRefill(pid);
+                    var snap = reserve ? null : SnapshotOwners(cand);
+                    var list = h.SearchBestFitDisplaySlotsForRestock(rackSlot, cand);
+                    if (snap != null) RestoreOwners(clerk, snap);
                     if (list == null || list.Count == 0) continue;
                     target = new IBoxTarget(new RackSlotBoxTarget(rackSlot).Pointer);
                     displays = list; productId = pid; source = "rack";
@@ -228,6 +310,8 @@ internal static class DoubleCarry
         var plan = GetPlan(clerk);
         if (plan == null) return true;
         plan.FetchOnlyNext = false;
+        // The fetch-only run that reserved these has ended (its Exit cleared them).
+        plan.ReservedSecond = null;
 
         var mgmt = clerk.ManagementData;
         if (mgmt == null || !mgmt.IsActive)
@@ -245,13 +329,16 @@ internal static class DoubleCarry
                 if (cur != null && stash == null && ProductOf(cur) == plan.FirstProduct)
                 {
                     plan.First = cur;
-                    if (TryFindSecondJob(h, clerk, plan.FirstProduct, out var target, out var displays,
+                    if (TryFindSecondJob(h, clerk, plan.FirstProduct, true, out var target, out var displays,
                             out int p2, out string source))
                     {
                         h.BoxTarget = target;
                         h.DisplayTargets = displays;
                         h.RackTarget = null;
                         plan.SecondProduct = p2;
+                        plan.ReservedSecond = new List<DisplaySlot>();
+                        for (int i = 0; i < displays.Count; i++)
+                            if (displays[i] != null) plan.ReservedSecond.Add(displays[i]);
                         plan.Phase = Phase.FetchSecond;
                         plan.FetchOnlyNext = true;
                         vanillaRan = false;
@@ -269,7 +356,7 @@ internal static class DoubleCarry
                 {
                     plan.Second = cur;
                     plan.Phase = Phase.DeliverFirst;
-                    clerk.CarryBox(plan.First);
+                    HandOver(clerk, plan.First);
                     Info($"{Name(clerk)}: has both boxes, restocking product {plan.FirstProduct} first");
                     return true;
                 }
@@ -281,7 +368,7 @@ internal static class DoubleCarry
                 plan.Phase = Phase.Unwind;
                 if (stash != null)
                 {
-                    clerk.CarryBox(stash);
+                    HandOver(clerk, stash);
                     Info($"{Name(clerk)}: product {plan.FirstProduct} done (box 1 {(IsStashed(clerk, plan.First) ? "has leftovers" : "gone")}), restocking product {ProductOf(stash)}");
                     return true;
                 }
@@ -301,7 +388,7 @@ internal static class DoubleCarry
         }
         if (cur == null)
         {
-            clerk.CarryBox(stash);
+            HandOver(clerk, stash);
             Info($"{Name(clerk)}: taking the remaining box (product {ProductOf(stash)}) back");
         }
         return true;
@@ -327,7 +414,7 @@ internal static class DoubleCarry
         int p1 = bt.ProductID;
         if (p1 < 0) return;
         // Only checks that a second job exists right now; the actual job is picked once box 1 is in hand.
-        if (!TryFindSecondJob(h, clerk, p1, out _, out _, out int p2, out string source)) return;
+        if (!TryFindSecondJob(h, clerk, p1, false, out _, out _, out int p2, out string source)) return;
 
         PruneDeadPlans();
         Plans[clerk.Pointer] = new Plan
@@ -446,7 +533,7 @@ internal static class DoubleCarry
         _dropping = true;
         try
         {
-            clerk.CarryBox(stash);
+            HandOver(clerk, stash);
             clerk.DropBoxToGround();
             if (keep != null && keep.gameObject.activeInHierarchy)
             {
@@ -470,7 +557,7 @@ internal static class DoubleCarry
         var stash = Stash(clerk, plan);
         if (stash == null) return;
         var cur = Current(clerk);
-        if (cur == null && handBack) clerk.CarryBox(stash);
+        if (cur == null && handBack) HandOver(clerk, stash);
         else DropStash(clerk, stash, cur);
     }
 
@@ -490,11 +577,12 @@ internal static class DoubleCarry
             {
                 var clerk = plan.Clerk;
                 if (clerk == null || !HostSide) continue;
+                ReleaseReserved(clerk, plan);
                 var stash = Stash(clerk, plan);
                 var cur = Current(clerk);
                 if (stash != null)
                 {
-                    if (cur == null) clerk.CarryBox(stash);
+                    if (cur == null) HandOver(clerk, stash);
                     else DropStash(clerk, stash, cur);
                 }
                 else if (plan.Phase == Phase.FetchSecond && Same(cur, plan.First) && IsFetching(clerk))
