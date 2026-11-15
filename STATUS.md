@@ -29,7 +29,7 @@ Rules:
 | Bug #2 | in-progress | `SupermarketFixes/src/Patches/GhostHeldItemFix.cs` | — | Review follow-ups being applied, awaiting review; then in-game test + logs |
 | Bug #3 | in-progress | `SupermarketFixes/src/Patches/StuckBoxFix.cs` | — | Review follow-ups being applied, awaiting review; then in-game test + logs |
 | Bug #4 | open | — | — | Question, not a code task: answer how to collect guest crash logs |
-| Bug #5 | in-progress | `SupermarketFixes/src/Patches/BoxPlaceFix.cs` | — | In-game test + logs |
+| Bug #5 | reviewed | `SupermarketFixes/src/Patches/BoxPlaceFix.cs` | 2026-11-15, 1 round, 5066b4084b02 | In-game test + logs. Trigger path unproven; delete the stale `plugins/SupermarketFixes/` subfolder dll and set `[General] Enabled = true` before testing |
 | Bug #6 | open | — | — | No data to reproduce; may be related to Bug #1 |
 | Improvement #1 | in-progress | `PriceMarkupKeeper/` | — | In-game test |
 | Improvement #2 | done 2026-11-14 | — | — | |

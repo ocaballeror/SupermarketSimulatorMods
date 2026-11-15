@@ -22,6 +22,17 @@ Not verifiable without the game: whether guest-side adoption removes all floatin
 
 ---
 
+## Bug #5: can't place into a new shelf until the crate is reopened
+
+Code: `SupermarketFixes/src/Patches/BoxPlaceFix.cs`. Reviewed at hash `5066b4084b02` (1 round). Approved with these minor findings left:
+
+1. **Minor: diagnostics blind spot** (`TrackPress`, ~190). It only starts when `m_holdingUse` is already true. If the real cause is that the Use press never reached `m_holdingUse` (`OnUse` returns early while `IsWaitingAvailability`; `OnTake` drops events while paused), nothing is logged. Also track "Use physically pressed but `m_holdingUse` false for more than 1.5 s with an open box and a slot targeted", logging `waiting`, `paused` and `m_PlacingMode`.
+2. **Minor: one exception cancels the resync** (`BeforeUpdate`, 150-175). `CheckStuckTake` runs first, and `s_takeAction` is cached per player pointer. A stale cached `InputAction` that throws every frame skips the `ResyncOpenState` block for good. Give each sub-step its own try/catch and drop the cached action on exception.
+3. **Minor: README "Who needs it" for Bug #5** should say that a host-only install does nothing for an unmodded guest's controls, and that if the failure only happens on the guest, the guest needs BepInEx with this plugin (macOS support unverified).
+4. **Nit:** the "treated as closed" and "Take button was released" lines ignore `Diagnostics`. **Nit:** the "placed nothing for 1.5 s" line also fires on legitimate refusals (empty box, full slot, wrong product).
+
+---
+
 ## Bug #2: ghost of an item left in the player's hands
 
 Code: `SupermarketFixes/src/Patches/GhostHeldItemFix.cs`. Reviewed at hash `50bfe90a93e8` (2 rounds, v0.6.1).
