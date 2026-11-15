@@ -10,7 +10,9 @@ Experienced restockers carry **two boxes per trip**. A restocker at level 10 or 
    - **If the box still has products**, it takes it to storage (a rack), then comes back for the box on the floor and unpacks that one.
 5. Whatever is left in the second box goes to storage, or in the trash if it's empty, as usual.
 
-If the second product's shelves were filled in the meantime, the restocker takes the box from the floor straight to storage. If there's nowhere to put it yet, it does other work and comes back for it later (it gives up after 3 minutes; the box then stays on the floor like any box a restocker drops). Other restockers don't pick up a box lying inside the store, so it waits for the one that put it there. A player can still pick it up; the restocker then just carries on.
+The box goes on the floor beside the restocker, away from the shelf (or to its left or right if that spot is taken). If the second product's shelves were filled in the meantime, the restocker takes the box from the floor straight to storage. If there's nowhere to put it yet, or it can't reach it, it does other work and tries again later (it gives up after 3 minutes of trying; the box then stays on the floor like any box a restocker drops).
+
+The restocker always goes back for a box it put down itself, even when its "pick up boxes from the ground" setting is off: that setting is about boxes in the outside delivery area. Other restockers don't pick up a box lying inside the store, so it waits for the one that put it there. A player can still pick it up; the restocker then just carries on.
 
 If there's no second job when it picks up the first box, or the second box is gone by the time it gets there, the restocker just carries on with one box. Lower-level restockers aren't affected.
 
@@ -36,7 +38,7 @@ Guests don't need the mod: every pick-up, product placement and box put-away use
 ## Notes
 
 - If a restocker is fired or deactivated while carrying two boxes, both are put down on the floor. A box it had already put down at a shelf stays there.
-- Turning the mod off while a box waits on the floor leaves it there; restockers don't pick up boxes inside the store, so move it yourself.
+- Turning the mod off while a box waits on the floor leaves it there, and so does saving and reloading at that moment. Restockers don't pick up boxes inside the store, so move it yourself. Turning the mod off while a restocker is on its way to the second box makes it put the first box down where it is.
 - With several restockers, another restocker may refill one of the two products in the meantime. Nothing breaks: the extra stock just goes back to storage.
 - A guest who joins in the middle of a two-box trip may see the second box floating near the restocker until the restocker next handles it.
 - A restocker that can't find anywhere to put a leftover box behaves as in the normal game: it waits, then puts the box on the floor. It then deals with the other box.

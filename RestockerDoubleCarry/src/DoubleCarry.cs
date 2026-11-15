@@ -112,13 +112,16 @@ internal static class DoubleCarry
         public List<DisplaySlot> ReservedSecond;
         /// <summary>The box this clerk put on the floor to unpack the other one; it comes back for it.</summary>
         public Box Floor;
-        public float FloorSince;
+        /// <summary>Time of the first empty-handed search that tried to fetch the floor box (-1: not yet).</summary>
+        public float FloorRetryStart = -1f;
     }
 
     /// <summary>How long a clerk keeps trying to come back for a box it put down before giving up.</summary>
     private const float FloorRetrySeconds = 180f;
     /// <summary>Where a box is put down: this far from the clerk, on the side away from the display.</summary>
     private const float SetDownDistance = 0.6f;
+    /// <summary>After this long the set-down box should have landed; its pose is sent to the guests again.</summary>
+    private const float SettleSeconds = 1.5f;
 
     private const float StackTweenTime = 0.3f;
 
@@ -398,6 +401,8 @@ internal static class DoubleCarry
 
     private static bool UnwindStep(SearchHandler h, ClerkT clerk, Plan plan, Box cur, Box stash, ref bool vanillaRan)
     {
+        // The clerk picked the floor box up again: it is a normal carried box from now on.
+        if (plan.Floor != null && Same(cur, plan.Floor)) plan.Floor = null;
         // A box in hand (box 1 with leftovers, or anything else): vanilla decides what to do with it.
         // If a box is still stashed and vanilla restocks again, RestockDisplay.OnBegin sets the stash down first.
         if (cur != null) return true;
@@ -432,7 +437,8 @@ internal static class DoubleCarry
     /// <summary>
     /// Hands empty and the set-down box is still on the floor: point the search results at it, the way the
     /// vanilla search does for a box lying in the delivery area. Returns true when the results were filled.
-    /// Clears <c>plan.Floor</c> when the box is gone or the clerk gives up.
+    /// Clears <c>plan.Floor</c> only when the box is gone or the clerk gives up: if the fetch run fails
+    /// (path aborted, box targeted by someone else), the next empty-handed search tries again.
     /// </summary>
     private static bool FetchFromFloor(SearchHandler h, ClerkT clerk, Plan plan)
     {
@@ -443,13 +449,21 @@ internal static class DoubleCarry
             Info($"{Name(clerk)}: the box it put down is gone (picked up by someone else?)");
             return false;
         }
+        if (plan.FloorRetryStart < 0f) plan.FloorRetryStart = Time.time;
+        else if (Time.time - plan.FloorRetryStart > FloorRetrySeconds)
+        {
+            plan.Floor = null;
+            Info($"{Name(clerk)}: could not get back to the box it put down (product {ProductOf(box)}) for {FloorRetrySeconds:0} s, leaving it on the floor");
+            return false;
+        }
         int pid = ProductOf(box);
         var mgmt = clerk.ManagementData;
 
+        // Same display rule as vanilla uses for a box already in hand (no refill threshold).
         DisplaySlotList displays = null;
         if (pid >= 0 && box.HasProducts && mgmt != null && mgmt.RestockShelf)
         {
-            var cand = h.GetDisplaySlotsRequiredRefill(pid);
+            var cand = h.GetDisplaySlotsRequiredRefillWithoutCondition(pid);
             if (cand != null && cand.Count > 0) displays = h.SearchBestFitDisplaySlotsForRestock(box, cand);
         }
         RackSlot rack = null;
@@ -460,16 +474,11 @@ internal static class DoubleCarry
         }
 
         if ((displays == null || displays.Count == 0) && rack == null)
-        {
-            if (Time.time - plan.FloorSince > FloorRetrySeconds)
-            {
-                plan.Floor = null;
-                Info($"{Name(clerk)}: still nowhere to take the box it put down (product {pid}), leaving it on the floor");
-            }
-            return false;
-        }
+            return false;   // nowhere to take it right now; retried on the next empty-handed search
 
+        int excluded = h.m_ExcludedProductId;   // set by the idle drop timer; Reset() would clear it
         h.Reset();
+        h.m_ExcludedProductId = excluded;
         h.BoxTarget = new IBoxTarget(new StreetBoxTarget(box).Pointer);
         if (displays != null && displays.Count > 0)
         {
@@ -484,7 +493,6 @@ internal static class DoubleCarry
             h.RackTarget = rack;
             Info($"{Name(clerk)}: going back for the box it put down, product {pid} is full on the shelves, taking it to storage");
         }
-        plan.Floor = null;
         plan.Phase = Phase.Unwind;
         return true;
     }
@@ -515,13 +523,16 @@ internal static class DoubleCarry
         }
         MoveAside(clerk, stash, task.TargetDisplaySlot);
         plan.Floor = stash;
-        plan.FloorSince = Time.time;
+        plan.FloorRetryStart = -1f;
         Info($"{Name(clerk)}: put box (product {ProductOf(stash)}) on the floor to unpack product {ProductOf(cur)}");
     }
 
     /// <summary>
     /// Moves a just-dropped box next to the clerk, on the side away from the display, so it doesn't fall
-    /// against the shelf. Only when this client owns the box, so the exact pose can be sent to the others.
+    /// against the shelf. Tries away from the display, then left and right of the clerk, and keeps the first
+    /// spot that is free (Physics.CheckBox); if none is, the box stays where it fell. Only when this client
+    /// owns the box, so the exact pose can be sent to the others. Box transform sync is off after a clerk
+    /// pickup and nothing turns it back on, so the pose is sent again once the box has landed.
     /// </summary>
     private static void MoveAside(ClerkT clerk, Box box, DisplaySlot slot)
     {
@@ -531,27 +542,72 @@ internal static class DoubleCarry
             bool online = PhotonNetwork.IsConnected && PhotonNetwork.InRoom;
             if (online && (view == null || !view.photonView.IsMine)) return;
 
-            var self = clerk.transform.position;
-            var away = slot != null ? self - slot.transform.position : -clerk.transform.forward;
+            var t = clerk.transform;
+            var self = t.position;
+            var away = slot != null ? self - slot.transform.position : -t.forward;
             away.y = 0f;
-            if (away.sqrMagnitude < 0.0001f) away = -clerk.transform.forward;
-            away.y = 0f;
+            if (away.sqrMagnitude < 0.0001f) { away = -t.forward; away.y = 0f; }
+            if (away.sqrMagnitude < 0.0001f) away = Vector3.back;
             away.Normalize();
-            var pos = self + away * SetDownDistance + Vector3.up * 0.3f;
-            var rot = Quaternion.LookRotation(away, Vector3.up);
+            var side = Vector3.Cross(Vector3.up, away);
 
-            var rb = box.GetComponent<Rigidbody>();
-            if (rb != null && !rb.isKinematic)
+            var b = Bounds(box, out var scale);
+            var half = Vector3.Scale(b.extents, scale);
+            var centerOffset = Vector3.Scale(b.center, scale);
+            float lift = half.y + 0.05f;   // box bottom 5 cm above the clerk's feet
+            // Far enough that the box clears the clerk's own body (about 0.35 m radius).
+            float dist = Mathf.Max(SetDownDistance, 0.4f + Mathf.Max(half.x, half.z));
+
+            Vector3? found = null;
+            Quaternion rot = Quaternion.identity;
+            foreach (var dir in new[] { away, side, -side })
             {
-                rb.velocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;
+                var r = Quaternion.LookRotation(dir, Vector3.up);
+                var center = self + dir * dist + Vector3.up * lift;
+                if (Physics.CheckBox(center, half * 0.95f, r, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                    continue;
+                found = center - r * centerOffset;
+                rot = r;
+                break;
             }
-            box.transform.SetPositionAndRotation(pos, rot);
-            if (online) view.BroadcastCurrentTransform();
+            if (found == null)
+            {
+                Info($"{Name(clerk)}: no free spot next to the shelf, the box stays where it fell");
+            }
+            else
+            {
+                var rb = box.GetComponent<Rigidbody>();
+                if (rb != null && !rb.isKinematic)
+                {
+                    rb.linearVelocity = Vector3.zero;
+                    rb.angularVelocity = Vector3.zero;
+                    rb.position = found.Value;
+                    rb.rotation = rot;
+                }
+                box.transform.SetPositionAndRotation(found.Value, rot);
+            }
+            if (!online) return;
+            view.BroadcastCurrentTransform();
+            DOVirtual.DelayedCall(SettleSeconds, (TweenCallback)(Action)(() => ResendPose(box)), true);
         }
         catch (Exception e)
         {
             Plugin.Logger.LogWarning($"[DoubleCarry] moving the box aside failed (it stays where it fell): {e.Message}");
+        }
+    }
+
+    private static void ResendPose(Box box)
+    {
+        try
+        {
+            if (box == null || !box.gameObject.activeInHierarchy || box.transform.parent != null) return;
+            var view = box.NetworkBox != null ? box.NetworkBox.m_PhotonTransformView : null;
+            if (view == null || !view.photonView.IsMine) return;
+            view.BroadcastCurrentTransform();
+        }
+        catch (Exception e)
+        {
+            Plugin.Logger.LogWarning($"[DoubleCarry] resending the set-down box pose failed: {e.Message}");
         }
     }
 
