@@ -31,7 +31,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.playercrouch";
     public const string Name = "Player Crouch";
-    public const string Version = "1.0.2";
+    public const string Version = "1.0.3";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

@@ -33,7 +33,7 @@ Rules:
 | Bug #6 | open | — | — | In-game 2026-11-15: still happening |
 | Improvement #1 | in-progress | `PriceMarkupKeeper/` | — | Rework v1.1.0 written (markup on license purchase); review pending |
 | Improvement #2 | done 2026-11-14 | — | — | |
-| Improvement #3 | needs-rework | `PlayerCrouch/` | — | Confirmed in-game 2026-11-15; rework: other players see no crouch pose (mod on both machines) |
+| Improvement #3 | in-progress | `PlayerCrouch/` | — | v1.0.3: pose the active skin's Animator (was posing an inactive skin); review pending |
 | Improvement #4 | in-progress | `SelfCheckoutSpeed/` | — | Rework v1.1.0 written (host-authoritative speed, guest catch-up, text field, employee help); review pending |
 | Improvement #5 | in-progress | `RestockerDoubleCarry/` | — | v1.1.2: remaining box moves down into the hands when the other leaves; review pending |
 | Improvement #6 | done 2026-11-15 | `FurnitureMoveCancel/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |

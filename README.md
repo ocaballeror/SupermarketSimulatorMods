@@ -17,7 +17,7 @@ The work list lives in [`TODO.md`](TODO.md): the bugs and improvements requested
 | Furniture Move Cancel | [`FurnitureMoveCancel/`](FurnitureMoveCancel) | Improvement #6: Escape puts moved furniture back | Done (confirmed in-game) |
 | Restocker Double Carry | [`RestockerDoubleCarry/`](RestockerDoubleCarry) | Improvement #5: level 10+ restockers fetch two boxes per trip | Written, awaiting in-game test |
 | Price Markup Keeper | [`PriceMarkupKeeper/`](PriceMarkupKeeper) | Improvement #1: prices keep the bulk markup when market prices change; new products start at it | Rework written (v1.1.0), awaiting in-game test |
-| Player Crouch | [`PlayerCrouch/`](PlayerCrouch) | Improvement #3: hold Ctrl to crouch, character model crouches (synced to modded players) | Done (confirmed in-game) |
+| Player Crouch | [`PlayerCrouch/`](PlayerCrouch) | Improvement #3: hold Ctrl to crouch, character model crouches (synced to modded players) | Fix written (v1.0.3: visible pose), awaiting in-game test |
 | Extra Computers | [`ExtraComputers/`](ExtraComputers) | Improvement #7: buyable extra computers, each with its own screen | Written, awaiting in-game test |
 | Grid Mode Default | [`GridModeDefault/`](GridModeDefault) | Improvement #8: grid mode is on by default when placing furniture | Done (confirmed in-game) |
 | Bulk Shelf Transfer | [`BulkShelfTransfer/`](BulkShelfTransfer) | Improvement #9: Shift+click moves a whole shelf slot into or out of a box, paper bag or crate | Written, awaiting in-game test |

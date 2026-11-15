@@ -1,8 +1,9 @@
 /*
  * Procedural crouch pose for every player model (local and remote).
  *
- * Player models are driven by PlayerAnimation.m_Animator (a humanoid Animator plus Animation Rigging rigs
- * for look-at and hand IK). There is no crouch clip, so after the Animator has written the pose (we run in
+ * Player models are driven by a humanoid Animator plus Animation Rigging rigs for look-at and hand IK. Each
+ * selectable character (skin) has its own; the one shown is PlayerInstance.SkinController.ActiveSkin (see
+ * FindAnimator). There is no crouch clip, so after the Animator has written the pose (we run in
  * LateUpdate, which Unity runs after the animation update) we bend it:
  *   1. remember the animated feet (world position + rotation) and head rotation,
  *   2. lower the hips by BodyDepth * leg length (and shift them back a little, for balance),
@@ -39,6 +40,7 @@ internal static class CrouchPose
         public PlayerInstance Instance;
         public Animator Animator;
         public bool WarnedNotHuman;
+        public bool WarnedNoAnimator;
         public PlayerIKHandler IkHandler;
         public bool SkippedForIk;
         public float T;
@@ -121,20 +123,29 @@ internal static class CrouchPose
 
         if (s.T <= 0.001f) { s.Applied = false; return; }
 
-        if (s.Animator == null || refresh)
+        if (s.Animator == null || refresh || !s.Animator.isActiveAndEnabled)
         {
-            var anim = inst.GetComponentInChildren<PlayerAnimation>(true);
-            var a = anim != null ? anim.m_Animator : null;
+            var a = FindAnimator(inst, out var ikHandler, out string from);
             if (a != null && (s.Animator == null || a.Pointer != s.Animator.Pointer))
             {
                 s.Animator = a;
                 s.Applied = false;
-                s.IkHandler = inst.GetComponentInChildren<PlayerIKHandler>(true);
-                Plugin.Info($"Model for player {(isLocal ? "(local)" : "(remote)")}: animator '{a.name}' human={a.isHuman} " +
+                s.IkHandler = ikHandler;
+                Plugin.Info($"Model for player {(isLocal ? "(local)" : "(remote)")}: animator '{a.name}' ({from}) human={a.isHuman} " +
                             $"onRoot={a.transform == inst.transform} {DescribeLegIk(s.IkHandler)}");
             }
         }
-        if (s.Animator == null || !s.Animator.isActiveAndEnabled) { s.Applied = false; return; }
+        if (s.Animator == null || !s.Animator.isActiveAndEnabled)
+        {
+            if (!s.WarnedNoAnimator)
+            {
+                s.WarnedNoAnimator = true;
+                Plugin.Logger.LogWarning($"[Crouch] No active character model found for player {(isLocal ? "(local)" : "(remote)")}; can't pose it");
+            }
+            s.Applied = false;
+            return;
+        }
+        s.WarnedNoAnimator = false;
         if (!s.Animator.isHuman)
         {
             if (!s.WarnedNotHuman) { Plugin.Logger.LogWarning("[Crouch] Player model isn't a humanoid rig; can't pose it"); s.WarnedNotHuman = true; }
@@ -156,6 +167,61 @@ internal static class CrouchPose
             Plugin.Logger.LogWarning($"[Crouch] Posing a player model failed: {e.Message}");
             s.Applied = false;
         }
+    }
+
+    /// <summary>
+    /// The Animator of the character the player is actually shown as. Every skin under the player's "Skins"
+    /// object (Man_01, Man_02, Woman_01, Woman_02 and the "Man_01_Rig_Test Variant") has its own Animator,
+    /// PlayerAnimation, rigs and IK handler; only the chosen one is active (PlayerSkinController.SetSkinIndex).
+    /// The first PlayerAnimation in the hierarchy belongs to the rig-test variant, which is normally
+    /// inactive, so posing it did nothing (in-game 2026-11-15).
+    /// </summary>
+    private static Animator FindAnimator(PlayerInstance inst, out PlayerIKHandler ik, out string from)
+    {
+        ik = null;
+        from = "?";
+        try
+        {
+            var sc = inst.SkinController;
+            var skin = sc != null ? sc.ActiveSkin : null;
+            if (skin != null && skin.gameObject.activeInHierarchy)
+            {
+                var a = skin.m_Animator;
+                if (a == null) a = skin.GetComponentInChildren<Animator>(false);
+                if (a != null && a.isActiveAndEnabled)
+                {
+                    ik = skin.GetComponentInChildren<PlayerIKHandler>(true);
+                    from = $"active skin '{skin.name}'";
+                    return a;
+                }
+            }
+        }
+        catch (Exception) { }
+
+        // Fallback: the first active humanoid Animator under the player, preferring its own PlayerAnimation's.
+        var anims = inst.GetComponentsInChildren<PlayerAnimation>(false);
+        for (int i = 0; anims != null && i < anims.Length; i++)
+        {
+            var a = anims[i] != null ? anims[i].m_Animator : null;
+            if (a != null && a.isActiveAndEnabled && a.isHuman)
+            {
+                ik = anims[i].GetComponentInParent<PlayerIKHandler>(true) ?? inst.GetComponentInChildren<PlayerIKHandler>(false);
+                from = $"active PlayerAnimation on '{anims[i].name}'";
+                return a;
+            }
+        }
+        var all = inst.GetComponentsInChildren<Animator>(false);
+        for (int i = 0; all != null && i < all.Length; i++)
+        {
+            var a = all[i];
+            if (a != null && a.isActiveAndEnabled && a.isHuman)
+            {
+                ik = inst.GetComponentInChildren<PlayerIKHandler>(false);
+                from = "first active humanoid Animator";
+                return a;
+            }
+        }
+        return null;
     }
 
     private static bool LegIkActive(PlayerIKHandler h)

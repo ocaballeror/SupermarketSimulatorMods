@@ -141,7 +141,7 @@ Make paint cans last twice as long as they currently do.
 
 ## Improvement #3: Add Player Crouching
 
-**Status:** NEEDS REWORK — See the rework request below (2026-11-15)  
+**Status:** IN PROGRESS — Fix v1.0.3 in `PlayerCrouch/src/CrouchPose.cs` (`FindAnimator`), under review  
 **First completed:** 2026-11-15
 
 Allow players to crouch by pressing `Ctrl`.
