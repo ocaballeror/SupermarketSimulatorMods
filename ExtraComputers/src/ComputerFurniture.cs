@@ -61,10 +61,6 @@ internal static class ComputerFurniture
 {
     public const int FurnitureId = 917001;
     public const string PrefabId = "Furnitures/ExtraComputers/ExtraComputer";
-    // The path the game's own spawner would use for a plain Furniture prefab called "ExtraComputer"
-    // ("Furnitures/<component type>/<prefab name>"). Registered too, so a computer box can still be opened
-    // by the vanilla code while the mod is switched off at runtime (best effort, not verified in-game).
-    public const string VanillaPrefabId = "Furnitures/Furniture/ExtraComputer";
     public const string ModelName = "ExtraComputerModel";
     public const string ScreenMarker = "#ecscreen";
     public const string DisplayName = "Computer";
@@ -176,6 +172,7 @@ internal static class ComputerFurniture
     internal static void OnActiveChanged(bool on)
     {
         if (So != null) So.IsMainFurniture = on;
+        if (on) Presence.Blocked(); // refresh the cache before the shop item is shown again
         RefreshShopItem();
     }
 
@@ -184,7 +181,7 @@ internal static class ComputerFurniture
     {
         var item = ShopItem;
         if (item == null) return;
-        bool show = Plugin.Active && !Presence.Blocked();
+        bool show = Plugin.Active && !Presence.CachedBlocked;
         var go = item.gameObject;
         if (go != null && go.activeSelf != show)
         {
@@ -249,7 +246,6 @@ internal static class ComputerFurniture
                 return;
             }
             dp.ResourceCache[PrefabId] = Template;
-            dp.ResourceCache[VanillaPrefabId] = Template;
         }
         catch (Exception e) { Plugin.Error("Registering the computer with Photon failed: " + e.Message); }
     }

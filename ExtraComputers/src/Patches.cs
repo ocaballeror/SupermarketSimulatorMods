@@ -83,6 +83,7 @@ internal static class ShopItemPatch
         try
         {
             ComputerFurniture.ShopItem = __instance;
+            Presence.Blocked(); // refresh the cached state
             ComputerFurniture.RefreshShopItem();
         }
         catch (Exception e) { Plugin.Error("Shop item setup failed: " + e.Message); }
@@ -131,18 +132,21 @@ internal static class PurchaseGatePatch
 }
 
 /// <summary>
-/// Opening a furniture box: the host's own click and a guest's request both end in this broadcast. A computer box
-/// stays closed while a player without the mod is in the room, because unboxing makes the host instantiate a
-/// prefab that player can't load.
+/// Opening a furniture box online runs FurnitureBoxInteraction.NetworkOpenBox on the host, for both paths: the
+/// host's own click (OnUse -> OpenFurnitureBox_Broadcast -> NetworkOpenBox) and a guest's request
+/// (OpenFurnitureBoxRequest -> RPC -> OpenFurnitureBoxRequest_RPC -> NetworkOpenBox, which does not pass
+/// through the broadcast method; verified in the ISIL). A computer box stays closed while a player without the
+/// mod is in the room, because unboxing makes the host instantiate a prefab that player can't load.
+/// Offline, OnUse calls OpenBox directly, and Presence.Blocked is false offline anyway.
 /// </summary>
-[HarmonyPatch(typeof(NetworkFurnitureBoxInteraction), nameof(NetworkFurnitureBoxInteraction.OpenFurnitureBox_Broadcast))]
+[HarmonyPatch(typeof(FurnitureBoxInteraction), nameof(FurnitureBoxInteraction.NetworkOpenBox))]
 internal static class OpenBoxGatePatch
 {
-    private static bool Prefix(NetworkFurnitureBoxInteraction __instance)
+    private static bool Prefix(FurnitureBoxInteraction __instance)
     {
         try
         {
-            var data = __instance.FurnitureBoxInteraction?.CurrentFurnitureBox?.Data;
+            var data = __instance.CurrentFurnitureBox?.Data;
             if (data == null || data.FurnitureID != ComputerFurniture.FurnitureId) return true;
             if (!Presence.Blocked(out var who)) return true;
             Plugin.Warn($"Computer box not opened: {who} doesn't have the Extra Computers mod " +
@@ -262,7 +266,7 @@ internal static class PhotonPoolPatch
 {
     private static void Prefix(string prefabId)
     {
-        if (prefabId != ComputerFurniture.PrefabId && prefabId != ComputerFurniture.VanillaPrefabId) return;
+        if (prefabId != ComputerFurniture.PrefabId) return;
         try
         {
             ComputerFurniture.EnsureSo();

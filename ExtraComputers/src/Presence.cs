@@ -40,9 +40,17 @@ internal static class Presence
     internal const string KeyPrice = "oscar.extracomputers.price";
     internal const string KeyUse = "oscar.extracomputers.use";
 
+    private enum Mod { Absent, Yes, No, Unreadable }
+
     private static float _nextTick;
-    private static bool _lastBlocked;
+    private static bool _cachedBlocked;
+    private static bool _loggedBlocked;
     private static bool _loggedError;
+    private static bool _loggedUnreadable;
+    private static string _lastSignature;
+
+    /// <summary>The result of the last check (refreshed about once a second), for per-frame use.</summary>
+    internal static bool CachedBlocked => _cachedBlocked;
     private static int _useViewId;
 
     internal static bool Online
@@ -69,6 +77,24 @@ internal static class Presence
         var v = Get(p, key);
         if (v == null) return null;
         try { return v.Unbox<bool>(); } catch (Exception) { return null; }
+    }
+
+    /// <summary>Absent = never published the key; No = published false; Unreadable = a value is there but
+    /// couldn't be read (counted as "has the mod": a read problem must never lock everybody out).</summary>
+    private static Mod GetMod(PhotonPlayer p)
+    {
+        var v = Get(p, KeyMod);
+        if (v == null) return Mod.Absent;
+        try { return v.Unbox<bool>() ? Mod.Yes : Mod.No; }
+        catch (Exception e)
+        {
+            if (!_loggedUnreadable)
+            {
+                _loggedUnreadable = true;
+                Plugin.Warn($"A player's '{KeyMod}' property couldn't be read ({e.Message}); treating that player as having the mod.");
+            }
+            return Mod.Unreadable;
+        }
     }
 
     private static int? ReadInt(PhotonPlayer p, string key)
@@ -100,7 +126,8 @@ internal static class Presence
             {
                 var p = others[i];
                 if (p == null) continue;
-                if (ReadBool(p, KeyMod) != true)
+                var m = GetMod(p);
+                if (m == Mod.Absent || m == Mod.No)
                     list.Add(string.IsNullOrEmpty(p.NickName) ? "player " + p.ActorNumber : p.NickName);
             }
         }
@@ -117,16 +144,38 @@ internal static class Presence
     {
         var names = PlayersWithoutMod();
         who = string.Join(", ", names);
-        return names.Count > 0;
+        _cachedBlocked = names.Count > 0;
+        return _cachedBlocked;
     }
 
     internal static bool Blocked() => Blocked(out _);
 
     // ---------------------------------------------------------------- publishing our own state
 
-    /// <summary>Called about once a second from the store computer's LateUpdate while the mod is active.</summary>
+    /// <summary>Verbose log line: what every other player's property reads as.</summary>
+    private static string Describe()
+    {
+        var sb = new System.Text.StringBuilder();
+        var others = PhotonNetwork.PlayerListOthers;
+        if (others != null)
+            for (int i = 0; i < others.Length; i++)
+            {
+                var p = others[i];
+                if (p == null) continue;
+                var raw = Get(p, KeyMod);
+                if (sb.Length > 0) sb.Append("; ");
+                sb.Append(string.IsNullOrEmpty(p.NickName) ? "player " + p.ActorNumber : p.NickName)
+                  .Append(": mod=").Append(GetMod(p)).Append(" (raw ").Append(raw == null ? "none" : raw.ToString()).Append(')');
+            }
+        return sb.Length == 0 ? "no other players" : sb.ToString();
+    }
+
+    /// <summary>Called every frame from the store computer's LateUpdate while the mod is active; the
+    /// checks and publishing run about once a second.</summary>
     internal static void Tick()
     {
+        // Cheap per-frame part: keep the shop entry as it should be even if the shop UI re-activates it.
+        try { ComputerFurniture.RefreshShopItem(); } catch (Exception) { }
         if (Time.unscaledTime < _nextTick) return;
         _nextTick = Time.unscaledTime + 1f;
         try
@@ -134,10 +183,16 @@ internal static class Presence
             if (Online) Publish(Plugin.Active);
             ComputerFurniture.ApplyPrice();
 
-            bool blocked = Blocked(out var who);
-            if (blocked != _lastBlocked)
+            if (Plugin.Verbose.Value && Online)
             {
-                _lastBlocked = blocked;
+                var sig = Describe();
+                if (sig != _lastSignature) { _lastSignature = sig; Plugin.Debug("Other players: " + sig); }
+            }
+
+            bool blocked = Blocked(out var who);
+            if (blocked != _loggedBlocked)
+            {
+                _loggedBlocked = blocked;
                 if (blocked)
                     Plugin.Warn($"{who} doesn't have the Extra Computers mod: computer purchases and unboxing are paused. " +
                                 "Computers or computer boxes that already exist will cause errors for that player.");
@@ -181,7 +236,7 @@ internal static class Presence
             if (Online && !PhotonNetwork.IsMasterClient)
             {
                 var master = PhotonNetwork.MasterClient;
-                if (master != null && ReadBool(master, KeyMod) == true)
+                if (master != null && (GetMod(master) == Mod.Yes || GetMod(master) == Mod.Unreadable))
                 {
                     var p = ReadFloat(master, KeyPrice);
                     if (p != null) return p.Value;
@@ -201,7 +256,8 @@ internal static class Presence
             if (Online) Publish(false);
         }
         catch (Exception e) { Plugin.Debug("Clearing player properties failed: " + e.Message); }
-        _lastBlocked = false;
+        _cachedBlocked = false;
+        _loggedBlocked = false;
     }
 
     // ---------------------------------------------------------------- who is on which computer
