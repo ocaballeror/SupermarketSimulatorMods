@@ -4,7 +4,7 @@ Player-facing info is in [README.md](README.md). Shared rules and game internals
 
 ## Status
 
-v1.1.1 (TODO Improvement #7): written, review rounds 1 and 2 applied (below), builds, **not yet run in-game**. Much of it depends on prefab and hierarchy details that the dumps can't show, so the first run is expected to need fixes. `VerboseLogging` dumps the store computer's hierarchy, the chosen base furniture prefab, the built computer prefab and the full furniture list to `LogOutput.log`. Ask for those lines first.
+v1.1.2 (TODO Improvement #7): written, review rounds 1 to 3 applied (below), builds, **not yet run in-game**. Much of it depends on prefab and hierarchy details that the dumps can't show, so the first run is expected to need fixes. `VerboseLogging` dumps the store computer's hierarchy, the chosen base furniture prefab, the built computer prefab and the full furniture list to `LogOutput.log`. Ask for those lines first.
 
 Open questions to settle from the first logs:
 - Which base ("donor") furniture gets picked, and which of its components get stripped (`Removed from the base furniture copy: ...`).
@@ -88,6 +88,12 @@ Host alone, then with a modded guest, then with an unmodded guest. Log tag `[Ext
 - N3: no in-game feedback is possible without a suitable `InteractionWarningType` (the existing ones have fixed, unrelated texts, so none was reused); documented in the README that refusals are silent on screen.
 - N4: alias removed, README softened.
 - N5: shop item refreshed every frame from a cached state; the stale `.use` case is accepted as negligible (Photon drops a leaving or crashed player's entry); the README no longer calls the setting host-only.
+
+## Review round 3 (v1.1.2)
+
+- R3-1: `ComputerFurniture.OnActiveChanged` refreshes the blocked cache only when `ShopItem` exists, so `BasePlugin.Load()` never reaches the Photon statics.
+- R3-2: confirmed in the ISIL (`OpenFurnitureBoxRequest` calls `PhotonView.TransferOwnership(MasterClient)` before the RPC). The check now also runs on the requesting client (`OpenBoxRequestGatePatch`, prefix on `NetworkFurnitureBoxInteraction.OpenFurnitureBoxRequest`), sharing `OpenBoxGate.Refuse` with the authoritative host-side gate. A modded guest sees the other players, including the host. Log line: `Computer box not opened (guest side)` / `(host side)`. Test step 5b: expect the guest-side line in the guest's log and the box still following the guest's hand.
+- R3-3: `EffectivePrice` reads the master's mod state once.
 
 ## Pitfalls / follow-ups
 

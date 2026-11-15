@@ -142,21 +142,39 @@ internal static class PurchaseGatePatch
 [HarmonyPatch(typeof(FurnitureBoxInteraction), nameof(FurnitureBoxInteraction.NetworkOpenBox))]
 internal static class OpenBoxGatePatch
 {
-    private static bool Prefix(FurnitureBoxInteraction __instance)
+    private static bool Prefix(FurnitureBoxInteraction __instance) => !OpenBoxGate.Refuse(__instance, "host");
+}
+
+/// <summary>
+/// The same check on the requesting guest. <c>OpenFurnitureBoxRequest</c> transfers the box's PhotonView ownership
+/// to the master before it sends the request RPC (ISIL), so a refusal only on the host would leave the guest holding
+/// a box that the host now owns (transform sync would follow the host). The host-side gate above stays authoritative.
+/// </summary>
+[HarmonyPatch(typeof(NetworkFurnitureBoxInteraction), nameof(NetworkFurnitureBoxInteraction.OpenFurnitureBoxRequest))]
+internal static class OpenBoxRequestGatePatch
+{
+    private static bool Prefix(NetworkFurnitureBoxInteraction __instance) =>
+        !OpenBoxGate.Refuse(__instance.FurnitureBoxInteraction, "guest");
+}
+
+internal static class OpenBoxGate
+{
+    /// <summary>True when this is a computer box and a player without the mod is in the room.</summary>
+    internal static bool Refuse(FurnitureBoxInteraction interaction, string side)
     {
         try
         {
-            var data = __instance.CurrentFurnitureBox?.Data;
-            if (data == null || data.FurnitureID != ComputerFurniture.FurnitureId) return true;
-            if (!Presence.Blocked(out var who)) return true;
-            Plugin.Warn($"Computer box not opened: {who} doesn't have the Extra Computers mod " +
+            var data = interaction?.CurrentFurnitureBox?.Data;
+            if (data == null || data.FurnitureID != ComputerFurniture.FurnitureId) return false;
+            if (!Presence.Blocked(out var who)) return false;
+            Plugin.Warn($"Computer box not opened ({side} side): {who} doesn't have the Extra Computers mod " +
                         "(or turn Multiplayer/ProtectUnmoddedPlayers off). Keep the box until everybody has the mod.");
-            return false;
+            return true;
         }
         catch (Exception e)
         {
             Plugin.Error("Box check failed: " + e.Message);
-            return true;
+            return false;
         }
     }
 }

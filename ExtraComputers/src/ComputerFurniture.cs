@@ -172,7 +172,9 @@ internal static class ComputerFurniture
     internal static void OnActiveChanged(bool on)
     {
         if (So != null) So.IsMainFurniture = on;
-        if (on) Presence.Blocked(); // refresh the cache before the shop item is shown again
+        // Refresh the cached state before the shop item is shown again, but only once the item exists (so never
+        // from BasePlugin.Load, where Photon statics must not be touched); Tick and ShopItemPatch refresh it anyway.
+        if (on && ShopItem != null) Presence.Blocked();
         RefreshShopItem();
     }
 

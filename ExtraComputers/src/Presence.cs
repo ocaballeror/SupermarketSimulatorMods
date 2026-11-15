@@ -236,7 +236,8 @@ internal static class Presence
             if (Online && !PhotonNetwork.IsMasterClient)
             {
                 var master = PhotonNetwork.MasterClient;
-                if (master != null && (GetMod(master) == Mod.Yes || GetMod(master) == Mod.Unreadable))
+                var masterMod = master != null ? GetMod(master) : Mod.Absent;
+                if (masterMod == Mod.Yes || masterMod == Mod.Unreadable)
                 {
                     var p = ReadFloat(master, KeyPrice);
                     if (p != null) return p.Value;
