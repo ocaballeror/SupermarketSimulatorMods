@@ -134,6 +134,7 @@ Typical loop for a task:
   - Game lists are `Il2CppSystem.Collections.Generic.List<T>`; iterate with an index.
   - Use `obj.TryCast<T>()` for downcasts.
   - Use `Object.FindObjectsOfType(Il2CppType.Of<T>())` to find all objects of a type.
+- **DOTween** is usable through the `DOTween.dll` interop: `DOTween.PlayingTweens(list)` appends without clearing and returns null when nothing plays; `Tween.timeScale` speeds one tween up. Whether brand-new tweens show up in `PlayingTweens` immediately is unconfirmed (BulkShelfTransfer relies on it).
 - **Lazy caches:** some game properties fill their backing field on first access (e.g. `RackSlot.OwnRack` fills `m_Rack`). Read the property, not the raw field.
 - **Delegates:** Il2CppInterop delegate types convert implicitly from `System.Action`, e.g. `(TweenCallback)(Action)(() => ...)` with DOTween.
 - **Custom MonoBehaviours:** give the class an `IntPtr` constructor and create it with `AddComponent<T>()` from the plugin, which registers it into IL2CPP. Input uses the **new Input System** (`UnityEngine.InputSystem.Keyboard.current`), not `UnityEngine.Input`.
@@ -277,7 +278,11 @@ Verified in the dumps unless marked otherwise. Addresses and offsets are specifi
 - `m_IsBoxOpen` is BoxInteraction's own copy of "open", separate from `Box.IsOpen` (`BoxData.IsOpen`). It is set when the box is bound, cleared by `OnClose` (C), and set by a delayed call after an open click.
 - `Box.OpenBox`/`CloseBox(false)` are ignored for 0.7 s after every open or close (`m_InAnimationTransition`). Online they go through `NetworkBox.OpenBox_Broadcast`/`CloseBox_Broadcast`.
 - Display slot checks (`CheckPlaceProductToSlot`): the display type must match; refused only if the slot has products of another id, or is full. Labels aren't checked, and `DisplaySlot.AddProduct` relabels an empty slot. `DisplaySlot.HasProduct` = `ProductCount > 0`. `ItemQuantity.HasLabel` = `FirstItemID > 0`.
-- Online place/take: guest → `NetworkBoxInteraction.AskPlaceProduct` → the host re-checks on its copy of that player's BoxInteraction → `PlaceProduct_RPC` to all (it opens the box if closed). Take works the same way.
+- Online place: guest → `NetworkBoxInteraction.AskPlaceProduct` → the host re-checks on its copy of that player's BoxInteraction (`TryPlaceProductToDisplay(slot, pos)`) → `PlaceProduct_RPC` to all (it opens the box if closed).
+- Online take is **not** checked: guest `AskTakeProduct` → host `AskTakeProduct_RPC` relays `TakeProduct_RPC` (All) as-is, and `Box.AddProduct` has no capacity check. A mod that sends takes from a guest must cap them itself.
+- Capacities: a box holds `ProductSO.GridLayoutInBox.productCount` (`Box.Full` / `MaxProductCount`); a shelf slot holds `ProductSO.GridLayoutInStorage.productCount` (`DisplaySlot.Full`, virtual, overridden by ice cream slots).
+- Product fly animation: `Box.AddProduct` / `DisplaySlot.AddProduct` tween with `DOLocalJump` + `DOLocalRotateQuaternion` (0.3 s) and `DOScale` (0.2 s).
+- Other containers: online-order paper bags (`OnlineOrderInteraction`) apply moves on the acting client and broadcast them; taking goes through `OnlineOrderService.TryTakeProductIntoBag` (returns `TakeProductStatus`). `CrateInteraction` has the names swapped: `OnTake` (right click) sets `m_IsOnUse` and runs `<OnUseLoop>` (shelf → crate); `OnUse` (left click) sets `m_IsOnTake` and runs `<OnTakeLoop>` (crate → shelf). Both yield `WaitForSeconds(TotalProductInteractionInterval)`.
 
 **Racks and racked boxes** (verified in dumps; behaviour on join confirmed by in-game logs).
 - `RackSlot`: `m_Boxes` (+0x38, live Box objects) and `m_Data.RackedBoxDatas` (the records that are saved and sent to guests). Racked boxes are drawn through `InstancedRenderer` snapshots (`Box.ToggleInstanced`), not their own mesh.

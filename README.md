@@ -20,6 +20,7 @@ The work list lives in [`TODO`](TODO): the bugs and improvements requested, and 
 | Player Crouch | [`PlayerCrouch/`](PlayerCrouch) | Improvement #3: hold Ctrl to crouch, character model crouches (synced to modded players) | Written, awaiting in-game test |
 | Extra Computers | [`ExtraComputers/`](ExtraComputers) | Improvement #7: buyable extra computers, each with its own screen | Written, awaiting in-game test |
 | Grid Mode Default | [`GridModeDefault/`](GridModeDefault) | Improvement #8: grid mode is on by default when placing furniture | Written, awaiting in-game test |
+| Bulk Shelf Transfer | [`BulkShelfTransfer/`](BulkShelfTransfer) | Improvement #9: Shift+click moves a whole shelf slot into or out of a box, paper bag or crate | Written, awaiting in-game test |
 
 ## Game and platform
 
