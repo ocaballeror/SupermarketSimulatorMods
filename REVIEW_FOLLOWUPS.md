@@ -10,36 +10,15 @@ Line numbers refer to the code as reviewed and may have shifted.
 
 ## Bug #1: rack move leaves floating, ghost or duplicate boxes
 
-Code: `SupermarketFixes/src/Patches/RackMoveFix.cs`. Reviewed at hash `9f3292ae76c2` (1 round).
+Code: `SupermarketFixes/src/Patches/RackMoveFix.cs`. Reviewed at hash `0a5ff690803c` (v0.7.0 follow-up review; the earlier 6 follow-ups were applied). Approved with only these minor findings left:
 
-**1. Minor: guests without the mod are still affected by causes A and C.** This is about the design and its coverage: the A and C sections of `RackMoveFix.cs` and the README's "Who needs it".
-- **Failure scenario:** the Mac guest, usually unmodded, joins mid-game or gets a rack rebuild from the host's clerk AI. It still ends up with loose networked boxes that stay floating when the rack moves. The host's copy of the mod only fixes D.
-- **Why this is minor:** the README says clearly that the guest needs the mod, which the stated intent allows. But the guest who reported the problem is the one most likely to be unmodded, and the root CLAUDE.md says to prefer host-side fixes.
-- **Suggested direction (follow-up):** the game has a complete host-driven path that every client handles without a mod: `NetworkRack.DematerializeBox_Broadcast(slotIdx, uid)` (RpcTarget.All) → `RackSlot.DematerializeNetworkedBox`. It does `RemoveBox`, then the master calls `PhotonNetwork.Destroy`, then every client runs `SpawnLocalRackedBox`. The game's own `ENABLE_DEMATERIALIZE_ON_PLACE` (AddBox `b__2`) calls it.
-  - A host-only option that dematerializes networked racked boxes, either once placement settles or when a player joins, would leave no networked boxes on racks. That would cover A and C for unmodded guests.
-  - The developers disabled this path for an unknown reason, so it needs care: clerk `IBoxTarget` references to destroyed boxes, and whether destroying an orphaned instanced box unregisters its snapshot.
-  - At minimum, say plainly in the README that an unmodded guest still gets floating boxes in those two cases.
+1. **Minor:** `RackDiagnostics.cs:122-133` (F8 `DUPLICATE` check) groups boxes by UID alone, but UIDs aren't unique. Two unrelated boxes with the same UID show up as a "duplicated record" in the log. No gameplay effect. Key on `(UID, ProductID)`.
+2. **Minor:** `RackMoveFix.cs` `PlacePatch.Postfix` (~835) and `RackDiagnostics.AfterPlace` (41-47): the `DOVirtual.DelayedCall` runs outside any try/catch. Wrap the body.
+3. **Minor:** `RackMoveFix.cs:625-634` (guest fallback in `UnrackBeforePickup`): every guest pickup of a parentless networked box calls `IndexLocalCopies(null)` (`FindObjectsOfType<Rack>` plus a slot walk) for the whole session. Small cost; could be limited to the join sweep window or cached.
+4. **Minor:** `RackMoveFix.cs:651-663` (`RemoveFromSlot`, shared-UID repair): re-added records are appended, so their order may differ from `m_Boxes` (save order only).
+5. **Nit:** `RackInitializePatch.Prefix` (~185) has no try/catch; it is a single assignment.
 
-**2. Minor: when two boxes in a slot share a UID, the fallback also deletes the other box's save record.** See `RackMoveFix.cs:498-503` together with `UnrackBeforePickup` at line 549.
-- **Cause:** `RackSlot.RemoveBox` calls `RackedBoxDatas.RemoveAll(r => r.m_UID == box.UID)` (the `DisplayClass76_0.b__1` predicate compares BoxData+0x10, which is `m_UID`). It removes every record with that UID.
-- **Failure scenario:** the host skips the broadcast because `CountUid != 1`, then runs `RemoveBox` locally. That also deletes the record of the other live box with the same UID. Records are not rebuilt from `m_Boxes` before saving (`UpdateRackedBoxDatas` is only called from the wholesale path), so after a reload that box is missing from the rack.
-- **How likely:** rare. The slot must hold two same-product boxes with the same UID, which can happen because UIDs restart every session. Without the mod you would get a duplicate on reload; with it you lose a box instead. Vanilla `TakeBoxFromRack` has the same flaw.
-- **Suggested direction:** in the shared-UID case, call `slot.UpdateRackedBoxDatas()` after `RemoveBox` to rebuild the records from `m_Boxes`, or skip unracking in that case.
-
-**3. Minor: a released networked box stays parented to the slot and is never looked at again.** See `Release`, lines 312-317.
-- **What happens:** `Release` makes the box's mesh visible but leaves it a child of the slot and not in `m_Boxes`. The rebuild prefix only captures boxes that are in `m_Boxes`, and the join sweep only considers boxes with no parent.
-- **Failure scenario:** a rebuild arrives early, before the host's data includes the box. The box is released. A later rebuild that does include it then spawns a local copy beside it, giving a lasting visible duplicate (mesh plus instanced copy) that moves with the rack.
-- **Suggested direction:** either unparent unclaimed boxes in `Release` (`SetParent(null, true)`) so the sweep can adopt them later, or have the `RackSlot.Initialize` prefix also capture networked `Box` children of the slot that are not in `m_Boxes`.
-
-**4. Minor: a failed match in the join sweep is not logged.** See `AdoptOrphans`, line 446: `if (found == 0) continue;`.
-- **Why it matters:** if a joining guest receives a box's position late, or the host's rack moved, a copy with the same UID and product can exist more than 0.3 m away. Nothing is logged then, so an in-game test can't tell a failed match from an ordinary loose box.
-- **Suggested direction:** when diagnostics are on, log once per box when a copy with the same key exists but is further than 0.3 m, including the distance.
-
-**5. Nit: network transform sync stays off after a box is grabbed straight off a rack.** `UnrackBeforePickup` could call `box.NetworkBox.DisableNetworkTransformSync(true)` after unracking a networked box, as vanilla `TakeBoxFromRack_RPC` does. That would remove the "dropped box hangs for others" lead that the doc comment already notes for Bug #6. It only works when both sides have the mod. This is optional and out of scope.
-
-**6. Nit: `Tick` keeps searching for racks in stores that have none** (lines 347-350). Until racks exist, it calls `FindObjectsOfType<Rack>` every 2 s. In a store with no racks that runs for the whole session. The cost is negligible.
-
-(The reviewer's finding 7, about a version mismatch, was a snapshot taken during a parallel edit. Versions are now in sync at 0.6.1, so it's resolved.)
+Not verifiable without the game: whether guest-side adoption removes all floating boxes; whether `DematerializeRackedBoxesOnHost` behaves with an unmodded guest (a single-box slot stays networked; a guest pickup in the instant before the host destroys the box falls back to the game's 3 s timeout).
 
 ---
 
