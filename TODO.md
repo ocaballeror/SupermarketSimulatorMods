@@ -303,9 +303,9 @@ Make the key binding configurable in the mod settings.
 
 ## Improvement #10: Allow Players to Carry Two Boxes at Once
 
-**Status:** IN PROGRESS  
-**Project:** `PlayerDoubleCarry/`  
-**Current task:** Being implemented.
+**Status:** REVIEWED — Awaiting in-game test and logs  
+**Last reviewed:** 2026-11-15  
+**Project:** `PlayerDoubleCarry/`
 
 Allow players to pick up and carry two boxes at a time.
 

@@ -40,7 +40,7 @@ Rules:
 | Improvement #7 | in-progress | `ExtraComputers/` | — | v1.2.0 after the first in-game test (2026-11-15): the furniture prefab failed to build (no donor furniture), so the box opened into nothing and the icon was the drawn placeholder. Rebuilt from a copy of the store computer; boxes refuse to open if the build still fails. Needs review, then in-game test per the mod's CLAUDE.md |
 | Improvement #8 | done 2026-11-15 | `GridModeDefault/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
 | Improvement #9 | reviewed | `BulkShelfTransfer/` | 2026-11-15, 1 round, 45be1793f004 | In-game test (steps in the mod's CLAUDE.md), send the `[Bulk]` lines. Unconfirmed: the animation speed-up catches new tweens ("N animation(s) sped up" > 0), the crate loop ends on its own, guest box bursts don't overfill |
-| Improvement #10 | in-progress | `PlayerDoubleCarry/` | — | Being implemented |
+| Improvement #10 | reviewed | `PlayerDoubleCarry/` | 2026-11-15, 1 round, 8e81b678aa84 | In-game test (steps in the mod's CLAUDE.md), send the `[PlayerCarry]` lines from both machines plus any `[GhostHeld]`/`[StuckBox]`. Unconfirmed: guest-sent `PickUP_RPC` accepted by an unmodded host, left-player rescue runs before the avatar is destroyed, bottom box follows the camera |
 
 Example of a reviewed row:
 `| Bug #1 | reviewed | SupermarketFixes/src/Patches/RackMoveFix.cs | 2026-11-15, 3 rounds, eb7de42e7b56 | In-game test + host F8 log |`
