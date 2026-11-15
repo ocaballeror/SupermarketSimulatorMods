@@ -4,7 +4,7 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
-v1.0.1: written, reviewed (round 1 findings applied), **not yet tested in-game**. Open questions that the first test answers (all logged by `[Crouch] Local player set up ...` / `Model for player ...`):
+v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switches `VerboseLogging` to default off (existing configs keep their value). The open questions below predate that test; keep them as hints if a problem shows up later.
 - Camera fallback (v1.0.1): if the FPS vcam's `Follow` is a different transform inside the player than `CinemachineCameraTarget`, the offset is applied to that one instead (log: `Camera offset target is now '<name>'`). Re-evaluated every 2 s while standing. Check the `VCam follows:` line; if the camera still doesn't drop, the vcam follows something this fallback doesn't pick.
 - Leg IK (v1.0.1): `Model for player ...` lines now include `legIK(L=<constraint weight>/<rig weight> R=...)`. Expect `0.00` outside vehicles. A `Leg IK is active ... not posing it` line while on foot means the guard fires wrongly; check that line. Test sitting in a vehicle as a remote player too.
 - Does the FPS vcam actually follow `FirstPersonController.CinemachineCameraTarget`? (Logged `VCam follows:`.) If not, the camera won't drop and the camera offset must move whatever the vcam follows.

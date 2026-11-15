@@ -28,7 +28,7 @@ Optional toggle mode: press once to crouch and again to stand. In this mode, jum
 | Animation | `LeanAngle` | `15` | Forward lean of the upper body, in degrees (0 to 40). |
 | Multiplayer | `ShareCrouchState` | `true` | Tells other players when you crouch, so modded players see your character crouch. |
 | Multiplayer | `AnimateOtherPlayers` | `true` | Shows other modded players crouching. |
-| Diagnostics | `VerboseLogging` | `true` | Writes `[Crouch]` lines to `BepInEx/LogOutput.log`. |
+| Diagnostics | `VerboseLogging` | `false` | Writes `[Crouch]` lines to `BepInEx/LogOutput.log`. |
 
 ## Who needs it (multiplayer)
 

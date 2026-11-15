@@ -31,7 +31,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.playercrouch";
     public const string Name = "Player Crouch";
-    public const string Version = "1.0.1";
+    public const string Version = "1.0.2";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -97,7 +97,7 @@ public class Plugin : BasePlugin
         AnimateOthers = Config.Bind("Multiplayer", "AnimateOtherPlayers", true,
             "Show other players' characters crouching when they crouch (they need this mod too).");
 
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
+        Verbose = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Write [Crouch] lines to BepInEx/LogOutput.log (setup details, crouch state changes, " +
             "other players' crouch state).");
 
