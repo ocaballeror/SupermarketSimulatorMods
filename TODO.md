@@ -46,7 +46,7 @@ This seems to happen especially often with ice cream cones purchased from the ge
 
 ## Bug #4: Random Multiplayer Crashes for the Guest Player
 
-**Status:** OPEN
+**Status:** OPEN — Guest crash logs analysed 2026-11-15 (no cause in them); need the Windows crash report folder
 
 The game randomly crashes for the other player (the guest, not the host) during multiplayer sessions.
 
@@ -56,7 +56,7 @@ There is currently no additional information available, as no specific cause or 
 
 ## Bug #5: Unable to Put Products on Shelves Without an Existing Label
 
-**Status:** OPEN
+**Status:** NEEDS REWORK — Still happening after the fix (in-game test 2026-11-15)
 
 Sometimes, players cannot put items from a crate onto a new shelf that does not yet have a label for that product.
 
@@ -71,7 +71,7 @@ The current workaround is:
 
 ## Bug #6: Boxes Sometimes Remain Floating When Removing Boxes from a Stack
 
-**Status:** OPEN
+**Status:** OPEN — Still happening (in-game test 2026-11-15)
 
 When there is a pile of boxes, such as after placing a large online order, sometimes removing the box directly underneath another box does not cause the upper box to fall.
 
@@ -119,14 +119,18 @@ Currently, orders are only removed when they have been delivered to the customer
 
 ## Improvement #1: Make Global Pricing Settings Persist Across Days
 
-**Status:** DONE  
-**Completed:** 2026-11-15
+**Status:** NEEDS REWORK — See the rework request below (2026-11-15)  
+**First completed:** 2026-11-15
 
 Make prices respect the global settings configured through the pricing tab on the computer.
 
 For example, I normally set prices to 5% above market value. However, at the beginning of the next day, some product prices change and no longer follow the previously configured rule.
 
 When the player sets a global pricing or discount rule, that rule should continue to apply to products whose market prices increase or decrease at the beginning of a new day.
+
+### Rework requested after in-game testing (2026-11-15)
+
+Auto pricing should also work for newly unlocked products. It should be applied immediately after their license is unlocked.
 
 ## Improvement #2: Make Paint Cans Last Twice as Long
 
@@ -137,17 +141,21 @@ Make paint cans last twice as long as they currently do.
 
 ## Improvement #3: Add Player Crouching
 
-**Status:** DONE  
-**Completed:** 2026-11-15
+**Status:** NEEDS REWORK — See the rework request below (2026-11-15)  
+**First completed:** 2026-11-15
 
 Allow players to crouch by pressing `Ctrl`.
 
 Characters should also play an appropriate crouching animation when this happens.
 
+### Rework requested after in-game testing (2026-11-15)
+
+The mod works, but there is no animation for the player crouching, so it does not show on the other player's screen, even with the mod installed on both. Make the character actually visually crouch on screen.
+
 ## Improvement #4: Make Self-Checkout Machines Faster
 
-**Status:** DONE  
-**Completed:** 2026-11-14
+**Status:** NEEDS REWORK — See the rework request below (2026-11-15)  
+**First completed:** 2026-11-14
 
 Make customers using self-checkout machines 2x faster.
 
@@ -155,9 +163,15 @@ The speed multiplier should be configurable as a floating-point value in the mod
 
 Allow values up to `10x`.
 
+### Rework requested after in-game testing (2026-11-15)
+
+- Customers leave before their products are done when the client and the host have different settings.
+- The setting should be typed into a text field in the in-game mod settings, not set with a slider.
+- The higher speed should also apply when the customer needs help from an employee.
+
 ## Improvement #5: Allow Level 10 Restockers to Carry Two Boxes
 
-**Status:** REVIEWED — Awaiting in-game test and logs  
+**Status:** NEEDS REWORK — See the rework request below (2026-11-15)  
 **Last reviewed:** 2026-11-15  
 **Project:** `RestockerDoubleCarry/`
 
@@ -198,6 +212,10 @@ When the restocker arrives at the shelves:
    - Continue the normal restocking workflow.
 
 The implementation should be efficient and avoid unnecessary trips.
+
+### Rework requested after in-game testing (2026-11-15)
+
+When restockers are carrying two boxes and they drop the bottom one, the top one should move down so it takes its place. Right now the top one stays floating.
 
 ## Improvement #6: Allow Furniture to Be Returned to Its Original Position
 
@@ -256,7 +274,7 @@ Make grid mode the default placement mode when placing furniture of any kind.
 
 ## Improvement #9: Add Bulk Item Transfer Between Shelves and Containers
 
-**Status:** REVIEWED — Awaiting in-game test and logs  
+**Status:** NEEDS REWORK — See the rework request below (2026-11-15)  
 **Last reviewed:** 2026-11-15  
 **Project:** `BulkShelfTransfer/`
 
@@ -301,9 +319,17 @@ The products should still follow the standard animation rather than simply telep
 
 Make the key binding configurable in the mod settings.
 
+### Rework requested after in-game testing (2026-11-15)
+
+Shift-clicking should work with paper bags for delivery too.
+
+- If the bag is being prepared for an active delivery, shift-clicking only takes the number of items the order still needs.
+- Otherwise, load as many products of that type as the bag can carry.
+- "Active delivery" means there is a delivery order present, and the currently selected delivery is not already being handled by another player or the courier.
+
 ## Improvement #10: Allow Players to Carry Two Boxes at Once
 
-**Status:** REVIEWED — Awaiting in-game test and logs  
+**Status:** NEEDS REWORK — See the rework request below (2026-11-15)  
 **Last reviewed:** 2026-11-15  
 **Project:** `PlayerDoubleCarry/`
 
@@ -316,3 +342,64 @@ When carrying two boxes:
 - Players can only carry the boxes and place them somewhere else.
 
 As soon as the player drops, throws, or places one of the boxes, they should be able to open the remaining box and place its products on shelves normally, following the game's standard behavior.
+
+### Rework requested after in-game testing (2026-11-15)
+
+It should also work at the wholesale store. When the player is holding a box and goes to a shelf, fridge or freezer at the wholesale store, they should still be able to click and hold to buy another box and stack it on top of the one they already hold. The same limit of at most 2 boxes in hand still applies.
+
+## Improvement #11: More clear tags
+
+**Status:** NEW
+
+Features:
+- Make the tags on boxes that show a small icon of what's inside 2x bigger. This number is configurable in the settings.
+- Pointing the player's reticle at one of these tags shows a hover text with the name of the product, the quantity of items inside and the price of the box itself.
+- This works also for the tags in shelves and racks.
+
+## Improvement #12: Auto courier load
+
+**Status:** NEW
+
+When the courier comes back from a delivery, he scans a small area around and including his regular parking space, and if there are any delivery bags that are closed and tagged with the customer's name whose delivery is active at the moment, he immediately takes it and loads it in his trunk. This works for up to 3 bags at a time (or whatever his trunk limit happens to be). if the bags he collected cover all the active online orders at the moment, or if one of those deliveries has less than one minute left, he leaves for delivery, as if the player went to him and pressed E to send him.
+
+## Improvement #13: Highlight same products
+
+**Status:** NEW
+
+Currently, hen holding a box of products, the game highlights boxes of the same type that are in the storage racks, with a green outline. Do the same for shelves/fridges/freezers that are labeled with this type of product, even if they're empty at the moment. Unlike the storage, where the boxes are highlighted, mark the whole shelf/fridge/freezer in this case, since the shelves could all be empty but we still want to find where those products would go, based on their labels.
+
+Additionally, when holding a paper bag for an online order, highlight all the groups of products on shelves/fridges/freezers that have the products that the order needs. In this case mark the products and not the shelves, so that if there is no product of this type on any of the shelves then nothing is highlighted. We don't want to see empty shelves since online orders require the products to actually be there.
+
+In both cases, make sure that the highlighting is updated live, since the labels and the
+stock of each shelf can change after the player picked up the box/bag. The highlighting
+needs to be updated to match
+
+## Improvement #14: Pack up products
+
+Right clicking on a product that is in a shelf/fridge/freezer currently does nothing, as
+it requires the user to use the crate tool or a paper bag to pack products in a specific
+way.
+
+This mod makes it so that right clicking on a product that is on the shelf spawns a box
+that is the right size for this type of product, and immediately puts that item in the
+box. Keep in mind that boxes in this game have different sizes, and each product only has
+one box size that is the right one for it, and the game does not allow to put items into
+the wrong box type, so make sure to spawn the right one.
+
+## Improvement #15: Employee clothes
+
+**Status:** NEW
+
+Create a new entry in the customization menu from the game's computer that allows the
+player to pick the color scheme of the clothes of the employees. It costs $500 to access
+each time.
+
+When selected, the game shows a preview of all the character models for a type of
+employee, with arrows to switch between types. It then offers a color palette picker like
+the one that already exists in game and is used for selecting the colors of the store's
+name at the front (another option in the customization menu). The color is then applied
+to the clothes of the employees, which still retain the same character models and clothes
+that are built in, just with the new colors. A checkbox is offered called "Apply to all"
+that will apply it all of the employee types, although the user can still switch to
+another type and override the color for that one specifically.
+
