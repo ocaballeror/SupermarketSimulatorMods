@@ -64,6 +64,8 @@ internal static class Crouch
     private static bool? _lastSent;
     private static float _nextVerify;
     private static bool _loggedBlocked;
+    private static bool _suppressUntilRelease;
+    private static float _nextCamResolve;
 
     internal static bool IsCrouching => LocalT > 0.001f;
 
@@ -87,12 +89,17 @@ internal static class Crouch
 
         ReadInput(out bool held, out bool pressed);
 
+        bool allowed = canMove && !placing;
+        if (!held) _suppressUntilRelease = false;
+        else if (!allowed) _suppressUntilRelease = true; // key held while blocked (e.g. Ctrl = snap): needs a fresh press
+
         if (skate) Want = false;
-        else if (canMove && !placing)
+        else if (ToggleModeOn)
         {
-            if (ToggleModeOn) { if (pressed) Want = !Want; }
-            else Want = held;
+            if (allowed && pressed) Want = !Want;
         }
+        else if (allowed) Want = held && (Want || !_suppressUntilRelease);
+        else Want &= held; // blocked: can't start a crouch, but letting go of the key still stands you up
 
         float target = Want ? 1f : 0f;
         if (!Want && LocalT > 0f && _ccModified && !HasHeadroom(player))
@@ -114,6 +121,16 @@ internal static class Crouch
     internal static void LateUpdate()
     {
         if (_fpc == null) return;
+        if (!_camWritten && Time.unscaledTime >= _nextCamResolve)
+        {
+            _nextCamResolve = Time.unscaledTime + 2f;
+            var t = ResolveCamTarget(_fpc);
+            if (t != null && (_camTarget == null || t.Pointer != _camTarget.Pointer))
+            {
+                _camTarget = t;
+                Plugin.Info($"Camera offset target is now '{t.name}'");
+            }
+        }
         ApplyCamera();
     }
 
@@ -131,7 +148,7 @@ internal static class Crouch
                 var k = kb[key];
                 if (k != null) { held |= k.isPressed; pressed |= k.wasPressedThisFrame; }
             }
-            catch (ArgumentException) { /* key not on this keyboard layout */ }
+            catch (Exception) { /* key not on this keyboard layout, or an unexpected Input System error: ignore this frame */ }
         }
 
         var pad = Gamepad.current;
@@ -176,8 +193,8 @@ internal static class Crouch
             _standCenter = _cc.center;
             _ccCaptured = _standHeight > 0.1f;
         }
-        var camGo = fpc.CinemachineCameraTarget;
-        _camTarget = camGo != null ? camGo.transform : null;
+        _camTarget = ResolveCamTarget(fpc);
+        _nextCamResolve = Time.unscaledTime + 2f;
 
         if (Plugin.Verbose.Value)
         {
@@ -200,9 +217,43 @@ internal static class Crouch
         }
     }
 
+    /// <summary>
+    /// The transform that gets the vertical camera offset: normally CinemachineCameraTarget. If the FPS virtual
+    /// camera follows a different transform inside the player (unverified in-game), that one is used instead, because
+    /// moving the camera target would otherwise not move the camera. The vcam's Follow may be assigned after the
+    /// player appears, so this is re-evaluated every 2 s while no offset is applied.
+    /// </summary>
+    private static Transform ResolveCamTarget(FirstPersonController fpc)
+    {
+        var go = fpc.CinemachineCameraTarget;
+        var own = go != null ? go.transform : null;
+        try
+        {
+            var pi = fpc.playerInstance;
+            var vcam = pi != null ? pi.m_FPSVCamObject : null;
+            var follow = vcam != null ? vcam.Follow : null;
+            if (follow != null && (own == null || follow.Pointer != own.Pointer))
+            {
+                var root = pi.transform;
+                if (follow.Pointer != root.Pointer && follow.IsChildOf(root)) return follow;
+            }
+        }
+        catch (Exception) { }
+        return own;
+    }
+
     /// <summary>Puts collider and camera back for the current local player and forgets it.</summary>
     private static void Release()
     {
+        // The local player is gone (respawn, scene change) or the mod is switched off: don't leave other modded
+        // players seeing us stuck crouched. Done before the early return below since _fpc may already be null.
+        if (_lastSent == true)
+        {
+            try { if (PhotonNetwork.InRoom && !PhotonNetwork.OfflineMode && PhotonNetwork.LocalPlayer != null) Send(false); }
+            catch (Exception) { }
+        }
+        _lastSent = null;
+
         if (_fpc == null && !_ccModified && !_camWritten) return;
         try { RestoreCollider(); } catch (Exception e) { Plugin.Logger.LogWarning($"[Crouch] Restoring collider failed: {e.Message}"); }
         try { RestoreCamera(); } catch (Exception e) { Plugin.Logger.LogWarning($"[Crouch] Restoring camera failed: {e.Message}"); }
@@ -221,12 +272,7 @@ internal static class Crouch
         Release();
         Want = false;
         LocalT = 0f;
-        try
-        {
-            if (_lastSent == true && PhotonNetwork.InRoom && !PhotonNetwork.OfflineMode) Send(false);
-        }
-        catch (Exception) { }
-        _lastSent = null;
+        _suppressUntilRelease = false;
     }
 
     // ---------------------------------------------------------------- collider

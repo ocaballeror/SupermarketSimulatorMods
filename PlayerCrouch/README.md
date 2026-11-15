@@ -8,7 +8,7 @@ Adds crouching to Supermarket Simulator. **Hold Left Ctrl** to crouch:
 
 Optional toggle mode: press once to crouch and again to stand. In this mode, jump also stands you up.
 
-**Ctrl is also the game's "snap" key while you place furniture.** While you are placing something, the crouch key is ignored, so snapping still works. It's also ignored in menus, at the computer and at the checkout, where you keep whatever state you were in. On a skateboard you always stand.
+**Ctrl is also the game's "snap" key while you place furniture.** While you are placing something, the crouch key can't start a crouch, so snapping still works. If you were already crouched when you picked something up, you stay crouched until you let go of the key (hold mode). A key you were holding while placing also has to be released before it can crouch you again. The same applies in menus, at the computer and at the checkout. In toggle mode you keep whatever state you were in there. On a skateboard you always stand.
 
 ## Settings
 

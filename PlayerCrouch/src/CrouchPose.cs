@@ -16,12 +16,19 @@
  * accumulate. We remember the hips localPosition and left upper-leg localRotation we wrote; if they are
  * unchanged at the next LateUpdate, the Animator didn't run and we leave the pose alone.
  *
+ * Leg IK: PlayerIKHandler has two-bone IK constraints for the legs (m_LeftLegRig / m_RightLegRig), and
+ * NetworkVehicle.SeatPlayer/UnseatPlayer switch the "Vehicle" rig layer on and off with SetWeight. Nothing in the
+ * game calls SetLeftLeg/SetRightLeg, so outside vehicles the leg constraints have no target and weight 0. While
+ * either leg constraint (and its Rig) has a weight above 0.01 (seated in a vehicle) the legs belong to that IK,
+ * so we don't pose that model, to keep the two systems from fighting. Seated players are not crouching anyway.
+ *
  * Crouch amount per player: the local player uses Crouch.LocalT; remote players follow the "oscar.crouch"
  * Photon player property of the PlayerInstance's PhotonView owner, smoothed over TransitionSeconds.
  */
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Animations.Rigging;
 
 namespace PlayerCrouch;
 
@@ -32,6 +39,8 @@ internal static class CrouchPose
         public PlayerInstance Instance;
         public Animator Animator;
         public bool WarnedNotHuman;
+        public PlayerIKHandler IkHandler;
+        public bool SkippedForIk;
         public float T;
         public bool LastRemote;
         public bool Applied;
@@ -120,8 +129,9 @@ internal static class CrouchPose
             {
                 s.Animator = a;
                 s.Applied = false;
+                s.IkHandler = inst.GetComponentInChildren<PlayerIKHandler>(true);
                 Plugin.Info($"Model for player {(isLocal ? "(local)" : "(remote)")}: animator '{a.name}' human={a.isHuman} " +
-                            $"onRoot={a.transform == inst.transform}");
+                            $"onRoot={a.transform == inst.transform} {DescribeLegIk(s.IkHandler)}");
             }
         }
         if (s.Animator == null || !s.Animator.isActiveAndEnabled) { s.Applied = false; return; }
@@ -131,12 +141,51 @@ internal static class CrouchPose
             return;
         }
 
+        bool ik = LegIkActive(s.IkHandler);
+        if (ik != s.SkippedForIk)
+        {
+            s.SkippedForIk = ik;
+            Plugin.Info(ik ? $"Leg IK is active on a {(isLocal ? "local" : "remote")} model; not posing it ({DescribeLegIk(s.IkHandler)})"
+                           : "Leg IK no longer active; posing resumed");
+        }
+        if (ik) { s.Applied = false; return; }
+
         try { Apply(s); }
         catch (Exception e)
         {
             Plugin.Logger.LogWarning($"[Crouch] Posing a player model failed: {e.Message}");
             s.Applied = false;
         }
+    }
+
+    private static bool LegIkActive(PlayerIKHandler h)
+    {
+        if (h == null) return false;
+        try { return Driven(h.m_LeftLegRig) || Driven(h.m_RightLegRig); }
+        catch (Exception) { return false; }
+    }
+
+    private static bool Driven(TwoBoneIKConstraint c)
+    {
+        if (c == null || c.weight <= 0.01f) return false;
+        var rig = c.GetComponentInParent<Rig>(true);
+        return rig == null || rig.weight > 0.01f;
+    }
+
+    private static string DescribeLegIk(PlayerIKHandler h)
+    {
+        if (h == null) return "legIK=no handler";
+        try
+        {
+            string One(TwoBoneIKConstraint c)
+            {
+                if (c == null) return "-";
+                var rig = c.GetComponentInParent<Rig>(true);
+                return $"{c.weight:F2}/{(rig != null ? rig.weight.ToString("F2") : "?")}";
+            }
+            return $"legIK(L={One(h.m_LeftLegRig)} R={One(h.m_RightLegRig)})";
+        }
+        catch (Exception) { return "legIK=?"; }
     }
 
     private static void Apply(State s)

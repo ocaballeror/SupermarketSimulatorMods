@@ -4,7 +4,9 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
-v1.0.0: written, **not yet tested in-game**. Open questions that the first test answers (all logged by `[Crouch] Local player set up ...` / `Model for player ...`):
+v1.0.1: written, reviewed (round 1 findings applied), **not yet tested in-game**. Open questions that the first test answers (all logged by `[Crouch] Local player set up ...` / `Model for player ...`):
+- Camera fallback (v1.0.1): if the FPS vcam's `Follow` is a different transform inside the player than `CinemachineCameraTarget`, the offset is applied to that one instead (log: `Camera offset target is now '<name>'`). Re-evaluated every 2 s while standing. Check the `VCam follows:` line; if the camera still doesn't drop, the vcam follows something this fallback doesn't pick.
+- Leg IK (v1.0.1): `Model for player ...` lines now include `legIK(L=<constraint weight>/<rig weight> R=...)`. Expect `0.00` outside vehicles. A `Leg IK is active ... not posing it` line while on foot means the guard fires wrongly; check that line. Test sitting in a vehicle as a remote player too.
 - Does the FPS vcam actually follow `FirstPersonController.CinemachineCameraTarget`? (Logged `VCam follows:`.) If not, the camera won't drop and the camera offset must move whatever the vcam follows.
 - Is the player Animator humanoid (`human=True`)? The pose needs `Animator.GetBoneTransform`.
 - Is the local player's own body visible to them? The pose is applied to it anyway (shadow / body when looking down).
@@ -21,6 +23,15 @@ v1.0.0: written, **not yet tested in-game**. Open questions that the first test 
 - **Collider:** `CharacterController.height/center` are untouched by game code, so they're shrunk with the bottom kept fixed. Standing up waits for a `Physics.OverlapCapsule` (crouched top → standing top, radius × 0.9, the player layer's collision mask, triggers and own hierarchy ignored).
 - **Network:** the Photon player custom property `oscar.crouch` (bool) on `PhotonNetwork.LocalPlayer`. It's sent on change and re-checked every 2 s, so it self-heals after a room change. Remote state is read from `PlayerInstance.m_PhotonView.Owner.CustomProperties`. Unmodded clients just store the key. The game itself uses player properties `sid` and `png`.
 - **Pose:** in LateUpdate (after the Animator and rigs), the mod lowers the hips, leans the spine (and restores the head's world rotation), and runs two-bone IK on both legs back to the animated foot positions, bending the knees toward the model's forward. An accumulation guard skips frames where the Animator didn't overwrite the bones, by comparing hips localPosition and left thigh localRotation with what we wrote.
+
+## Review round 1 (v1.0.1)
+
+- **Hold mode while blocked:** when input is blocked (placing, `_movementInteraction` false), `Want &= held`, so releasing the key stands you up; a key held while blocked sets `_suppressUntilRelease`, so it can't start a crouch until released (Ctrl = snap would otherwise crouch you when placing ends). Toggle mode is frozen while blocked.
+- **Stale network state:** `Release()` publishes `oscar.crouch=false` if `true` was sent (player gone while still in the room, mod disabled).
+- **`ReadInput`** catches any `Exception`.
+- **Leg IK vs vehicles:** `PlayerIKHandler.SetLeftLeg`/`SetRightLeg` have no callers in the dumps (searched `native-all`, `native`, `native-pun`). The only IK switch is `NetworkVehicle.SeatPlayer`/`UnseatPlayer` calling `SetWeight("Vehicle", w)` on the rig layers. `CrouchPose` skips a model whose leg constraint and Rig weights are both above 0.01. Unverified in-game; see the legIK log lines.
+- **Photon property `oscar.crouch`:** the only game code reacting to player property updates is `RoomPlayerPropsListener.OnPlayerPropertiesUpdate` → `RoomSettingsManager.OnPlayerPropertiesUpdateHook`, which only does `ContainsKey("png")` and `ContainsKey("sid")` on the changed table; any other key is ignored. `RackManager.OnPlayerPropertiesUpdate` is the empty shared method. So unmodded clients can't react to our key.
+- Not changed: the `Vector3`/`Quaternion` approximate equality in the accumulation guard (harmless: the hips drop at the `T > 0.001` cutoff is about 3e-4 m, far above the 1e-5 tolerance), and `CrouchBehaviour` still being added while `Enabled=false` (it must exist so the master switch can re-enable the mod live; the cost is one bool check per frame).
 
 ## Pitfalls / follow-ups
 
