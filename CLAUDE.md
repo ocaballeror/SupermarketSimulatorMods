@@ -112,7 +112,7 @@ tools/readconst.py 0x1838CEBA8 [--type f|d|i|q]                     # value of a
 tools/bindings.py escape                                            # default input bindings: map/action -> key (filter optional)
 ```
 
-**Game assets** (textures, sprites, names) aren't in the dumps. Inspect them with UnityPy in a throwaway venv (`python3 -m venv <scratch>/upy && <scratch>/upy/bin/pip install UnityPy`), loading `<game>/Supermarket Simulator_Data/sharedassets*.assets` / `resources.assets` and saving `obj.read().image` as PNG. `strings -n 5 <file> | grep -i <name>` is a quick first check. The Addressables bundles in `StreamingAssets/aa` hold only localization. Furniture shop icons are one atlas, `T_IconAtlas_Furnitures` (sharedassets2); it has no computer.
+**Game assets** (textures, sprites, names) aren't in the dumps. Inspect them with UnityPy in a throwaway venv (`python3 -m venv <scratch>/upy && <scratch>/upy/bin/pip install UnityPy`), loading `<game>/Supermarket Simulator_Data/sharedassets*.assets` / `resources.assets` and saving `obj.read().image` as PNG. `strings -n 5 <file> | grep -i <name>` is a quick first check. The Addressables bundles in `StreamingAssets/aa` hold only localization. Furniture shop icons are renders in one atlas, `T_IconAtlas_Furnitures` (sharedassets2); it has no computer. Flat white UI glyphs are named `icon_<set>_<n>` (e.g. `icon_device_63` is a computer).
 
 `Il2CppDump` uses the Cpp2IL that ships in `<game>/BepInEx/core`, which already supports this metadata version. Don't download other Cpp2IL or Il2CppDumper builds unless that one stops working.
 
