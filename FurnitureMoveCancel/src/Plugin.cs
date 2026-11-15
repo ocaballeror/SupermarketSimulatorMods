@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.furnituremovecancel";
     public const string Name = "Furniture Move Cancel";
-    public const string Version = "1.0.0";
+    public const string Version = "1.0.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

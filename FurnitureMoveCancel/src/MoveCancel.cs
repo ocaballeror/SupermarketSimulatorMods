@@ -17,7 +17,10 @@
  *     collider's tag must be in FurniturePlacer.m_CurrentPlacingTag. Blocked areas
  *     (PlacementBlockedArea.IsBlocked) clear it, but only when CurrentFurnitureAimsThroughWalls.
  *     The surface can be movable furniture (a category sign sits on a shelf), so the mod raycasts for a
- *     correctly tagged surface at the origin instead of assuming it is still there.
+ *     correctly tagged surface at the origin instead of assuming it is still there. That probe is a
+ *     heuristic (short rays from the pivot along four local axes), so it is calibrated at pickup, while
+ *     the piece still stands at a valid spot: if it finds no support there, it is not enforced for that
+ *     piece at Escape time (only the overlap check is), and the pickup log line says so.
  *   - Putting it down = the player's Use click: PlayerInteraction.onUse(true) -> the active
  *     interaction's OnUse -> CheckPlaceFurniture -> broadcast + Place...(). Invoking onUse(true)
  *     therefore places any furniture type through the game's own code, including multiplayer sync.
@@ -45,7 +48,6 @@
  */
 using System;
 using HarmonyLib;
-using Il2CppInterop.Runtime.InteropTypes;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -59,6 +61,9 @@ internal static class MoveCancel
     private static Vector3 _originPos;
     private static Quaternion _originRot;
     private static string _what;
+    // True if the surface probe found support when the piece was picked up (i.e. at a spot known to be
+    // valid). Only then is the probe trusted at Escape time; otherwise only the overlap check is used.
+    private static bool _surfaceCalibrated;
 
     // Escape pressed and the spot was free: holding the piece at its origin until _placeAt.
     private static bool _returning;
@@ -122,7 +127,14 @@ internal static class MoveCancel
         _originPos = t.position;
         _originRot = t.rotation;
         _what = SafeName(t);
-        Log($"picked up {_what} at {_originPos}");
+        // Calibrate the surface probe while the piece still stands at its valid spot (before the first
+        // PlacingRaycast moves it). If the probe finds nothing here, it can't be trusted for this piece
+        // (pivot far from the supporting collider, support on an unprobed axis, ...).
+        _surfaceCalibrated = false;
+        try { _surfaceCalibrated = SurfaceStillThere(t); }
+        catch (Exception e) { Plugin.Logger.LogWarning($"[MoveCancel] surface calibration failed: {e.Message}"); }
+        Log($"picked up {_what} at {_originPos}; surface probe " +
+            (_surfaceCalibrated ? "calibrated (surface check on)" : "found no surface here (surface check off, overlap check only)"));
     }
 
     internal static void MarkFromBox() => _fromBoxFrame = Time.frameCount;
@@ -173,8 +185,9 @@ internal static class MoveCancel
         }
         catch (Exception e)
         {
+            // Don't retry every frame (Tick runs from Update): give up on this pickup.
             Plugin.Logger.LogError($"[MoveCancel] {e}");
-            _returning = false;
+            Reset();
         }
     }
 
@@ -222,7 +235,8 @@ internal static class MoveCancel
         _returning = true;
         _placeAt = Time.unscaledTime + delay;
         Log($"Escape pressed: returning {_what} to {_originPos} ({how}; placing in {delay:0.##}s)");
-        if (delay <= 0f) FinishReturn(pm);
+        // The spot was just checked this frame, so with no delay place without checking again.
+        if (delay <= 0f) FinishReturn(pm, recheck: false);
     }
 
     /// <summary>
@@ -253,9 +267,9 @@ internal static class MoveCancel
         }
     }
 
-    private static void FinishReturn(FurniturePlacingMode pm)
+    private static void FinishReturn(FurniturePlacingMode pm, bool recheck = true)
     {
-        if (!TryPutAtOrigin(pm, out string why))
+        if (recheck && !TryPutAtOrigin(pm, out string why))
         {
             // Something moved into the spot during the delay: give control back. PlacedOnCorrectSurface
             // may still be forced/stale here; the next PlacingRaycast recomputes it.
@@ -278,9 +292,10 @@ internal static class MoveCancel
 
         if (StillMoving() != null)
         {
-            // The interaction refused (e.g. its short place cooldown right after picking up).
+            // The interaction refused: its short place cooldown right after pickup, or a rule of its own
+            // that this mod can't see. The piece stays at the origin until the next PlacingRaycast.
             _returning = false;
-            Log($"the game did not accept placing {_what} yet; press Escape again");
+            Log($"the game did not accept placing {_what} at its original spot (just picked up, or a game rule); the piece goes back to the crosshair");
         }
         // Success is logged and cleaned up by Tick once the placer leaves placing mode.
     }
@@ -299,7 +314,7 @@ internal static class MoveCancel
         pm.OverlapBoxes(); // syncs transforms and refreshes the overlapping-collider list
         // The per-frame surface raycast isn't running while frozen, so check the surface ourselves:
         // what the piece stood on may have been moved or sold (e.g. the shelf under a category sign).
-        if (!SurfaceStillThere(t))
+        if (_surfaceCalibrated && !SurfaceStillThere(t))
         {
             why = "the surface it stood on is gone";
             return false;
@@ -355,7 +370,7 @@ internal static class MoveCancel
             try
             {
                 var asset = player.InputActions?.m_PlayerInput?.actions;
-                _backAction = asset?.FindAction("Back", false);
+                _backAction = asset?.FindAction("Player/Back", false);
             }
             catch (Exception e) { Plugin.Logger.LogWarning($"[MoveCancel] Back action lookup failed: {e.Message}"); }
             if (_backAction == null)
@@ -435,8 +450,9 @@ internal static class PlacerUpdatePatch
 [HarmonyPatch(typeof(FurnitureBoxInteraction), nameof(FurnitureBoxInteraction.CheckFurnitureType))]
 internal static class FromBoxPatch
 {
-    private static void Prefix()
+    // shouldInteract is false when the call only mirrors another player's unboxing: no local pickup follows.
+    private static void Prefix(bool shouldInteract)
     {
-        try { MoveCancel.MarkFromBox(); } catch { }
+        try { if (shouldInteract) MoveCancel.MarkFromBox(); } catch { }
     }
 }
