@@ -96,6 +96,7 @@ internal static class ComputerFurniture
             {
                 var c = all[i];
                 if (c == null || !c.gameObject.scene.IsValid()) continue;
+                if (_holder != null && c.transform.IsChildOf(_holder.transform)) continue; // never our template
                 _computer = c;
                 break;
             }
@@ -203,7 +204,7 @@ internal static class ComputerFurniture
     {
         var item = ShopItem;
         if (item == null) return;
-        bool show = Plugin.Active && !Presence.CachedBlocked;
+        bool show = Plugin.Active && Template != null && !Presence.CachedBlocked;
         var go = item.gameObject;
         if (go != null && go.activeSelf != show)
         {
@@ -255,21 +256,23 @@ internal static class ComputerFurniture
         return Template != null;
     }
 
-    internal static void RegisterWithPhoton()
+    /// <summary>Makes the template network-instantiable. Returns false if that isn't possible.</summary>
+    internal static bool RegisterWithPhoton()
     {
-        if (Template == null) return;
+        if (Template == null) return false;
         try
         {
             var pool = PhotonNetwork.PrefabPool;
             var dp = pool?.TryCast<DefaultPool>();
             if (dp == null)
             {
-                Plugin.Error("Photon's prefab pool isn't the default pool; extra computers won't appear for other players.");
-                return;
+                Plugin.Error("Photon's prefab pool isn't the default pool; extra computers can't be placed online.");
+                return false;
             }
             dp.ResourceCache[PrefabId] = Template;
+            return true;
         }
-        catch (Exception e) { Plugin.Error("Registering the computer with Photon failed: " + e.Message); }
+        catch (Exception e) { Plugin.Error("Registering the computer with Photon failed: " + e.Message); return false; }
     }
 
     private static void BuildTemplate(Computer comp, IDManager ids)
@@ -302,7 +305,12 @@ internal static class ComputerFurniture
         tpl.name = "ExtraComputer";
         tpl.transform.localPosition = Vector3.zero;
         tpl.transform.localRotation = Quaternion.identity;
-        tpl.transform.localScale = compRoot.lossyScale;
+        // Unboxing forces the spawned furniture's scale to 1 (OpenBox tweens to 1, OpenBoxOrder sets Vector3.one), so a
+        // store computer that isn't at unit scale would come out a different size.
+        tpl.transform.localScale = Vector3.one;
+        var sc = compRoot.lossyScale;
+        if (Mathf.Abs(sc.x - 1f) > 0.01f || Mathf.Abs(sc.y - 1f) > 0.01f || Mathf.Abs(sc.z - 1f) > 0.01f)
+            Plugin.Warn($"The store computer's scale is {sc}; extra computers will be built at scale 1 and may look a different size.");
 
         var zone = zonePath != null ? Find(tpl.transform, zonePath) : null;
         StripComputerCopy(tpl.transform, camPath, screenPath, zone);
@@ -450,26 +458,28 @@ internal static class ComputerFurniture
 
     // ---------------------------------------------------------------- icon
 
-    /// <summary>The game has no computer furniture icon (the furniture icon atlas has none, and the only computer-named
-    /// sprite, T_Vending_ComputerIcon, is a vending machine silhouette), so the icon is rendered from the computer's
-    /// model, like the other furniture icons. The drawn fallback is retried a few times, because the store computer
-    /// may not exist yet when the shop first asks for the icon.</summary>
+    /// <summary>The furniture shop's icons are renders in one atlas (T_IconAtlas_Furnitures), which has no computer, so
+    /// by default the icon is rendered from the computer's model in the same style. The game also has a flat white
+    /// computer symbol (sprite icon_device_63, a UI glyph), used when Icon = GameSymbol. A drawn placeholder is only a
+    /// stopgap: rendering is retried a few times, because the store computer may not exist yet when the shop first
+    /// asks for the icon.</summary>
     internal static void EnsureIcon()
     {
         if (So == null) return;
         if (!_iconRendered && _iconRenderAttempts < 3)
         {
-            Transform model = EnsureTemplate() ? Template.transform : null;
-            if (model == null)
-            {
-                var comp = FindRealComputer();
-                if (comp != null) { model = ComputerRoot(comp); MeasureFront(comp, model); }
-            }
+            _iconRenderAttempts++;
             Texture2D tex = null;
-            if (model != null)
+            if (Plugin.Icon.Value == IconStyle.GameSymbol) tex = IconMaker.FromGameSymbol();
+            if (tex == null)
             {
-                _iconRenderAttempts++;
-                tex = IconMaker.Render(model);
+                Transform model = EnsureTemplate() ? Template.transform : null;
+                if (model == null)
+                {
+                    var comp = FindRealComputer();
+                    if (comp != null) { model = ComputerRoot(comp); MeasureFront(comp, model); }
+                }
+                if (model != null) tex = IconMaker.Render(model);
             }
             if (tex != null) _iconRendered = true;
             else if (IconTexture == null) tex = IconMaker.Draw();
@@ -485,6 +495,14 @@ internal static class ComputerFurniture
         if (So.FurnitureIcon == null || So.FurnitureIcon.Pointer != _iconSprite.Pointer) So.FurnitureIcon = _iconSprite;
     }
 
+    /// <summary>The Icon setting changed: make the icon again (the shop shows it after the next store load).</summary>
+    internal static void ResetIcon()
+    {
+        _iconRendered = false;
+        _iconRenderAttempts = 0;
+        EnsureIcon();
+    }
+
     private static void SetIconTexture(Texture2D tex)
     {
         tex.name = "ExtraComputerIcon";
@@ -494,7 +512,7 @@ internal static class ComputerFurniture
         if (_boxIconMaterial != null)
             foreach (var prop in new[] { "_BaseMap", "_MainTex" })
                 if (_boxIconMaterial.HasProperty(prop)) _boxIconMaterial.SetTexture(prop, tex);
-        Plugin.Debug(_iconRendered ? "Computer icon rendered from the model" : "Computer icon: using the drawn placeholder for now");
+        if (!_iconRendered) Plugin.Debug("Computer icon: using the drawn placeholder for now");
     }
 
     /// <summary>The furniture box's label: a copy of the game's icon-atlas material showing our icon.</summary>
@@ -510,12 +528,18 @@ internal static class ComputerFurniture
             if (mats == null || mats.Count == 0 || mats[0] == null) return false;
             _boxIconMaterial = new Material(mats[0]) { name = "ExtraComputerBoxIcon" };
             _boxIconMaterial.hideFlags = HideFlags.DontUnloadUnusedAsset;
+            // Vanilla SetFurnitureIcon only sets the _BaseMap offset to AtlasPosition * 0.125 (ISIL); the 1/8 cell size
+            // comes either from the material's tiling or from the label mesh's UVs. With atlas tiling s, the mesh UVs
+            // span (1/8)/s, so a scale of 8*s makes our whole texture fill the label in both cases.
             foreach (var prop in new[] { "_BaseMap", "_MainTex" })
             {
                 if (!_boxIconMaterial.HasProperty(prop)) continue;
+                var atlasScale = mats[0].GetTextureScale(prop);
+                var scale = atlasScale * 8f;
                 _boxIconMaterial.SetTexture(prop, IconTexture);
-                _boxIconMaterial.SetTextureScale(prop, Vector2.one);
+                _boxIconMaterial.SetTextureScale(prop, scale);
                 _boxIconMaterial.SetTextureOffset(prop, Vector2.zero);
+                Plugin.Debug($"Box label material: {prop} atlas tiling {atlasScale}, ours {scale}");
             }
         }
         rend.sharedMaterial = _boxIconMaterial;

@@ -105,6 +105,14 @@ internal static class PurchaseGatePatch
         {
             if (PhotonNetwork.IsConnectedAndSlave) return true; // guests only send a request to the host
             if (!CartHasComputer(__instance)) return true;
+            if (!ComputerFurniture.EnsureTemplate())
+            {
+                // Purchase reads FurnitureSO.FurniturePrefab for every furniture in the cart after the delivery has
+                // been created and throws on a null prefab (ISIL), and the box could never be opened anyway.
+                Plugin.Error("Purchase refused: the cart holds a computer, but the computer furniture couldn't be built " +
+                             "(see 'Building the computer furniture failed' earlier in this log). Remove it from the cart.");
+                return false;
+            }
             if (!Presence.Blocked(out var who)) return true;
             Plugin.Warn($"Purchase refused: the cart holds a computer and {who} doesn't have the Extra Computers mod. " +
                         "Remove the computer from the cart (or turn Multiplayer/ProtectUnmoddedPlayers off).");
@@ -174,9 +182,10 @@ internal static class OpenBoxGate
         {
             var data = interaction?.CurrentFurnitureBox?.Data;
             if (data == null || data.FurnitureID != ComputerFurniture.FurnitureId) return false;
-            if (!ComputerFurniture.EnsureTemplate())
+            bool hostOnline = PhotonNetwork.IsConnected && PhotonNetwork.IsMasterClient;
+            if (!ComputerFurniture.EnsureTemplate() || (hostOnline && !ComputerFurniture.RegisterWithPhoton()))
             {
-                // Opening would despawn the box and spawn nothing, leaving the player in an empty placing mode.
+                // Opening would use up the box and spawn nothing, leaving the player in an empty placing mode.
                 Plugin.Error($"Computer box not opened ({side} side): the computer furniture couldn't be built " +
                              "(see the 'Building the computer furniture failed' error earlier in this log).");
                 return true;

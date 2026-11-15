@@ -180,7 +180,7 @@ internal static class Presence
         _nextTick = Time.unscaledTime + 1f;
         try
         {
-            if (Online) Publish(Plugin.Active);
+            if (Online) Publish(Ready);
             ComputerFurniture.ApplyPrice();
 
             if (Plugin.Verbose.Value && Online)
@@ -194,7 +194,7 @@ internal static class Presence
             {
                 _loggedBlocked = blocked;
                 if (blocked)
-                    Plugin.Warn($"{who} doesn't have the Extra Computers mod: computer purchases and unboxing are paused. " +
+                    Plugin.Warn($"{who} doesn't have the Extra Computers mod (or it couldn't build the computer there): computer purchases and unboxing are paused. " +
                                 "Computers or computer boxes that already exist will cause errors for that player.");
                 else
                     Plugin.Info("Every player has the Extra Computers mod; computers are available again");
@@ -203,6 +203,10 @@ internal static class Presence
         }
         catch (Exception e) { Plugin.Debug("Presence tick failed: " + e.Message); }
     }
+
+    /// <summary>What this client publishes as "has the mod": the mod is on AND its computer furniture was built. A client
+    /// whose build failed can't load computers either, so the others treat it like a player without the mod.</summary>
+    private static bool Ready => Plugin.Active && ComputerFurniture.Template != null;
 
     private static void Publish(bool modOn)
     {
@@ -285,7 +289,7 @@ internal static class Presence
         _useViewId = viewId;
         try
         {
-            if (Online && Plugin.Active) Publish(true);
+            if (Online && Plugin.Active) Publish(Ready);
         }
         catch (Exception e) { Plugin.Debug("Publishing the computer in use failed: " + e.Message); }
     }

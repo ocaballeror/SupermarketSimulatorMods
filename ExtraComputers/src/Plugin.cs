@@ -7,18 +7,21 @@ using HarmonyLib;
 
 namespace ExtraComputers;
 
+public enum IconStyle { Model, GameSymbol }
+
 [BepInPlugin(Guid, Name, Version)]
 public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.extracomputers";
     public const string Name = "Extra Computers";
-    public const string Version = "1.2.0";
+    public const string Version = "1.2.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<float> Price;
     internal static ConfigEntry<bool> ProtectUnmodded;
     internal static ConfigEntry<bool> Verbose;
+    internal static ConfigEntry<IconStyle> Icon;
 
     internal static bool Active { get; private set; }
 
@@ -42,12 +45,21 @@ public class Plugin : BasePlugin
             "Host only. While any other player in the room does not have this mod, the computer is hidden in the shop, " +
             "buying it is refused and computer boxes can't be opened, because a player without the mod gets errors from " +
             "computer boxes and computers. Turn this off only if everybody has the mod.");
+        Icon = Config.Bind("ExtraComputers", "Icon", IconStyle.Model,
+            "Picture of the computer in the furniture shop and on its box. Model: a picture made from the computer's 3D " +
+            "model, in the style of the other furniture. GameSymbol: the game's flat computer symbol (icon_device_63). " +
+            "The shop picks up a change after the store is loaded again.");
         Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
             "Log how the computer furniture is built and every time an extra computer is used " +
             "(tag [ExtraComputers] in LogOutput.log).");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
         Price.SettingChanged += (_, _) => ComputerFurniture.ApplyPrice();
+        Icon.SettingChanged += (_, _) =>
+        {
+            try { ComputerFurniture.ResetIcon(); }
+            catch (Exception e) { Log.LogWarning($"Changing the icon failed: {e.Message}"); }
+        };
 
         SetActive(Enabled.Value);
         Log.LogInfo($"{Name} {Version} loaded ({(Active ? "enabled" : "disabled")})");

@@ -17,7 +17,7 @@ internal static class IconMaker
     internal static Texture2D Render(Transform model)
     {
         if (model == null) return null;
-        GameObject root = null, camGo = null;
+        GameObject root = null, camGo = null, lightGo = null;
         RenderTexture rt = null;
         var prevActive = RenderTexture.active;
         try
@@ -53,6 +53,17 @@ internal static class IconMaker
             camGo.transform.position = b.center + dir * dist;
             camGo.transform.LookAt(b.center);
 
+            // The copy sits far below the map, away from the store's lights (and has no lightmaps), so light it
+            // ourselves: a key light from the camera's side, only for the render layer.
+            lightGo = new GameObject("ExtraComputers.IconLight");
+            var light = lightGo.AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.intensity = 1.3f;
+            light.color = Color.white;
+            light.cullingMask = 1 << layer;
+            light.shadows = LightShadows.None;
+            lightGo.transform.rotation = Quaternion.LookRotation(-(Quaternion.AngleAxis(-25f, Vector3.up) * dir), Vector3.up);
+
             rt = new RenderTexture(Size, Size, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
             cam.targetTexture = rt;
             cam.Render();
@@ -63,13 +74,19 @@ internal static class IconMaker
             tex.Apply();
             cam.targetTexture = null;
 
-            if (!KeyOut(tex))
+            if (!KeyOut(tex, out float brightness))
             {
                 Plugin.Warn("The computer icon render came out empty; using a drawn icon instead.");
                 Object.Destroy(tex);
                 return null;
             }
-            Plugin.Debug("Computer icon rendered from the model");
+            if (brightness < 0.06f)
+            {
+                Plugin.Warn($"The computer icon render came out too dark (brightness {brightness:0.00}); using a drawn icon instead.");
+                Object.Destroy(tex);
+                return null;
+            }
+            Plugin.Debug($"Computer icon rendered from the model (brightness {brightness:0.00})");
             return tex;
         }
         catch (Exception e)
@@ -82,6 +99,7 @@ internal static class IconMaker
             RenderTexture.active = prevActive;
             if (rt != null) { rt.Release(); Object.Destroy(rt); }
             if (camGo != null) Object.Destroy(camGo);
+            if (lightGo != null) Object.Destroy(lightGo);
             if (root != null) Object.Destroy(root);
         }
     }
@@ -147,8 +165,9 @@ internal static class IconMaker
     /// <summary>Turns the magenta background transparent. Returns false if nothing was drawn.
     /// Only pixels that are exactly the clear colour, plus magenta-ish pixels connected to them (the anti-aliased
     /// edge), are removed, so magenta-ish pixels inside the model survive.</summary>
-    private static bool KeyOut(Texture2D tex)
+    private static bool KeyOut(Texture2D tex, out float brightness)
     {
+        brightness = 0f;
         var px = tex.GetPixels32();
         var bg = new bool[px.Length];
         var stack = new Stack<int>();
@@ -180,11 +199,72 @@ internal static class IconMaker
             c.a = 255;
             px[i] = c;
             solid++;
+            brightness += (0.299f * c.r + 0.587f * c.g + 0.114f * c.b) / 255f;
         }
         if (solid < px.Length / 100) return false;
+        brightness /= solid;
         tex.SetPixels32(px);
         tex.Apply();
         return true;
+    }
+
+    /// <summary>The game's flat computer symbol (sprite icon_device_63, white on transparent), tinted dark so it shows on
+    /// the light shop cards and box labels. Sprite textures usually aren't readable, so it's copied through a
+    /// RenderTexture.</summary>
+    internal static Texture2D FromGameSymbol()
+    {
+        RenderTexture rt = null;
+        var prevActive = RenderTexture.active;
+        try
+        {
+            Sprite sprite = null;
+            var all = Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<Sprite>());
+            for (int i = 0; i < all.Length && sprite == null; i++)
+                if (all[i] != null && all[i].name == "icon_device_63") sprite = all[i].TryCast<Sprite>();
+            if (sprite == null || sprite.texture == null)
+            {
+                Plugin.Warn("The game's computer symbol (icon_device_63) wasn't found; using the model picture.");
+                return null;
+            }
+            var src = sprite.texture;
+            var r = sprite.textureRect;
+            rt = RenderTexture.GetTemporary(src.width, src.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            Graphics.Blit(src, rt);
+            RenderTexture.active = rt;
+            int w = Mathf.Max(1, (int)r.width), h = Mathf.Max(1, (int)r.height);
+            var glyph = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            glyph.ReadPixels(new Rect(r.x, r.y, w, h), 0, 0);
+            glyph.Apply();
+
+            // Centre it on a square canvas with a margin, tinted like the drawn icon's frame.
+            int side = Mathf.Max(w, h) * 5 / 4;
+            var outTex = new Texture2D(side, side, TextureFormat.RGBA32, false);
+            var px = new Color32[side * side];
+            for (int i = 0; i < px.Length; i++) px[i] = new Color32(255, 255, 255, 0);
+            var gp = glyph.GetPixels32();
+            int ox = (side - w) / 2, oy = (side - h) / 2;
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    var c = gp[y * w + x];
+                    px[(y + oy) * side + x + ox] = new Color32(45, 48, 54, c.a);
+                }
+            Object.Destroy(glyph);
+            outTex.SetPixels32(px);
+            outTex.Apply();
+            Plugin.Debug($"Computer icon taken from the game's symbol icon_device_63 ({w}x{h})");
+            return outTex;
+        }
+        catch (Exception e)
+        {
+            Plugin.Warn("Using the game's computer symbol failed (" + e.Message + "); using the model picture.");
+            return null;
+        }
+        finally
+        {
+            RenderTexture.active = prevActive;
+            if (rt != null) RenderTexture.ReleaseTemporary(rt);
+        }
     }
 
     /// <summary>Fallback icon: a simple monitor on a stand with a keyboard.</summary>
