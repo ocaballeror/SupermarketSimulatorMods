@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.pricemarkupkeeper";
     public const string Name = "Price Markup Keeper";
-    public const string Version = "1.1.0";
+    public const string Version = "1.1.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -48,8 +48,8 @@ public class Plugin : BasePlugin
             "by hand are left alone. Turn off to reprice every product whose market price changed.");
         PriceNewProducts = Config.Bind("Pricing", "PriceNewlyUnlockedProducts", true,
             "When a product license is bought, give its new products a selling price right away: the markup " +
-            "(% above market price) last applied from the computer's bulk pricing tab. Products that already " +
-            "have a price are left alone.");
+            "(% above market price) and discount last applied from the computer's bulk pricing tab. If you never " +
+            "applied a markup, that means exactly market price. Products that already have a price are left alone.");
         Verbose = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Log every repriced product (tag [Markup] in LogOutput.log).");
 

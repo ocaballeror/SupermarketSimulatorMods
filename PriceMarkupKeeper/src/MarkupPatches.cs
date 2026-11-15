@@ -246,10 +246,13 @@ internal static class ChangeCurrentCostPatch
 // A newly unlocked product has no player price (m_PricesSetByPlayer entry), so it sells at CurrentCost,
 // with no profit at all. Postfix both, on the host or offline only: for each product of the license that
 // isn't IsHiddenForCustomer and has no player price yet, GetOrCreatePriceSetByPlayer (creates one at
-// market price, as the pricing tab does) and set Price to the saved bulk markup on that market price.
-// Then FinishBulkPricingApply(list, false, ratio), the game's own end of a bulk apply: refreshes the
-// pricing viewer, discount points, onPriceSet (price tags), and online BulkPricingApplied_RPC to the
-// guests. Its sale sign reroll only touches products with DiscountRate > 0.1, and these have none.
+// market price, as the pricing tab does) and set Price to the saved bulk markup on that market price,
+// and DiscountRate to the saved bulk discount (BulkDiscountRatio) if there is one, as ApplyBulkDiscount
+// does. Then FinishBulkPricingApply(list, false, ratio), the game's own end of a bulk apply: refreshes
+// the pricing viewer, discount points, onPriceSet (price tags), and online BulkPricingApplied_RPC to the
+// guests; with a discount, a second FinishBulkPricingApply(list, true, discount) as ApplyBulkDiscount's
+// own finish (it picks the sale sign style). EnsurePricingDataComplete runs first because
+// GetOrCreatePriceSetByPlayer throws without the product's pricingDatas entry.
 internal static class NewProductPricer
 {
     private static bool IsAuthority() => !PhotonNetwork.IsConnected || PhotonNetwork.IsMasterClient;
@@ -264,39 +267,67 @@ internal static class NewProductPricer
         var products = license != null ? license.Products : null;
         if (products == null) return;
 
+        // GetOrCreatePriceSetByPlayer reads the product's pricingDatas entry and throws if it's missing. The
+        // pricing tab fills that list before its own bulk apply (LoadPricingData), and WholeSaleManager calls
+        // EnsurePricingDataComplete first; this hook can run before the pricing tab was ever opened.
+        try { pm.EnsurePricingDataComplete(); }
+        catch (Exception e) { Plugin.Logger.LogWarning($"[Markup] EnsurePricingDataComplete failed: {e.Message}"); }
+
         float ratio = pm.BulkMarkupRatio;
+        int discount = (int)Math.Round(pm.BulkDiscountRatio);
+        if (discount < 0 || discount > 100) discount = 0;
         var changed = new Il2CppSystem.Collections.Generic.List<Pricing>();
         int skipped = 0;
-        for (int i = 0; i < products.Count; i++)
+        try
         {
-            var so = products[i];
-            if (so == null || so.IsHiddenForCustomer) continue;
-            int id = so.ID;
-            if (pm.GetPriceSetByPlayer(id) != null)
+            for (int i = 0; i < products.Count; i++)
             {
-                skipped++;
-                if (Plugin.Verbose.Value)
-                    Plugin.Logger.LogInfo($"[Markup] New product {id}: already has a price, left alone");
-                continue;
+                var so = products[i];
+                if (so == null || so.IsHiddenForCustomer) continue;
+                int id = so.ID;
+                try
+                {
+                    if (pm.GetPriceSetByPlayer(id) != null)
+                    {
+                        skipped++;
+                        if (Plugin.Verbose.Value)
+                            Plugin.Logger.LogInfo($"[Markup] New product {id}: already has a price, left alone");
+                        continue;
+                    }
+                    // Creates the entry at market price (as the pricing tab does). From here on it must be
+                    // sent to the guests, so it goes into `changed` even if the market price is unusable.
+                    var p = pm.GetOrCreatePriceSetByPlayer(id);
+                    if (p == null) continue;
+                    float market = p.MarketPrice;
+                    if (market > 0f) p.Price = MarkupKeeper.MarkupPrice(market, ratio);
+                    if (discount > 0) p.DiscountRate = discount; // as ApplyBulkDiscount does
+                    changed.Add(p);
+                    if (Plugin.Verbose.Value)
+                        Plugin.Logger.LogInfo($"[Markup] New product {id}: market {market:0.00}, price {p.Price:0.00}" +
+                                              (discount > 0 ? $", discount {discount}%" : ""));
+                }
+                catch (Exception e)
+                {
+                    Plugin.Logger.LogError($"[Markup] New product {id}: pricing failed: {e.Message}");
+                }
             }
-            var p = pm.GetOrCreatePriceSetByPlayer(id);
-            if (p == null) continue;
-            float market = p.MarketPrice;
-            if (market <= 0f) continue;
-            p.Price = MarkupKeeper.MarkupPrice(market, ratio);
-            changed.Add(p);
-            if (Plugin.Verbose.Value)
-                Plugin.Logger.LogInfo($"[Markup] New product {id}: market {market:0.00}, price {p.Price:0.00}");
         }
-        if (changed.Count == 0)
+        finally
         {
-            if (Plugin.Verbose.Value)
+            // Always finish what was priced, so the host's prices reach the guests and the price tags.
+            if (changed.Count > 0)
+            {
+                pm.FinishBulkPricingApply(changed, false, ratio);
+                // A second pass for the discount, like ApplyBulkDiscount's own finish: it also picks a sale
+                // sign style for the newly discounted products and tells guests isDiscount.
+                if (discount > 0) pm.FinishBulkPricingApply(changed, true, discount);
+                Plugin.Logger.LogInfo($"[Markup] License {licenseID} unlocked ({via}): priced {changed.Count} new product(s) " +
+                                      $"at {ratio:0.##}% above market price" + (discount > 0 ? $", {discount}% discount" : "") +
+                                      (PhotonNetwork.IsConnected ? " (sent to guests)" : ""));
+            }
+            else if (Plugin.Verbose.Value)
                 Plugin.Logger.LogInfo($"[Markup] License {licenseID} unlocked ({via}): nothing to price ({skipped} already priced)");
-            return;
         }
-        pm.FinishBulkPricingApply(changed, false, ratio);
-        Plugin.Logger.LogInfo($"[Markup] License {licenseID} unlocked ({via}): priced {changed.Count} new product(s) " +
-                              $"at {ratio:0.##}% above market price" + (PhotonNetwork.IsConnected ? " (sent to guests)" : ""));
     }
 }
 

@@ -4,7 +4,7 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
-v1.1.0 (rework, not yet tested in-game): newly unlocked products get the markup as soon as their license is bought (user request after the 2026-11-15 session).
+v1.1.1 (rework, not yet tested in-game): newly unlocked products get the markup (and the saved bulk discount) as soon as their license is bought (user request after the 2026-11-15 session). Review round 1 (1.1.1): `EnsurePricingDataComplete` before the loop (`GetOrCreatePriceSetByPlayer` throws on a missing `pricingDatas` entry before the pricing tab was opened), per-product try/catch with `FinishBulkPricingApply` in a `finally` so whatever was priced is always sent, entries created with an unusable market price are still sent, the bulk discount is applied too (the original request covers "pricing or discount" rules). Not changed: the authority check `!IsConnected || IsMasterClient` (same as the in-game-confirmed daily repricing).
 
 v1.0.2: daily repricing **confirmed working in-game by the user (2026-11-15).**
 
@@ -34,7 +34,7 @@ v1.0.2: daily repricing **confirmed working in-game by the user (2026-11-15).**
 ## Pitfalls / follow-ups
 
 - `FinishBulkPricingApply` isn't called on purpose: it rerolls `_saleIndex` (`Random.Range(0,4)`) for products with `DiscountRate > 0.1`, which would change their sale sign style every morning. If the game adds steps to it in an update, mirror them in `MarkupKeeper.EndDay`.
-- New licenses (v1.1.0): for each product of `IDManager.ProductLicenseSO(id).Products` that isn't `IsHiddenForCustomer` and has no player price, `GetOrCreatePriceSetByPlayer` + `Price = markup(MarketPrice)`, then the game's own `FinishBulkPricingApply(list, false, ratio)` (viewer refresh, discount points, `onPriceSet`, `BulkPricingApplied_RPC`). Its sale reroll only touches `DiscountRate > 0.1`, which new products don't have. Only `ApplyBulkMarkup`/`ApplyBulkDiscount` call `GetOrCreatePriceSetByPlayer`, so a freshly unlocked product has no player price (it would sell at `CurrentCost`).
+- New licenses (v1.1.x): `EnsurePricingDataComplete`, then for each product of `IDManager.ProductLicenseSO(id).Products` that isn't `IsHiddenForCustomer` and has no player price, `GetOrCreatePriceSetByPlayer` + `Price = markup(MarketPrice)` (+ `DiscountRate = BulkDiscountRatio` when > 0), then the game's own `FinishBulkPricingApply(list, false, ratio)` (and `(list, true, discount)` for a discount) (viewer refresh, discount points, `onPriceSet`, `BulkPricingApplied_RPC`). Its sale reroll only touches `DiscountRate > 0.1`, which new products don't have. Only `ApplyBulkMarkup`/`ApplyBulkDiscount` call `GetOrCreatePriceSetByPlayer`, so a freshly unlocked product has no player price (it would sell at `CurrentCost`).
 - Not covered: re-activating a disabled license/product (`SetLicenseState`/`SetProductState`); those products normally kept their price.
 - If the user never used bulk pricing, the saved ratio is 0, so products priced exactly at market follow the market (documented in README).
 
