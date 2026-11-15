@@ -25,7 +25,7 @@ Rules:
 
 | Item | State | Code | Reviewed (date, rounds, hash) | Awaiting / notes |
 |---|---|---|---|---|
-| Bug #1 | reviewed | `SupermarketFixes/src/Patches/RackMoveFix.cs` | 2026-11-15, 1 round, 9f3292ae76c2 | In-game test + host F8 log (v0.6.0+) |
+| Bug #1 | in-progress | `SupermarketFixes/src/Patches/RackMoveFix.cs` | — | Review follow-ups applied (v0.7.0), awaiting review; then in-game test + host F8 log |
 | Bug #2 | reviewed | `SupermarketFixes/src/Patches/GhostHeldItemFix.cs` | 2026-11-15, 2 rounds, 50bfe90a93e8 | In-game test + logs (v0.6.1) |
 | Bug #3 | reviewed | `SupermarketFixes/src/Patches/StuckBoxFix.cs` | 2026-11-15, 1 round, 13bfc34905b6 | In-game test + logs |
 | Bug #4 | open | — | — | Question, not a code task: answer how to collect guest crash logs |
