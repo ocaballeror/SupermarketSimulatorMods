@@ -33,7 +33,7 @@ Rules:
 | Bug #6 | open | — | — | No data to reproduce; may be related to Bug #1 |
 | Improvement #1 | reviewed | `PriceMarkupKeeper/` | 2026-11-15, 2 rounds, 67292843335b | In-game test (steps in the mod's CLAUDE.md "How to test in-game"): the `[Markup] New day: ...` summary line proves the detour fired; check guest price tags refresh; check `OnlyProductsFollowingMarkup` off override |
 | Improvement #2 | done 2026-11-14 | — | — | |
-| Improvement #3 | in-progress | `PlayerCrouch/` | — | Approved with open minor/nit findings; fixing them, then re-review. In-game test after (`[Crouch]` log lines) |
+| Improvement #3 | reviewed | `PlayerCrouch/` | 2026-11-15, 2 rounds, 2a49cccf09cd | In-game test + `[Crouch]` log lines (`VCam follows:`, `human=`, `legIK(...)`, `Camera offset target`). Unverified: vcam follows `CinemachineCameraTarget`, humanoid Animator, leg IK weights outside vehicles |
 | Improvement #4 | done 2026-11-14 | — | — | |
 | Improvement #5 | in-progress | `RestockerDoubleCarry/` | — | In-game test |
 | Improvement #6 | in-progress | `FurnitureMoveCancel/` | — | In-game test |
