@@ -4,7 +4,7 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
-v1.0.1: written, builds, review round 1 applied, **awaiting in-game test**. `VerboseLogging` defaults to on until the user confirms; switch it to off afterwards.
+v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switches `VerboseLogging` to default off (existing configs keep their value).
 
 ## Game mechanism
 

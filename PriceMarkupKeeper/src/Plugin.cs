@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.pricemarkupkeeper";
     public const string Name = "Price Markup Keeper";
-    public const string Version = "1.0.1";
+    public const string Version = "1.0.2";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -43,7 +43,7 @@ public class Plugin : BasePlugin
         OnlyFollowingProducts = Config.Bind("Pricing", "OnlyProductsFollowingMarkup", true,
             "Only reprice products whose price still matched that markup before the change, so prices you typed in " +
             "by hand are left alone. Turn off to reprice every product whose market price changed.");
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
+        Verbose = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Log every repriced product (tag [Markup] in LogOutput.log).");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);

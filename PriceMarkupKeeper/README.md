@@ -15,7 +15,7 @@ Discounts set from the pricing tab are a percentage of the selling price, so the
 | General | `Enabled` | `true` | Master switch. Turning it off restores normal behaviour right away; no restart needed. |
 | Pricing | `KeepMarkupOnPriceChanges` | `true` | Reprice products whose market price changed at the start of the day, using the markup you last applied from the bulk pricing tab. |
 | Pricing | `OnlyProductsFollowingMarkup` | `true` | Only reprice products whose price still matched your markup before the change. Prices you typed in by hand for single products are left alone. Turn it off to reprice every product whose market price changed, **including ones you priced by hand** (with no markup ever applied from the pricing tab, that means exactly market price). |
-| Diagnostics | `VerboseLogging` | `true` | Logs every repriced or skipped product as `[Markup]` lines in `BepInEx/LogOutput.log`. |
+| Diagnostics | `VerboseLogging` | `false` | Logs every repriced or skipped product as `[Markup]` lines in `BepInEx/LogOutput.log`. |
 
 ## Using it
 
