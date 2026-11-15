@@ -35,7 +35,7 @@ Rules:
 | Improvement #2 | done 2026-11-14 | — | — | |
 | Improvement #3 | reviewed | `PlayerCrouch/` | 2026-11-15, 2 rounds, 2a49cccf09cd | In-game test + `[Crouch]` log lines (`VCam follows:`, `human=`, `legIK(...)`, `Camera offset target`). Unverified: vcam follows `CinemachineCameraTarget`, humanoid Animator, leg IK weights outside vehicles |
 | Improvement #4 | done 2026-11-14 | — | — | |
-| Improvement #5 | in-progress | `RestockerDoubleCarry/` | — | In-game test |
+| Improvement #5 | reviewed | `RestockerDoubleCarry/` | 2026-11-15, 3 rounds, d632e95a4b9f | In-game test (steps in the mod's CLAUDE.md "In-game test steps", `[DoubleCarry]` lines): stack placement, carry animation with two boxes, unmodded guest sync over a whole trip, `IBoxTarget` wrapping, interrupts |
 | Improvement #6 | in-progress | `FurnitureMoveCancel/` | — | In-game test |
 | Improvement #7 | in-progress | `ExtraComputers/` | — | In-game test |
 | Improvement #8 | open | — | — | |
