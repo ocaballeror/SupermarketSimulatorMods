@@ -178,6 +178,7 @@ Verified in the dumps unless marked otherwise. Addresses and offsets are specifi
 
 - **Object layout.** `List<T>`: `_items` at +0x10, `_size` at +0x18. Arrays: length at +0x18, elements from +0x20, 8 bytes each for references.
 - **Const fields.** These appear in dumps as `static` at offset `0x0`.
+- **Virtual calls.** `Move rax, [rdx+N]` then `Call rax` (with `rdx = [obj]`, the class) is a vtable call: slot `(N - 312) / 16`. Slots 0–3 are `System.Object`'s virtuals, then the class's own virtuals in declaration order (base class first). Derived from `IPlacingMode` (376 = `get_AvailablePosition`, 408 = `OverlapBoxes`, 424 = `PlacingMode(bool, Material)`), consistent at three call sites; check the stub's `virtual` members when using it.
 - **Float literals.** ISIL shows them as `[0x18...]`; read them with `tools/readconst.py`. Cpp2IL sometimes mislabels a float load as `typeof(T)`; take the address from the raw `movss` line above it.
 
 **Singletons and lookups.**
@@ -261,6 +262,14 @@ Verified in the dumps unless marked otherwise. Addresses and offsets are specifi
   - sets `OccupiedPlayer` and, online, `NetworkComputer.InteractComputer_Broadcast(true)` (receivers only set `IsOccupied` / `OccupiedPlayer`);
   - puts the avatar in front of the cam.
 - `Back()` (called from `ComputerInteraction.OnCancel` / `GamepadBack`) does `set_OpenPC(false)` (which broadcasts false), then puts the player at `m_PlayerPosition`.
+
+**Holding objects (`PlayerObjectHolder`).**
+- Every holdable (Box, FurnitureBox, PaintBucket, FloorBox, OrderPaperBag, IceCreamBucket) goes through `HoldObject(item, posOffset, rotOffset)`. It makes the colliders of `item`'s active objects triggers, the root Rigidbody kinematic, saves `item.layer` in `m_CurrentObjectsLayer` and sets "Ignore Raycast", takes the item's `IPlacingMode` as `m_CurrentPlacingMode`, stores `m_CurrentObject` (+0x48), and parents the item **directly** to `m_ObjectHolder` (+0x20), tweening it to the offset.
+- It **overwrites** `m_CurrentObject` and the saved layer without releasing the previous object. `DropObject` / `TryDropObject` / throw / `ReleaseObject` only release the current one; `DropObject` doesn't clear `m_CurrentObject`.
+- `DropObject`: unparent, `DOKill`, restore the saved layer, `m_CurrentPlacingMode.PlacingMode(false, null)` (hologram off, triggers cleared), colliders solid, physics on. `NetworkRigidbodySetter` keeps it kinematic online if another client owns its PhotonView.
+- Vanilla drops a box only through placing mode (`BoxInteraction.OnDrop` → `StartPlacingMode`). `IPlacingMode.AvailablePosition` is just "`m_Triggers` is empty", and only `OverlapBoxes` (from `FixedUpdate`, while placing) fills `m_Triggers`, so `TryDropObject` accepts any spot outside placing mode. `OverlapBoxes` tests the layers Default, Interactable, QueryOnly, WallLayer, Ignore Raycast.
+- Networked box drop: `NetworkBoxInteraction.DropBox_Broadcast()` uses `BoxInteraction.m_Box`: it sets the box's `PhotonTransformViewOptimized.m_SyncEnabled` and clears `NetworkBox.IsNetworkOccupied` locally, then `DropBox_RPC` (Others) does the same on each receiver's copy and calls `BoxInteraction.DropBox(userId)` → that player's `DropObject` (current object only), `SetOccupy(false)`, `InteractionEnd`. `IsNetworkOccupied` is set only by the host's `PickUp_Broadcast`, and the host rejects pickups while it's set.
+- `NetworkBox.DisableNetworkTransformSync(bool isActive)` sets `m_SyncEnabled = isActive`, despite the name: `false` turns sync off.
 
 **Boxes in hand (`BoxInteraction`).**
 - Offsets: `m_Box` +0x48, `m_PlacingMode` +0x50, `m_holdingUse` +0x51, `m_IsBoxOpen` +0x52, `m_holdingTake` +0x58, `m_CurrentDisplaySlot` +0x60, `IsWaitingAvailability` +0x118.
