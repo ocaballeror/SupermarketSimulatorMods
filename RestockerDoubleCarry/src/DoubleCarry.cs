@@ -36,12 +36,29 @@
  *   Phase FetchFirst:  next search: still holding B1 -> fill the search results with job 2 ourselves
  *                      (skip vanilla) and fetch only again. TakeBox(B2) makes B2 current; B1 stays in
  *                      the hands and becomes the "stash".
- *   Phase FetchSecond: next search: holding B2 with B1 stashed -> CarryBox(B1) (B2 becomes the stash),
- *                      vanilla search then restocks P1 with B1 (and trashes it if empty).
- *   Phase DeliverFirst: next search: CarryBox(B2) (B1, if it still has products, becomes the stash),
- *                      vanilla restocks P2.
- *   Phase Unwind:      whenever the hands are empty and a box is stashed, CarryBox(stash) and let
- *                      vanilla rack it. Done when nothing is stashed.
+ *   Phase FetchSecond: next search: holding B2 with B1 stashed -> CarryBox(B1) (B2 becomes the stash, on
+ *                      top), vanilla search then restocks P1 with B1.
+ *   Set down:          a clerk never unpacks while holding two boxes. When the first RestockDisplay task
+ *                      begins (the clerk has walked to the first display and is about to open the box),
+ *                      a RestockDisplay.OnBegin prefix puts the stashed box on the floor behind the clerk
+ *                      (Clerk.DropBoxToGround on it, then CarryBox(B1) again). The box is now `Plan.Floor`.
+ *                      Clerk-dropped boxes are subscribed to StorageStreet, but every street search also
+ *                      requires StorageStreet.IsWithinRestockableArea (the outside delivery area), so no
+ *                      restocker's search picks up a box lying inside the store: it waits for this clerk.
+ *   Phase DeliverFirst: vanilla handles B1 to the end: more displays, then the trash if empty
+ *                      (GoToTrash), or a rack if not (RackingState). The mod stays out of every search
+ *                      made with a box in hand.
+ *   Back for B2:       first search with empty hands and B2 still on the floor: fill the search results
+ *                      ourselves with B2 as a StreetBoxTarget, plus its display slots (vanilla
+ *                      SearchBestFitDisplaySlotsForRestock) or, if no display needs it any more, a rack
+ *                      slot (IsMergeAvailableWithBox / HasSpaceInRackSlotForProduct, exactly as the vanilla
+ *                      street-to-rack branch). A normal full Restocking/Racking run then picks B2 up,
+ *                      restocks P2 and trashes or racks the leftovers. If there is nowhere to take it, the
+ *                      clerk does other (vanilla) work and retries on its next empty-handed search, for up
+ *                      to FloorRetrySeconds; a player picking B2 up ends the plan.
+ *   Phase Unwind:      whenever the hands are empty and a box is still stashed (no display was ever
+ *                      reached, e.g. another restocker filled them first), CarryBox(stash) and let
+ *                      vanilla handle it. Done when nothing is stashed or on the floor.
  *   Any failure (box taken by someone else, job gone) falls back to vanilla with whatever is in hand.
  *   The stash is dropped to the floor when the game drops the clerk's box for any reason other than the
  *   idle "nowhere to put it" timer (firing, deactivation), and when the mod is switched off.
@@ -93,7 +110,15 @@ internal static class DoubleCarry
         /// them; they are released by hand if the plan dies before that.
         /// </summary>
         public List<DisplaySlot> ReservedSecond;
+        /// <summary>The box this clerk put on the floor to unpack the other one; it comes back for it.</summary>
+        public Box Floor;
+        public float FloorSince;
     }
+
+    /// <summary>How long a clerk keeps trying to come back for a box it put down before giving up.</summary>
+    private const float FloorRetrySeconds = 180f;
+    /// <summary>Where a box is put down: this far from the clerk, on the side away from the display.</summary>
+    private const float SetDownDistance = 0.6f;
 
     private const float StackTweenTime = 0.3f;
 
@@ -359,41 +384,175 @@ internal static class DoubleCarry
                     plan.Second = cur;
                     plan.Phase = Phase.DeliverFirst;
                     HandOver(clerk, plan.First);
-                    Info($"{Name(clerk)}: has both boxes, restocking product {plan.FirstProduct} first");
+                    Info($"{Name(clerk)}: has both boxes, restocking product {plan.FirstProduct} first (box 2 goes on the floor at the shelf)");
                     return true;
                 }
                 plan.Phase = Phase.Unwind;
                 Info($"{Name(clerk)}: could not take box 2, continuing with box 1");
-                return UnwindStep(clerk, plan, cur, stash);
-
-            case Phase.DeliverFirst:
-                plan.Phase = Phase.Unwind;
-                if (stash != null)
-                {
-                    HandOver(clerk, stash);
-                    Info($"{Name(clerk)}: product {plan.FirstProduct} done (box 1 {(IsStashed(clerk, plan.First) ? "has leftovers" : "gone")}), restocking product {ProductOf(stash)}");
-                    return true;
-                }
-                return UnwindStep(clerk, plan, Current(clerk), null);
+                return UnwindStep(h, clerk, plan, cur, stash, ref vanillaRan);
 
             default:
-                return UnwindStep(clerk, plan, cur, stash);
+                return UnwindStep(h, clerk, plan, cur, stash, ref vanillaRan);
         }
     }
 
-    private static bool UnwindStep(ClerkT clerk, Plan plan, Box cur, Box stash)
+    private static bool UnwindStep(SearchHandler h, ClerkT clerk, Plan plan, Box cur, Box stash, ref bool vanillaRan)
     {
-        if (stash == null)
+        // A box in hand (box 1 with leftovers, or anything else): vanilla decides what to do with it.
+        // If a box is still stashed and vanilla restocks again, RestockDisplay.OnBegin sets the stash down first.
+        if (cur != null) return true;
+        if (stash != null)
         {
-            EndPlan(clerk, "trip finished");
+            plan.Phase = Phase.Unwind;
+            HandOver(clerk, stash);
+            Info($"{Name(clerk)}: hands free, carrying on with the other box (product {ProductOf(stash)})");
             return true;
         }
-        if (cur == null)
+        if (plan.Floor != null)
         {
-            HandOver(clerk, stash);
-            Info($"{Name(clerk)}: taking the remaining box (product {ProductOf(stash)}) back");
+            if (FetchFromFloor(h, clerk, plan))
+            {
+                vanillaRan = false;
+                return false;
+            }
+            if (plan.Floor != null) return true;   // nowhere to take it right now: vanilla work, retry later
         }
+        EndPlan(clerk, "trip finished");
         return true;
+    }
+
+    /// <summary>The box still lies where this clerk put it (nobody picked it up, racked it or destroyed it).</summary>
+    private static bool IsOnFloor(ClerkT clerk, Box box)
+    {
+        if (box == null || !box.gameObject.activeInHierarchy) return false;
+        if (box.transform.parent != null) return false;
+        return !box.IsOccupiedByAnother(clerk.transform);
+    }
+
+    /// <summary>
+    /// Hands empty and the set-down box is still on the floor: point the search results at it, the way the
+    /// vanilla search does for a box lying in the delivery area. Returns true when the results were filled.
+    /// Clears <c>plan.Floor</c> when the box is gone or the clerk gives up.
+    /// </summary>
+    private static bool FetchFromFloor(SearchHandler h, ClerkT clerk, Plan plan)
+    {
+        var box = plan.Floor;
+        if (!IsOnFloor(clerk, box))
+        {
+            plan.Floor = null;
+            Info($"{Name(clerk)}: the box it put down is gone (picked up by someone else?)");
+            return false;
+        }
+        int pid = ProductOf(box);
+        var mgmt = clerk.ManagementData;
+
+        DisplaySlotList displays = null;
+        if (pid >= 0 && box.HasProducts && mgmt != null && mgmt.RestockShelf)
+        {
+            var cand = h.GetDisplaySlotsRequiredRefill(pid);
+            if (cand != null && cand.Count > 0) displays = h.SearchBestFitDisplaySlotsForRestock(box, cand);
+        }
+        RackSlot rack = null;
+        if ((displays == null || displays.Count == 0) && pid >= 0 && box.HasProducts)
+        {
+            if (!h.IsMergeAvailableWithBox(box, out rack) || rack == null)
+                if (!h.HasSpaceInRackSlotForProduct(pid, out rack)) rack = null;
+        }
+
+        if ((displays == null || displays.Count == 0) && rack == null)
+        {
+            if (Time.time - plan.FloorSince > FloorRetrySeconds)
+            {
+                plan.Floor = null;
+                Info($"{Name(clerk)}: still nowhere to take the box it put down (product {pid}), leaving it on the floor");
+            }
+            return false;
+        }
+
+        h.Reset();
+        h.BoxTarget = new IBoxTarget(new StreetBoxTarget(box).Pointer);
+        if (displays != null && displays.Count > 0)
+        {
+            h.DisplayTargets = displays;
+            h.RackTarget = null;
+            Info($"{Name(clerk)}: going back for the box it put down, restocking product {pid}");
+        }
+        else
+        {
+            if (h.DisplayTargets == null) h.DisplayTargets = new DisplaySlotList();
+            h.DisplayTargets.Clear();   // Idle -> Restocking needs Count > 0; this must go to Racking
+            h.RackTarget = rack;
+            Info($"{Name(clerk)}: going back for the box it put down, product {pid} is full on the shelves, taking it to storage");
+        }
+        plan.Floor = null;
+        plan.Phase = Phase.Unwind;
+        return true;
+    }
+
+    // ---------------------------------------------------------------- setting a box down
+
+    /// <summary>
+    /// The clerk is about to unpack at a display. If it still holds a second box, put that one on the floor
+    /// first (behind the clerk, away from the display) and remember it.
+    /// </summary>
+    internal static void BeforeRestockDisplay(RestockDisplay task)
+    {
+        if (!HostSide) return;
+        var clerk = task.Clerk;
+        if (clerk == null) return;
+        var plan = GetPlan(clerk);
+        if (plan == null) return;
+        var stash = Stash(clerk, plan);
+        var cur = Current(clerk);
+        if (stash == null || cur == null) return;
+
+        DropStash(clerk, stash, cur);
+        if (!IsOnFloor(clerk, stash))
+        {
+            Plugin.Logger.LogWarning($"[DoubleCarry] {Name(clerk)}: putting the second box down failed, trip cancelled");
+            AbortPlan(clerk, false, null);
+            return;
+        }
+        MoveAside(clerk, stash, task.TargetDisplaySlot);
+        plan.Floor = stash;
+        plan.FloorSince = Time.time;
+        Info($"{Name(clerk)}: put box (product {ProductOf(stash)}) on the floor to unpack product {ProductOf(cur)}");
+    }
+
+    /// <summary>
+    /// Moves a just-dropped box next to the clerk, on the side away from the display, so it doesn't fall
+    /// against the shelf. Only when this client owns the box, so the exact pose can be sent to the others.
+    /// </summary>
+    private static void MoveAside(ClerkT clerk, Box box, DisplaySlot slot)
+    {
+        try
+        {
+            var view = box.NetworkBox != null ? box.NetworkBox.m_PhotonTransformView : null;
+            bool online = PhotonNetwork.IsConnected && PhotonNetwork.InRoom;
+            if (online && (view == null || !view.photonView.IsMine)) return;
+
+            var self = clerk.transform.position;
+            var away = slot != null ? self - slot.transform.position : -clerk.transform.forward;
+            away.y = 0f;
+            if (away.sqrMagnitude < 0.0001f) away = -clerk.transform.forward;
+            away.y = 0f;
+            away.Normalize();
+            var pos = self + away * SetDownDistance + Vector3.up * 0.3f;
+            var rot = Quaternion.LookRotation(away, Vector3.up);
+
+            var rb = box.GetComponent<Rigidbody>();
+            if (rb != null && !rb.isKinematic)
+            {
+                rb.velocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
+            box.transform.SetPositionAndRotation(pos, rot);
+            if (online) view.BroadcastCurrentTransform();
+        }
+        catch (Exception e)
+        {
+            Plugin.Logger.LogWarning($"[DoubleCarry] moving the box aside failed (it stays where it fell): {e.Message}");
+        }
     }
 
     /// <summary>Runs after the game's own search: decides whether to start a two-box trip.</summary>
@@ -673,6 +832,16 @@ internal static class RestockExitPatch
     {
         try { DoubleCarry.RestoreTasks(__instance); }
         catch (Exception e) { Plugin.Logger.LogError($"[DoubleCarry] restock exit failed: {e}"); }
+    }
+}
+
+[HarmonyPatch(typeof(RestockDisplay), nameof(RestockDisplay.OnBegin))]
+internal static class RestockDisplayBeginPatch
+{
+    private static void Prefix(RestockDisplay __instance)
+    {
+        try { DoubleCarry.BeforeRestockDisplay(__instance); }
+        catch (Exception e) { Plugin.Logger.LogError($"[DoubleCarry] putting the second box down failed: {e}"); }
     }
 }
 
