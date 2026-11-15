@@ -54,7 +54,7 @@ internal static class GridDefaultPatch
     private static IntPtr _seeded;
     private static bool _original;
 
-    internal static void Reset() { _seeded = IntPtr.Zero; _original = false; }
+    internal static void Reset() { _seeded = IntPtr.Zero; }
 
     /// <summary>Puts the preference back when the mod is switched off live.</summary>
     internal static void Restore()
@@ -78,7 +78,7 @@ internal static class GridDefaultPatch
     {
         try
         {
-            if (!Plugin.Active || __instance == null) return;
+            if (!Plugin.Active) return;
             bool first = __instance.Pointer != _seeded;
             if (first)
             {

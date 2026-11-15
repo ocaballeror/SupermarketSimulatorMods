@@ -2,7 +2,7 @@
 
 When you place or move furniture (shelves, fridges, freezers, racks, checkouts, vending machines, signs and so on), the game's **grid mode** is on from the start. You no longer have to press the grid key for every piece.
 
-- Grid mode is the game's own: the grid is drawn on the floor and the piece snaps to its cells. It only appears where the game supports it, so furniture types or surfaces without a grid behave exactly as before.
+- Grid mode is the game's own: the grid is drawn on the floor and the piece snaps to its cells. This mod only turns it on by default, so it is limited by the game's own grid support: the grid exists for floor, storage floor and ceiling surfaces. Pieces that are placed on other surfaces (for example on walls or on top of other furniture) get no grid and behave exactly as before.
 - The grid key (**X** by default, gamepad North button) still toggles it. If you turn the grid off for a piece, it stays off for the next ones until you turn it on again or restart the game, unless you change the `RememberToggle` setting.
 - The grid size keys (`+` / `-`) work as before.
 - **Ctrl** is a different feature in the game ("snap" to the neighbouring furniture's snap points). It isn't changed by this mod.
@@ -13,7 +13,7 @@ When you place or move furniture (shelves, fridges, freezers, racks, checkouts, 
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch. Turning it off restores the game's own grid setting right away; no restart needed. |
+| General | `Enabled` | `true` | Master switch. Turning it off restores the game's own grid setting from the next piece you pick up; no restart needed. |
 | GridMode | `RememberToggle` | `true` | `true`: the grid starts on, and if you turn it off with the grid key it stays off until you turn it back on (or restart the game). `false`: every piece you pick up or place starts with the grid on again. |
 | Diagnostics | `VerboseLogging` | `true` | Writes `[GridMode]` lines to `BepInEx/LogOutput.log` each time placement starts. |
 

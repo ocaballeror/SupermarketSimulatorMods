@@ -4,7 +4,7 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
-v1.0.0: written and builds; awaiting in-game test. `VerboseLogging` defaults to on until confirmed.
+v1.0.1: written and builds; awaiting in-game test. 1.0.1 applies review round 1 (README wording, tiny cleanups). `VerboseLogging` defaults to on until confirmed.
 
 ## How it works
 
@@ -21,6 +21,7 @@ Local only: GridManager only wires the local player's placer and input; nothing 
 ## Pitfalls and open questions
 
 - The first `PlacingRaycast` in `StartPlacingMode` runs before the delegate, so the first frame is not quantised; the next frame is. Not expected to be visible.
+- Grid areas come from `GridManager.BuildAllAreas`: manual `GridAreaAnchor`s plus auto-discovery of objects tagged `Floor`, `Storage Floor` and `Ceiling`. Which furniture prefab uses which placing tag lives in prefab assets, not in the dumps, so which types get no grid can only be found in-game (test step 6). Disabling the mod live restores only the preference; a piece already held keeps its grid until placed.
 - Furniture without matching surface areas (log line "No matching active areas" from the game) stays in free placement; that's the game's rule, not the mod's.
 - Grid size (`m_CurrentCellSizeIndex`) is untouched.
 - Not confirmed in-game: that the delegate target patch is hit (look for the `[GridMode]` line).
