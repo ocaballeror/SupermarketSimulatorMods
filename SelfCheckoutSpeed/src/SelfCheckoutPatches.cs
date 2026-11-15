@@ -16,8 +16,9 @@
  *
  * Fix: postfix both coroutines' MoveNext and divide the yielded WaitForSeconds.m_Seconds by the
  * multiplier. Unity reads the wait time after MoveNext returns, and every yield allocates a new
- * WaitForSeconds, so this shortens each wait exactly once without touching prefab values. Customer-helper assisted scanning
- * (<StartCustomerHelperCheckout>...) is employee speed, so it is left alone.
+ * WaitForSeconds, so this shortens each wait exactly once without touching prefab values.
+ * Customer-helper assisted scanning (<StartCustomerHelperCheckout>...) is employee speed, so it is
+ * left alone.
  *
  * Multiplayer: the host drives the checkout (FinishedScanning and the finish broadcast only run on
  * the master client), so the HOST needs this mod. A guest runs its own copy of the Scanning
@@ -51,9 +52,15 @@ internal static class SelfCheckoutPatches
     // interop coroutine type -> its "<>2__current" property
     private static readonly Dictionary<Type, PropertyInfo> CurrentProp = new();
 
+    // The postfix runs on every coroutine step; if it keeps failing (e.g. after a game update) only the
+    // first failure is logged so LogOutput.log isn't flooded.
+    private static bool _postfixErrorLogged;
+
     internal static int Apply(Harmony harmony)
     {
         int applied = 0;
+        CurrentProp.Clear(); // reset static state on every (re-)apply, e.g. after the master switch was toggled
+        _postfixErrorLogged = false;
         var postfix = new HarmonyMethod(typeof(SelfCheckoutPatches), nameof(MoveNextPostfix));
         foreach (var nested in typeof(SelfCheckout).GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
         {
@@ -112,7 +119,11 @@ internal static class SelfCheckoutPatches
         }
         catch (Exception e)
         {
-            Plugin.Logger.LogError($"[SelfCheckout] MoveNext postfix: {e}");
+            if (!_postfixErrorLogged)
+            {
+                _postfixErrorLogged = true;
+                Plugin.Logger.LogError($"[SelfCheckout] MoveNext postfix failed (further failures are not logged): {e}");
+            }
         }
     }
 }

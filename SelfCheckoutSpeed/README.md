@@ -19,7 +19,7 @@ This speeds up everything a customer waits for at the machine:
 ## Who needs it (multiplayer)
 
 - **Host: required.** The host runs the customers and decides when a checkout is finished.
-- **Guests: strongly recommended.** Each guest's game scans the items itself, at its own speed. A guest without the mod scans at normal speed and falls behind the host, by about *items × scan time × (1 − 1/multiplier)*. Until it catches up, that guest sees and hears the machine still scanning after the customer has paid and left, and possibly while the next customer starts at the same machine. This should only affect what the guest sees, but it hasn't been tested yet. With the mod on both sides they stay in step.
+- **Guests: strongly recommended.** Each guest's game scans the items itself, at its own speed. A guest without the mod scans at normal speed and falls behind the host, by about *items × scan time × (1 − 1/multiplier)*. Until it catches up, that guest sees and hears the machine still scanning after the customer has paid and left, and possibly while the next customer starts at the same machine. This should only affect what the guest sees and hears, but it hasn't been tested with a guest that doesn't have the mod yet. If you see or hear this on a guest, lower the multiplier or install the mod on the guest too. With the mod on both sides they stay in step.
 
 ## Notes
 

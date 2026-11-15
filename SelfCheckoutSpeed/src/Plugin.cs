@@ -12,14 +12,14 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.selfcheckoutspeed";
     public const string Name = "Self Checkout Speed";
-    public const string Version = "1.0.0";
+    public const string Version = "1.0.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<float> SpeedMultiplier;
     internal static ConfigEntry<bool> Verbose;
 
-    internal static bool Active { get; private set; }
+    private static bool Active { get; set; }
 
     private Harmony _harmony;
 
