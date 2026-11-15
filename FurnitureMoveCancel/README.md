@@ -17,7 +17,7 @@ Picked up a shelf, fridge, freezer, rack, checkout or other furniture by mistake
 | General | `Enabled` | `true` | Master switch. Turning it off removes the feature right away; no restart needed. |
 | FurnitureMoveCancel | `ShowHint` | `true` | Shows the Escape key in the key hints list while moving furniture. |
 | FurnitureMoveCancel | `ReturnDelaySeconds` | `0` | Optional pause at the original spot before the furniture is put down (0 to 2 s). 0 = immediately. |
-| Diagnostics | `VerboseLogging` | `true` | Writes `[MoveCancel]` lines to `BepInEx/LogOutput.log`. |
+| Diagnostics | `VerboseLogging` | `false` | Writes `[MoveCancel]` lines to `BepInEx/LogOutput.log`. |
 
 ## Who needs it (multiplayer)
 

@@ -4,7 +4,7 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
-v1.0.1: implemented, awaiting the user's in-game test. An earlier version (hold at the origin, then place) was seen working in-game; the current version places immediately after sending the exact position, and that change has not been re-tested. Multiplayer is unconfirmed.
+v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switches `VerboseLogging` to default off (existing configs keep their value). The notes below predate that test.
 
 Open questions and pitfalls:
 - **Multiplayer path unconfirmed in-game:** `BroadcastCurrentTransform()` before the place RPC (host and guest as mover; unmodded guest watching).

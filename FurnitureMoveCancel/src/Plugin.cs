@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.furnituremovecancel";
     public const string Name = "Furniture Move Cancel";
-    public const string Version = "1.0.1";
+    public const string Version = "1.0.2";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -39,7 +39,7 @@ public class Plugin : BasePlugin
                 "In multiplayer, if a piece can't send its exact position to the other players, it is held " +
                 "at least 0.3 s so they see it in the right place.",
                 new AcceptableValueRange<float>(0f, 2f)));
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
+        Verbose = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Log what happens when Escape is pressed while moving furniture (tag [MoveCancel] in LogOutput.log).");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
