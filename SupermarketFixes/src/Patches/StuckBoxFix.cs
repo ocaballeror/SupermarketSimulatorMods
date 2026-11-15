@@ -33,17 +33,26 @@ namespace SupermarketFixes.Patches;
 ///  Two native paths lead there (not yet confirmed which one happens in-game):
 ///   a) Box.InstantInteract on a guest returns true WITHOUT asking the host when box.NetworkBox is
 ///      Unity-null (destroyed): bound, not waiting, not held. Player.log would show no "AskAvailability".
+///      This can't happen on the purchase path while online (Purchase dereferences box.NetworkBox for
+///      Setup_Broadcast before it calls Interact, so it would throw first); it only applies to other clicks.
 ///   b) An exception inside Box.PickUp after it bound BoxInteraction but before HoldObject, after
 ///      EndAvailabilityWait already cleared the wait. Player.log would show "[BoxDiag] PickUP_RPC BEFORE"
 ///      with no matching "PickUP_RPC AFTER".
-///  Note: PlayerObjectHolder.m_CurrentObject is only ever written by HoldObject (drops don't clear it), so
-///  "held" must also check that the object is still in the hands.
+///  Note: PlayerObjectHolder.m_CurrentObject is written by HoldObject; no native caller of
+///  SetNullCurrentObject / set_CurrentObject was found, and drops don't clear it, so "held" must also check
+///  that the object is still in the hands.
 ///
 /// Fix (runs for this machine's own player, so it must be installed on the machine that gets stuck):
-///  - Watchdog: if the stuck state lasts StuckSeconds (or a pickup wait never ends), end the box
+///  - Watchdog: if the stuck state lasts StuckSeconds (or a pickup wait lasts 6 s, i.e. the game's own
+///    3 s timeout never ran; so an answer that never arrives is handled after about 6 s + StuckSeconds), end the box
 ///    interaction the way the game does on a rejected pickup, reset the BoxInteraction flags DropBox
 ///    would reset, then retry the pickup once through the normal path (same calls Purchase makes).
-///    If it gets stuck again, only free the controls; the box stays where it is.
+///    If it gets stuck again, only free the controls; the box stays where it is. The one-retry guard is
+///    per box and is cleared once the box is confirmed held (or after RetryAgainSeconds), so a later
+///    incident, or a LeanPool-reused Box object, gets its retry too. There is no cap on recoveries: a
+///    recovery only happens after the player clicked the box again, so nothing can loop.
+///  - F9 on a pickup that is still waiting for the host does nothing until the game's own 3 s timeout has
+///    passed, so it can't cancel a valid pending pickup.
 ///  - Host side: if a player asks for a box the host already considers held by that same player
 ///    (what a retry after a lost pickup looks like), grant it again instead of rejecting it forever.
 /// </summary>
@@ -57,10 +66,12 @@ internal static class StuckBoxFix
 
     /// <summary>The game's own pickup wait times out after 3 s; a wait twice that long is stuck.</summary>
     private const float MaxWaitSeconds = 6f;
+    /// <summary>The game's own pickup timeout; F9 doesn't cancel a wait younger than this.</summary>
+    private const float GameWaitTimeoutSeconds = 3f;
+    /// <summary>A retried box may be retried again after this long, even if it was never seen held.</summary>
+    private const float RetryAgainSeconds = 30f;
     /// <summary>Retry only boxes within reach, so a retry can't grab something across the store.</summary>
     private const float MaxRetryDistance = 5f;
-    /// <summary>Stop auto-recovering a box that keeps getting stuck (F9 still works).</summary>
-    private const int MaxRecoveriesPerBox = 3;
 
     internal static void Bind(ConfigFile cfg)
     {
@@ -76,7 +87,8 @@ internal static class StuckBoxFix
             "Host only: when a player asks to pick up a box the host thinks that same player is already " +
             "holding, allow it instead of refusing. Lets a stuck player's retry succeed.");
         Diagnostics = cfg.Bind("StuckBox", "Diagnostics", true,
-            "Log details about stuck boxes and what was done about them.");
+            "Log extra details: the result of the pickup retry and why a retry was skipped. " +
+            "Recoveries and failures are always logged.");
     }
 
     internal static void ResetState()
@@ -86,17 +98,15 @@ internal static class StuckBoxFix
         s_waitBox = IntPtr.Zero;
         s_waitSince = -1f;
         s_retried = IntPtr.Zero;
-        s_recoveredBox = IntPtr.Zero;
-        s_recoveries = 0;
+        s_retriedAt = -1f;
     }
 
     private static IntPtr s_box;          // box currently seen as stuck
     private static float s_since = -1f;
     private static IntPtr s_waitBox;      // box we are waiting on the host for
     private static float s_waitSince = -1f;
-    private static IntPtr s_retried;      // last box we already retried, so a retry can't loop
-    private static IntPtr s_recoveredBox; // backoff: how often the same box was recovered
-    private static int s_recoveries;
+    private static IntPtr s_retried;      // box we already retried, so a retry can't loop; cleared once held
+    private static float s_retriedAt = -1f;
 
     /// <summary>
     /// BoxInteraction is bound to a box that this player isn't actually holding, or has been waiting for
@@ -113,8 +123,9 @@ internal static class StuckBoxFix
         if (bi.IsWaitingAvailability)
         {
             if (s_waitBox != box.Pointer) { s_waitBox = box.Pointer; s_waitSince = now; }
-            if (!force && now - s_waitSince < MaxWaitSeconds) return null;
-            reason = $"waiting for the host for {now - s_waitSince:F1}s";
+            float waited = now - s_waitSince;
+            if (waited < (force ? GameWaitTimeoutSeconds : MaxWaitSeconds)) return null;
+            reason = $"waiting for the host for {waited:F1}s";
             return box;
         }
         s_waitBox = IntPtr.Zero;
@@ -125,7 +136,11 @@ internal static class StuckBoxFix
         // (or held in placing mode, where it is unparented on purpose).
         bool held = holder != null && HeldState.SameObject(holder.m_CurrentObject, box.gameObject) &&
                     (holder.m_PlacingMode || (hold != null && box.transform.IsChildOf(hold)));
-        if (held) return null;
+        if (held)
+        {
+            if (s_retried == box.Pointer) s_retried = IntPtr.Zero; // pickup worked; a later incident may retry
+            return null;
+        }
         reason = "bound to a box that is not in your hands";
         return box;
     }
@@ -133,9 +148,15 @@ internal static class StuckBoxFix
     /// <summary>Called every frame from DiagnosticsBehaviour.</summary>
     internal static void Tick(float now)
     {
-        if (!AutoRecover.Value) { s_box = IntPtr.Zero; s_waitBox = IntPtr.Zero; return; }
         var p = HeldState.LocalPlayer();
         string reason = null;
+        if (!AutoRecover.Value)
+        {
+            // Keep tracking how long a pickup has been waiting, so F9 can tell a stale wait from a fresh one.
+            s_box = IntPtr.Zero;
+            if (p != null) FindStuckBox(p, now, false, out reason);
+            return;
+        }
         var box = p != null ? FindStuckBox(p, now, false, out reason) : null;
         if (box == null) { s_box = IntPtr.Zero; return; }
 
@@ -148,16 +169,6 @@ internal static class StuckBoxFix
         if (now - s_since < StuckSeconds.Value) return;
         s_box = IntPtr.Zero;
 
-        if (s_recoveredBox != box.Pointer) { s_recoveredBox = box.Pointer; s_recoveries = 0; }
-        if (s_recoveries >= MaxRecoveriesPerBox)
-        {
-            if (s_recoveries == MaxRecoveriesPerBox)
-                Plugin.Logger.LogWarning($"[StuckBox] This box got stuck {MaxRecoveriesPerBox} times; not fixing it " +
-                                         "automatically any more. Press F9 to try again. " + HeldState.Describe(box));
-            s_recoveries = MaxRecoveriesPerBox + 1;
-            return;
-        }
-        s_recoveries++;
         Recover(p, box, $"{reason}, for {StuckSeconds.Value:F1}s");
     }
 
@@ -168,6 +179,8 @@ internal static class StuckBoxFix
         string reason = null;
         var box = p != null ? FindStuckBox(p, Time.unscaledTime, true, out reason) : null;
         if (box != null) Recover(p, box, $"F9, {reason}");
+        else if (p != null && p.BoxInteraction != null && p.BoxInteraction.Enable && p.BoxInteraction.IsWaitingAvailability)
+            Plugin.Logger.LogInfo("[StuckBox] F9: still waiting for the host to answer the pickup; try again in a few seconds");
         else Plugin.Logger.LogInfo("[StuckBox] F9: controls are not stuck on a box");
     }
 
@@ -202,7 +215,7 @@ internal static class StuckBoxFix
             Plugin.Logger.LogInfo("[StuckBox] Controls freed");
 
             if (!RetryPickup.Value || takenByOther || pi == null) return;
-            if (s_retried == box.Pointer)
+            if (s_retried == box.Pointer && Time.unscaledTime - s_retriedAt < RetryAgainSeconds)
             {
                 Plugin.Logger.LogWarning("[StuckBox] Already retried this box; leaving it where it is. " +
                                          "Look at it and click to pick it up again.");
@@ -211,10 +224,11 @@ internal static class StuckBoxFix
             string skip = RetrySkipReason(p, box);
             if (skip != null)
             {
-                Plugin.Logger.LogInfo($"[StuckBox] Not retrying the pickup: {skip}");
+                if (Diagnostics.Value) Plugin.Logger.LogInfo($"[StuckBox] Not retrying the pickup: {skip}");
                 return;
             }
             s_retried = box.Pointer;
+            s_retriedAt = Time.unscaledTime;
             pi.SetCurrentInteractable(box.Cast<IInteractable>());
             pi.Interact(false, false);
             if (Diagnostics.Value)

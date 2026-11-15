@@ -26,7 +26,7 @@ Where it can, the mod uses the game's own drop, so other players see the item le
 
 ### Bug #3: stuck on a box after buying it in a market (v0.4.0, awaiting in-game confirmation)
 
-After buying a box in a market (often ice cream cones in the general goods store), the box could stay on the shelf while your controls stayed locked onto it: clicking opened and closed it, and you couldn't drop or throw it. Now, after 2 seconds in that state, your controls are freed and the game tries once more to put the box in your hands.
+After buying a box in a market (often ice cream cones in the general goods store), the box could stay on the shelf while your controls stayed locked onto it: clicking opened and closed it, and you couldn't drop or throw it. Now, after 2 seconds in that state, your controls are freed and the game tries once more to put the box in your hands. This works every time it happens, not just the first few. If you're a guest and the host never answers your pickup request, that is handled after about 8 seconds. Pressing F9 while a pickup is still waiting for the host does nothing until 3 seconds have passed, so it can't cancel a pickup that is about to succeed.
 
 ### Bug #5: can't put items from a box onto a shelf until the box is closed and reopened (v0.5.0, awaiting in-game confirmation)
 
@@ -59,7 +59,7 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes either of
 | StuckBox | `StuckSeconds` | `2` | How long (0.5–10 s) that state must last before it is fixed. |
 | StuckBox | `RetryPickup` | `true` | After freeing your controls, tries once more to pick the box up the normal way. |
 | StuckBox | `RegrantToSameHolder` | `true` | Host only: if a player asks for a box the host thinks that player already holds, allows it instead of refusing. This lets a stuck player's retry succeed. |
-| StuckBox | `Diagnostics` | `true` | Logs `[StuckBox]` lines about pickups and recoveries. |
+| StuckBox | `Diagnostics` | `true` | Logs extra `[StuckBox]` details: the result of the pickup retry and why a retry was skipped. Recoveries and failures are always logged. |
 | BoxPlace | `ResyncOpenState` | `true` | If the box in your hands is open but the game treats it as closed (clicking a shelf places nothing until you close and reopen the box), fixes it as soon as you hold left click. |
 | BoxPlace | `ReleaseStuckTake` | `true` | If the game still thinks you're holding right click (take) after you let go, which also stops placing, releases it. |
 | BoxPlace | `Diagnostics` | `true` | Logs `[BoxPlace]` lines explaining why nothing was placed when you hold left click on a shelf for 1.5 s. |
@@ -71,4 +71,4 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes either of
   - A host can reduce this for guests without the mod by turning on `DematerializeRackedBoxesOnHost` (experimental, see above). Boxes that are alone in their rack slot are still affected, and so are boxes racked less than about 10 seconds before the guest joins or the rack is moved.
 - **Bug #5: whoever has the problem.** It only repairs your own controls, so it must be installed on the machine where placing fails. Nothing it does is sent over the network, so other players don't need it.
 - **Bug #2: the guest.** The suspected cause (a late pickup answer from the host) can only happen on a guest, so the guest who sees the item in their hands needs the mod. Installing it only on the host doesn't fix anything in a guest's hands. The host can run it too: its `RegrantToSameHolder` lets a guest pick up a box again after the mod dropped it from their hands.
-- **Bug #3: whoever gets stuck.** The fix repairs the state of your own player, so it only helps on the machine where the problem shows up. The host should run the mod too: `RegrantToSameHolder` runs there and lets a guest's retry succeed. A guest without the mod is not affected by it.
+- **Bug #3: whoever gets stuck.** The fix repairs the state of your own player, so it only helps on the machine where the problem shows up. The host should run the mod too: `RegrantToSameHolder` runs there and lets a guest's retry succeed. A guest without the mod is not affected by it. If the host does not run the mod, a guest's fix still frees the guest's controls, but the host may keep counting that box as held by the guest: nobody can pick that box up until the game is reloaded, and other players may see it in the guest's hands.
