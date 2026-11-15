@@ -37,7 +37,7 @@ Rules:
 | Improvement #4 | done 2026-11-14 | — | — | |
 | Improvement #5 | reviewed | `RestockerDoubleCarry/` | 2026-11-15, 3 rounds, d632e95a4b9f | In-game test (steps in the mod's CLAUDE.md "In-game test steps", `[DoubleCarry]` lines): stack placement, carry animation with two boxes, unmodded guest sync over a whole trip, `IBoxTarget` wrapping, interrupts |
 | Improvement #6 | reviewed | `FurnitureMoveCancel/` | 2026-11-15, 2 rounds, bfe4f8234204 | In-game test, incl. multiplayer (exact-position sync before the place RPC, unmodded guest); steps and `[MoveCancel]` lines in the mod's CLAUDE.md. Unconfirmed: surface probe calibration on offset-pivot pieces |
-| Improvement #7 | in-progress | `ExtraComputers/` | — | In-game test |
+| Improvement #7 | reviewed | `ExtraComputers/` | 2026-11-15, 4 rounds, 4426fb32469d | In-game test: follow "First in-game test" in the mod's CLAUDE.md (host alone, modded guest, unmodded guest, config toggle). Much of it can't be verified from the dumps: donor furniture choice and prefab building, collider/placing behaviour, Photon property reads, shop hiding, box icon, save/load. Send back the `[ExtraComputers]` log lines |
 | Improvement #8 | reviewed | `GridModeDefault/` | 2026-11-15, 2 rounds, aaa2ae1d9e15 | In-game test (steps in the mod's CLAUDE.md). Look for the `[GridMode] placement started` line (proves the delegate-only patch is hit), and report which furniture types showed no grid. Grid toggle is X, not Ctrl |
 | Improvement #9 | open | — | — | |
 | Improvement #10 | open | — | — | |
