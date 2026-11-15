@@ -4,9 +4,11 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
-v1.0.1: written and builds, **awaiting in-game test** (TODO Improvement #5). `VerboseLogging` defaults to on until confirmed.
+v1.0.2: written and builds, **awaiting in-game test** (TODO Improvement #5). `VerboseLogging` defaults to on until confirmed.
 
 Review round 1 applied in 1.0.1: the second-job probe no longer leaves display slots reserved (`TryFindSecondJob(reserve: false)` snapshots and restores `DisplaySlot.m_OccupiedRestocker`); reservations of the real box-2 job (`Plan.ReservedSecond`) are released in `EndPlan`/`ReleaseAll` if the trip dies before the fetch run's `Exit`; stash hand-overs go through `HandOver` (`DOKill` first, so stacking and carry tweens don't fight).
+
+Round 2 (1.0.2): `RestoreOwners` now counts/rewrites only slots whose owner really changed (null-safe compare); `ReleaseAll` skips `ReleaseReserved` for a clerk whose fetch-only run is still active (`IsFetching`), since that run's `Exit` clears the reservation.
 
 Open questions to confirm in-game:
 - Does the stacked box sit correctly on top (uses `Box.LocalBounds`, i.e. the main `BoxCollider`)?

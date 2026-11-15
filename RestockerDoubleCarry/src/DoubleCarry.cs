@@ -224,7 +224,9 @@ internal static class DoubleCarry
         int n = 0;
         foreach (var (slot, owner) in snap)
         {
-            if (slot == null || Same(slot.m_OccupiedRestocker, owner)) continue;
+            if (slot == null) continue;
+            var now = slot.m_OccupiedRestocker;
+            if (now == null ? owner == null : Same(now, owner)) continue;   // unchanged (Same() is false for nulls)
             slot.m_OccupiedRestocker = owner;
             n++;
         }
@@ -577,7 +579,8 @@ internal static class DoubleCarry
             {
                 var clerk = plan.Clerk;
                 if (clerk == null || !HostSide) continue;
-                ReleaseReserved(clerk, plan);
+                // A fetch-only run that is still walking keeps its reservation; its own Exit clears it.
+                if (!IsFetching(clerk)) ReleaseReserved(clerk, plan);
                 var stash = Stash(clerk, plan);
                 var cur = Current(clerk);
                 if (stash != null)
