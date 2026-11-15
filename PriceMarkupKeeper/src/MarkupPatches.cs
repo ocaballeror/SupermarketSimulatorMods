@@ -233,3 +233,89 @@ internal static class ChangeCurrentCostPatch
         catch (Exception e) { Plugin.Logger.LogError($"[Markup] Product {productID}: reprice failed: {e}"); }
     }
 }
+
+// Rework 2026-11-15: newly unlocked products get the markup right away.
+//
+// Buying a license (verified in the dumps): the buyer's game runs
+// ProductLicenseManager.PurchaseLicense(licenseID) (from LicenseItem.Purchase), which adds the license to
+// the unlocked/active lists, calls UpdateUnlockedProducts and, online, NetworkLicenseManager
+// .PurchaseLicense_Broadcast. Every other client runs PurchaseLicense_Order(licenseID) from
+// PurchaseLicense_RPC, which does the same without broadcasting. So the host runs exactly one of the two
+// whoever bought it, and the products are unlocked when either returns.
+//
+// A newly unlocked product has no player price (m_PricesSetByPlayer entry), so it sells at CurrentCost,
+// with no profit at all. Postfix both, on the host or offline only: for each product of the license that
+// isn't IsHiddenForCustomer and has no player price yet, GetOrCreatePriceSetByPlayer (creates one at
+// market price, as the pricing tab does) and set Price to the saved bulk markup on that market price.
+// Then FinishBulkPricingApply(list, false, ratio), the game's own end of a bulk apply: refreshes the
+// pricing viewer, discount points, onPriceSet (price tags), and online BulkPricingApplied_RPC to the
+// guests. Its sale sign reroll only touches products with DiscountRate > 0.1, and these have none.
+internal static class NewProductPricer
+{
+    private static bool IsAuthority() => !PhotonNetwork.IsConnected || PhotonNetwork.IsMasterClient;
+
+    internal static void OnLicenseUnlocked(int licenseID, string via)
+    {
+        if (!Plugin.PriceNewProducts.Value || !IsAuthority()) return;
+        var idm = NoktaSingleton<IDManager>.Instance;
+        var pm = NoktaSingleton<PriceManager>.Instance;
+        if (idm == null || pm == null) return;
+        var license = idm.ProductLicenseSO(licenseID);
+        var products = license != null ? license.Products : null;
+        if (products == null) return;
+
+        float ratio = pm.BulkMarkupRatio;
+        var changed = new Il2CppSystem.Collections.Generic.List<Pricing>();
+        int skipped = 0;
+        for (int i = 0; i < products.Count; i++)
+        {
+            var so = products[i];
+            if (so == null || so.IsHiddenForCustomer) continue;
+            int id = so.ID;
+            if (pm.GetPriceSetByPlayer(id) != null)
+            {
+                skipped++;
+                if (Plugin.Verbose.Value)
+                    Plugin.Logger.LogInfo($"[Markup] New product {id}: already has a price, left alone");
+                continue;
+            }
+            var p = pm.GetOrCreatePriceSetByPlayer(id);
+            if (p == null) continue;
+            float market = p.MarketPrice;
+            if (market <= 0f) continue;
+            p.Price = MarkupKeeper.MarkupPrice(market, ratio);
+            changed.Add(p);
+            if (Plugin.Verbose.Value)
+                Plugin.Logger.LogInfo($"[Markup] New product {id}: market {market:0.00}, price {p.Price:0.00}");
+        }
+        if (changed.Count == 0)
+        {
+            if (Plugin.Verbose.Value)
+                Plugin.Logger.LogInfo($"[Markup] License {licenseID} unlocked ({via}): nothing to price ({skipped} already priced)");
+            return;
+        }
+        pm.FinishBulkPricingApply(changed, false, ratio);
+        Plugin.Logger.LogInfo($"[Markup] License {licenseID} unlocked ({via}): priced {changed.Count} new product(s) " +
+                              $"at {ratio:0.##}% above market price" + (PhotonNetwork.IsConnected ? " (sent to guests)" : ""));
+    }
+}
+
+[HarmonyPatch(typeof(ProductLicenseManager), nameof(ProductLicenseManager.PurchaseLicense))]
+internal static class PurchaseLicensePatch
+{
+    private static void Postfix(int licenseID)
+    {
+        try { NewProductPricer.OnLicenseUnlocked(licenseID, "bought here"); }
+        catch (Exception e) { Plugin.Logger.LogError($"[Markup] Pricing license {licenseID} failed: {e}"); }
+    }
+}
+
+[HarmonyPatch(typeof(ProductLicenseManager), nameof(ProductLicenseManager.PurchaseLicense_Order))]
+internal static class PurchaseLicenseOrderPatch
+{
+    private static void Postfix(int licenseID)
+    {
+        try { NewProductPricer.OnLicenseUnlocked(licenseID, "bought by another player"); }
+        catch (Exception e) { Plugin.Logger.LogError($"[Markup] Pricing license {licenseID} failed: {e}"); }
+    }
+}

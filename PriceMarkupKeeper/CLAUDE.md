@@ -4,7 +4,9 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
-v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switches `VerboseLogging` to default off (existing configs keep their value).
+v1.1.0 (rework, not yet tested in-game): newly unlocked products get the markup as soon as their license is bought (user request after the 2026-11-15 session).
+
+v1.0.2: daily repricing **confirmed working in-game by the user (2026-11-15).**
 
 ## Game mechanism
 
@@ -20,6 +22,8 @@ v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switc
 | `PriceManager.TryChangingBasePrices` | prefix | start tracking (host / offline only), read `BulkMarkupRatio` |
 | `PriceManager.ChangeCurrentCost` | prefix | skip products with no `m_CurrentCosts` entry (vanilla skips them too, and `CurrentCost(id)` / `MarketPrice` would create one); decide if the product follows the markup (price == markup on the *old* market price, ±0.006); remember the old `CurrentCost` |
 | `PriceManager.ChangeCurrentCost` | postfix | if the cost really changed (it may not: `ExemptFromChange`, no cost entry, 64 failed rerolls), set price to markup on the new market price; collect it, deduped by id |
+| `ProductLicenseManager.PurchaseLicense` | postfix | buyer's side of a license purchase; `NewProductPricer.OnLicenseUnlocked` (host / offline only) |
+| `ProductLicenseManager.PurchaseLicense_Order` | postfix | every other client's side (from `PurchaseLicense_RPC`); so the host prices a license whoever bought it |
 | `PriceManager.TryChangingBasePrices` | postfix | `FinishBulkPricingApply`'s steps minus its sale sign reroll and minus `RefreshUnlockedProducts` (the game's own loop already calls it per product right after `ChangeCurrentCost`, i.e. after our price change): `CalculateTotalDiscountPoints`, `onPriceSet`, and `BulkPricingApplied_Broadcast` when online |
 
 ## Multiplayer
@@ -30,8 +34,14 @@ v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switc
 ## Pitfalls / follow-ups
 
 - `FinishBulkPricingApply` isn't called on purpose: it rerolls `_saleIndex` (`Random.Range(0,4)`) for products with `DiscountRate > 0.1`, which would change their sale sign style every morning. If the game adds steps to it in an update, mirror them in `MarkupKeeper.EndDay`.
-- Products unlocked after the bulk apply have no player price (selling price falls back to `CurrentCost`), so with `OnlyProductsFollowingMarkup` on they're skipped. Not requested; a possible follow-up is to apply the markup on unlock.
+- New licenses (v1.1.0): for each product of `IDManager.ProductLicenseSO(id).Products` that isn't `IsHiddenForCustomer` and has no player price, `GetOrCreatePriceSetByPlayer` + `Price = markup(MarketPrice)`, then the game's own `FinishBulkPricingApply(list, false, ratio)` (viewer refresh, discount points, `onPriceSet`, `BulkPricingApplied_RPC`). Its sale reroll only touches `DiscountRate > 0.1`, which new products don't have. Only `ApplyBulkMarkup`/`ApplyBulkDiscount` call `GetOrCreatePriceSetByPlayer`, so a freshly unlocked product has no player price (it would sell at `CurrentCost`).
+- Not covered: re-activating a disabled license/product (`SetLicenseState`/`SetProductState`); those products normally kept their price.
 - If the user never used bulk pricing, the saved ratio is 0, so products priced exactly at market follow the market (documented in README).
+
+## How to test the v1.1.0 rework
+
+1. `VerboseLogging` on, bulk markup applied (say 5%). Buy a license on the host: `[Markup] License N unlocked (bought here): priced K new product(s) at 5% above market price (sent to guests)`. The pricing tab shows market × 1.05 for the new products; their price tags are set.
+2. Online, buy a license on the guest: the host logs `(bought by another player)`; the guest's pricing tab shows the same prices.
 
 ## How to test in-game (host)
 

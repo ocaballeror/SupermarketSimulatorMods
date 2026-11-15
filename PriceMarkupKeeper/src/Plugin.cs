@@ -12,12 +12,13 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.pricemarkupkeeper";
     public const string Name = "Price Markup Keeper";
-    public const string Version = "1.0.2";
+    public const string Version = "1.1.0";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<bool> KeepMarkup;
     internal static ConfigEntry<bool> OnlyFollowingProducts;
+    internal static ConfigEntry<bool> PriceNewProducts;
     internal static ConfigEntry<bool> Verbose;
 
     internal static bool Active { get; private set; }
@@ -28,6 +29,8 @@ public class Plugin : BasePlugin
     {
         typeof(TryChangingBasePricesPatch),
         typeof(ChangeCurrentCostPatch),
+        typeof(PurchaseLicensePatch),
+        typeof(PurchaseLicenseOrderPatch),
     };
 
     public override void Load()
@@ -43,6 +46,10 @@ public class Plugin : BasePlugin
         OnlyFollowingProducts = Config.Bind("Pricing", "OnlyProductsFollowingMarkup", true,
             "Only reprice products whose price still matched that markup before the change, so prices you typed in " +
             "by hand are left alone. Turn off to reprice every product whose market price changed.");
+        PriceNewProducts = Config.Bind("Pricing", "PriceNewlyUnlockedProducts", true,
+            "When a product license is bought, give its new products a selling price right away: the markup " +
+            "(% above market price) last applied from the computer's bulk pricing tab. Products that already " +
+            "have a price are left alone.");
         Verbose = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Log every repriced product (tag [Markup] in LogOutput.log).");
 

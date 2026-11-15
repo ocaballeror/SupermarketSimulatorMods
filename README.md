@@ -16,7 +16,7 @@ The work list lives in [`TODO.md`](TODO.md): the bugs and improvements requested
 | Self Checkout Speed | [`SelfCheckoutSpeed/`](SelfCheckoutSpeed) | Improvement #4: faster self checkout customers and employee help (configurable, follows the host) | Rework written (v1.1.0), awaiting in-game test |
 | Furniture Move Cancel | [`FurnitureMoveCancel/`](FurnitureMoveCancel) | Improvement #6: Escape puts moved furniture back | Done (confirmed in-game) |
 | Restocker Double Carry | [`RestockerDoubleCarry/`](RestockerDoubleCarry) | Improvement #5: level 10+ restockers fetch two boxes per trip | Written, awaiting in-game test |
-| Price Markup Keeper | [`PriceMarkupKeeper/`](PriceMarkupKeeper) | Improvement #1: prices keep the bulk markup when market prices change | Done (confirmed in-game) |
+| Price Markup Keeper | [`PriceMarkupKeeper/`](PriceMarkupKeeper) | Improvement #1: prices keep the bulk markup when market prices change; new products start at it | Rework written (v1.1.0), awaiting in-game test |
 | Player Crouch | [`PlayerCrouch/`](PlayerCrouch) | Improvement #3: hold Ctrl to crouch, character model crouches (synced to modded players) | Done (confirmed in-game) |
 | Extra Computers | [`ExtraComputers/`](ExtraComputers) | Improvement #7: buyable extra computers, each with its own screen | Written, awaiting in-game test |
 | Grid Mode Default | [`GridModeDefault/`](GridModeDefault) | Improvement #8: grid mode is on by default when placing furniture | Done (confirmed in-game) |
