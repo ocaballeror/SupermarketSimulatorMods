@@ -12,11 +12,12 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.extracomputers";
     public const string Name = "Extra Computers";
-    public const string Version = "1.0.0";
+    public const string Version = "1.1.0";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<float> Price;
+    internal static ConfigEntry<bool> ProtectUnmodded;
     internal static ConfigEntry<bool> Verbose;
 
     internal static bool Active { get; private set; }
@@ -29,12 +30,18 @@ public class Plugin : BasePlugin
         _harmony = new Harmony(Guid);
 
         Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off removes all patches immediately (no restart needed). " +
-            "Computers already placed stay in the store as furniture but can't be used until it is turned back on. " +
-            "If the game starts with this off, saved extra computers are not loaded (and are lost when the game saves).");
+            "Master switch. Turning it off removes all patches immediately (no restart needed): the computer leaves the " +
+            "shop, and placed computers stay in the store as furniture but can't be used until it is turned back on. " +
+            "If the game STARTS with this off (or the mod is removed), saved extra computers and computer boxes " +
+            "(unopened, in storage, in a pending delivery or in the cart) can't be loaded and may cause errors or be lost. " +
+            "Unbox and place or sell every computer box, and empty the cart, before doing that.");
         Price = Config.Bind("ExtraComputers", "Price", 500f,
             new ConfigDescription("Price of one extra computer in the furniture shop.",
                 new AcceptableValueRange<float>(0f, 100000f)));
+        ProtectUnmodded = Config.Bind("Multiplayer", "ProtectUnmoddedPlayers", true,
+            "Host only. While any other player in the room does not have this mod, the computer is hidden in the shop, " +
+            "buying it is refused and computer boxes can't be opened, because a player without the mod gets errors from " +
+            "computer boxes and computers. Turn this off only if everybody has the mod.");
         Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
             "Log how the computer furniture is built and every time an extra computer is used " +
             "(tag [ExtraComputers] in LogOutput.log).");
@@ -53,11 +60,14 @@ public class Plugin : BasePlugin
         else
         {
             ComputerSession.ForceEnd("mod disabled");
+            Presence.OnDisabled();
             _harmony.UnpatchSelf();
             Log.LogInfo("All patches removed (disabled)");
         }
         Active = on;
         ComputerSession.Reset();
+        try { ComputerFurniture.OnActiveChanged(on); }
+        catch (Exception e) { Log.LogWarning($"Updating the shop item failed: {e.Message}"); }
     }
 
     private void ApplyPatches()

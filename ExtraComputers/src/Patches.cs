@@ -73,6 +73,90 @@ internal static class FurnituresViewerSpawnPatch
     }
 }
 
+/// <summary>Remembers the computer's shop entry, so it can be hidden (mod off, or a player without the mod).</summary>
+[HarmonyPatch(typeof(FurnitureSalesItem), nameof(FurnitureSalesItem.Setup))]
+internal static class ShopItemPatch
+{
+    private static void Postfix(FurnitureSalesItem __instance, int productID)
+    {
+        if (productID != ComputerFurniture.FurnitureId) return;
+        try
+        {
+            ComputerFurniture.ShopItem = __instance;
+            ComputerFurniture.RefreshShopItem();
+        }
+        catch (Exception e) { Plugin.Error("Shop item setup failed: " + e.Message); }
+    }
+}
+
+// ------------------------------------------------------------------ protecting players without the mod (see Presence)
+
+/// <summary>
+/// Host/offline purchase (a guest's purchase request ends up here on the host too). Refused while a player
+/// without the mod is in the room and the cart holds a computer: the delivery would create computer boxes.
+/// </summary>
+[HarmonyPatch(typeof(MarketShoppingCart), nameof(MarketShoppingCart.Purchase))]
+internal static class PurchaseGatePatch
+{
+    private static bool Prefix(MarketShoppingCart __instance)
+    {
+        try
+        {
+            if (PhotonNetwork.IsConnectedAndSlave) return true; // guests only send a request to the host
+            if (!CartHasComputer(__instance)) return true;
+            if (!Presence.Blocked(out var who)) return true;
+            Plugin.Warn($"Purchase refused: the cart holds a computer and {who} doesn't have the Extra Computers mod. " +
+                        "Remove the computer from the cart (or turn Multiplayer/ProtectUnmoddedPlayers off).");
+            return false;
+        }
+        catch (Exception e)
+        {
+            Plugin.Error("Purchase check failed: " + e.Message);
+            return true;
+        }
+    }
+
+    private static bool CartHasComputer(MarketShoppingCart cart)
+    {
+        var data = cart != null ? cart.CartData : null;
+        var list = data?.FurnituresInCarts;
+        if (list == null) return false;
+        for (int i = 0; i < list.Count; i++)
+        {
+            var q = list[i];
+            if (q != null && q.FirstItemID == ComputerFurniture.FurnitureId) return true;
+        }
+        return false;
+    }
+}
+
+/// <summary>
+/// Opening a furniture box: the host's own click and a guest's request both end in this broadcast. A computer box
+/// stays closed while a player without the mod is in the room, because unboxing makes the host instantiate a
+/// prefab that player can't load.
+/// </summary>
+[HarmonyPatch(typeof(NetworkFurnitureBoxInteraction), nameof(NetworkFurnitureBoxInteraction.OpenFurnitureBox_Broadcast))]
+internal static class OpenBoxGatePatch
+{
+    private static bool Prefix(NetworkFurnitureBoxInteraction __instance)
+    {
+        try
+        {
+            var data = __instance.FurnitureBoxInteraction?.CurrentFurnitureBox?.Data;
+            if (data == null || data.FurnitureID != ComputerFurniture.FurnitureId) return true;
+            if (!Presence.Blocked(out var who)) return true;
+            Plugin.Warn($"Computer box not opened: {who} doesn't have the Extra Computers mod " +
+                        "(or turn Multiplayer/ProtectUnmoddedPlayers off). Keep the box until everybody has the mod.");
+            return false;
+        }
+        catch (Exception e)
+        {
+            Plugin.Error("Box check failed: " + e.Message);
+            return true;
+        }
+    }
+}
+
 [HarmonyPatch(typeof(LocalizationManager), nameof(LocalizationManager.LocalizedFurnitureName))]
 internal static class FurnitureNamePatch
 {
@@ -118,6 +202,8 @@ internal static class ComputerSpawner
             Plugin.Warn("A guest was asked to spawn a computer; only the host spawns furniture");
             return null;
         }
+        if (Presence.Blocked(out var who))
+            Plugin.Warn($"Spawning a computer although {who} doesn't have the mod; that player will get errors for it.");
         ComputerFurniture.RegisterWithPhoton();
         var data = new Il2CppReferenceArray<Il2CppSystem.Object>(1);
         unsafe
@@ -176,7 +262,7 @@ internal static class PhotonPoolPatch
 {
     private static void Prefix(string prefabId)
     {
-        if (prefabId != ComputerFurniture.PrefabId) return;
+        if (prefabId != ComputerFurniture.PrefabId && prefabId != ComputerFurniture.VanillaPrefabId) return;
         try
         {
             ComputerFurniture.EnsureSo();
@@ -235,6 +321,9 @@ internal static class ComputerBackPatch
 {
     private static void Prefix() => ComputerSession.InBack = true;
 
+    /// <summary>Runs even if vanilla Back throws, so InBack can't stay stuck (it would block ComputerClosePatch).</summary>
+    private static void Finalizer() => ComputerSession.InBack = false;
+
     private static void Postfix()
     {
         ComputerSession.InBack = false;
@@ -260,6 +349,7 @@ internal static class ComputerLateUpdatePatch
     private static void Postfix()
     {
         if (ComputerSession.Active) ComputerSession.SyncAnchors();
+        Presence.Tick();
     }
 }
 

@@ -53,7 +53,7 @@ internal static class IconMaker
             camGo.transform.position = b.center + dir * dist;
             camGo.transform.LookAt(b.center);
 
-            rt = new RenderTexture(Size, Size, 24, RenderTextureFormat.ARGB32);
+            rt = new RenderTexture(Size, Size, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
             cam.targetTexture = rt;
             cam.Render();
 
@@ -142,17 +142,44 @@ internal static class IconMaker
         return 31;
     }
 
-    /// <summary>Turns the magenta background transparent. Returns false if nothing was drawn.</summary>
+    private static bool Magentaish(Color32 c) => c.r > 200 && c.g < 60 && c.b > 200;
+
+    /// <summary>Turns the magenta background transparent. Returns false if nothing was drawn.
+    /// Only pixels that are exactly the clear colour, plus magenta-ish pixels connected to them (the anti-aliased
+    /// edge), are removed, so magenta-ish pixels inside the model survive.</summary>
     private static bool KeyOut(Texture2D tex)
     {
         var px = tex.GetPixels32();
-        int solid = 0;
+        var bg = new bool[px.Length];
+        var stack = new Stack<int>();
         for (int i = 0; i < px.Length; i++)
         {
             var c = px[i];
-            bool bg = c.a < 10 || (c.r > 200 && c.g < 60 && c.b > 200);
-            if (bg) px[i] = new Color32(255, 255, 255, 0);
-            else { c.a = 255; px[i] = c; solid++; }
+            if (c.a < 10 || (c.r >= 250 && c.g <= 5 && c.b >= 250)) { bg[i] = true; stack.Push(i); }
+        }
+        // Grow the background into connected magenta-ish pixels (the fringe).
+        while (stack.Count > 0)
+        {
+            int i = stack.Pop();
+            int x = i % Size, y = i / Size;
+            for (int d = 0; d < 4; d++)
+            {
+                int nx = x + (d == 0 ? 1 : d == 1 ? -1 : 0), ny = y + (d == 2 ? 1 : d == 3 ? -1 : 0);
+                if (nx < 0 || ny < 0 || nx >= Size || ny >= Size) continue;
+                int n = ny * Size + nx;
+                if (bg[n] || !Magentaish(px[n])) continue;
+                bg[n] = true;
+                stack.Push(n);
+            }
+        }
+        int solid = 0;
+        for (int i = 0; i < px.Length; i++)
+        {
+            if (bg[i]) { px[i] = new Color32(255, 255, 255, 0); continue; }
+            var c = px[i];
+            c.a = 255;
+            px[i] = c;
+            solid++;
         }
         if (solid < px.Length / 100) return false;
         tex.SetPixels32(px);

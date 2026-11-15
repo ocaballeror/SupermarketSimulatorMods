@@ -33,7 +33,9 @@
  *      child "ExtraComputerModel" = copy of the store's real computer with every script, camera,
  *             UI canvas and network component removed (meshes, colliders, navmesh data kept).
  *    The donor's FurniturePlacingMode gets the real computer's placing settings (remapped to the copy).
- *    The root gets a box collider around the whole model for interaction raycasts.
+ *    The root gets a box collider around the whole model (+1 cm per side) for interaction raycasts; it is
+ *    listed in m_OwnerCollider (IPlacingMode.OverlapBoxes ignores those). m_PhysicalColliders is not read by
+ *    any native code (only its own getter exists), so it is left as copied.
  *    The template is registered in Photon's DefaultPool.ResourceCache under PrefabId.
  *  - An icon rendered from the model (fallback: a drawn monitor icon).
  *
@@ -59,12 +61,18 @@ internal static class ComputerFurniture
 {
     public const int FurnitureId = 917001;
     public const string PrefabId = "Furnitures/ExtraComputers/ExtraComputer";
+    // The path the game's own spawner would use for a plain Furniture prefab called "ExtraComputer"
+    // ("Furnitures/<component type>/<prefab name>"). Registered too, so a computer box can still be opened
+    // by the vanilla code while the mod is switched off at runtime (best effort, not verified in-game).
+    public const string VanillaPrefabId = "Furnitures/Furniture/ExtraComputer";
     public const string ModelName = "ExtraComputerModel";
     public const string ScreenMarker = "#ecscreen";
     public const string DisplayName = "Computer";
 
     internal static FurnitureSO So;
     internal static GameObject Template;
+    /// <summary>The computer's entry in the furniture shop (built once per scene by FurnituresViewer.Start).</summary>
+    internal static FurnitureSalesItem ShopItem;
     internal static Texture2D IconTexture;
     private static Sprite _iconSprite;
     private static Material _boxIconMaterial;
@@ -151,9 +159,38 @@ internal static class ComputerFurniture
         return So;
     }
 
+    /// <summary>Sets the shop price: the config value, or the host's published value when this client is a guest.</summary>
     internal static void ApplyPrice()
     {
-        if (So != null) So.Cost = Plugin.Price.Value;
+        if (So == null) return;
+        float price = Presence.EffectivePrice();
+        if (So.Cost != price)
+        {
+            So.Cost = price;
+            Plugin.Debug($"Computer price is now {price}");
+        }
+    }
+
+    /// <summary>The mod was switched on or off: the shop item follows (the furniture definition itself stays
+    /// listed, so boxes and computers that already exist keep resolving their definition).</summary>
+    internal static void OnActiveChanged(bool on)
+    {
+        if (So != null) So.IsMainFurniture = on;
+        RefreshShopItem();
+    }
+
+    /// <summary>Shows the shop entry only while the mod is on and every other player has it.</summary>
+    internal static void RefreshShopItem()
+    {
+        var item = ShopItem;
+        if (item == null) return;
+        bool show = Plugin.Active && !Presence.Blocked();
+        var go = item.gameObject;
+        if (go != null && go.activeSelf != show)
+        {
+            go.SetActive(show);
+            Plugin.Debug(show ? "Computer shown in the shop" : "Computer hidden in the shop");
+        }
     }
 
     private static void LogFurnitureList(Il2CppSystem.Collections.Generic.List<FurnitureSO> list)
@@ -212,6 +249,7 @@ internal static class ComputerFurniture
                 return;
             }
             dp.ResourceCache[PrefabId] = Template;
+            dp.ResourceCache[VanillaPrefabId] = Template;
         }
         catch (Exception e) { Plugin.Error("Registering the computer with Photon failed: " + e.Message); }
     }
@@ -357,6 +395,9 @@ internal static class ComputerFurniture
         }
         if (removed.Count > 0)
             Plugin.Debug("Removed from the base furniture copy: " + string.Join(", ", removed.Distinct()));
+        var bodies = tpl.GetComponentsInChildren<Rigidbody>(true);
+        for (int i = 0; i < bodies.Length; i++)
+            Plugin.Debug($"Base furniture keeps a Rigidbody on '{bodies[i].name}': kinematic={bodies[i].isKinematic}, gravity={bodies[i].useGravity}");
     }
 
     private static readonly HashSet<string> KeptModelComponents = new()
@@ -424,7 +465,7 @@ internal static class ComputerFurniture
         var box = tpl.GetComponent<BoxCollider>() ?? tpl.AddComponent<BoxCollider>();
         box.isTrigger = false;
         box.center = b.center;
-        box.size = b.size + new Vector3(0.04f, 0.04f, 0.04f);
+        box.size = b.size + new Vector3(0.02f, 0.02f, 0.02f);
         return box;
     }
 
@@ -638,5 +679,6 @@ internal static class ComputerFurniture
     internal static void OnSceneObjectsGone()
     {
         _computer = null;
+        ShopItem = null;
     }
 }

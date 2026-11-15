@@ -28,10 +28,15 @@
  *    and restored afterwards. Changes made on any computer go through the game's normal networked
  *    code, exactly as on the store computer; two people on screens of the same tab may each see an
  *    older view until they reopen it (same as vanilla).
+ *  - IsOccupied and OccupiedPlayer of the store computer are saved before and restored after the vanilla
+ *    InstantInteract unconditionally, so the store computer never looks used because of an extra one.
+ *  - The extra computer in use is published as a player property (Presence.SetUse); a second player who tries
+ *    to open the same computer gets the game's "in use by another player" warning.
  */
 using System;
 using System.Collections.Generic;
 using __Project__.Scripts.Computer;
+using Photon.Pun;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -81,6 +86,18 @@ internal static class ComputerSession
         var model = prop.transform.Find(ComputerFurniture.ModelName);
         if (model == null) { Plugin.Warn("This computer has no model; can't open it"); return false; }
 
+        // Another player on this very computer: their avatar would overlap ours (the store computer prevents that
+        // with IsOccupied; extra computers use a player property, see Presence).
+        var view = prop.GetComponent<PhotonView>();
+        int viewId = view != null ? view.ViewID : 0;
+        if (Presence.IsInUseByOther(viewId))
+        {
+            Plugin.Debug($"Computer view {viewId} is in use by another player");
+            RaiseInUseWarning();
+            return false;
+        }
+        InBack = false;
+
         var pm = comp.m_PlacingMode;
         _compRoot = pm != null && pm.m_Furniture != null ? pm.m_Furniture.transform : comp.transform;
         _comp = comp;
@@ -103,6 +120,8 @@ internal static class ComputerSession
             return false;
         }
 
+        // Vanilla InstantInteract writes IsOccupied-related state (OccupiedPlayer at +0xD8) for the local player;
+        // nobody clears it for an extra computer (the broadcast that would is skipped), so put both back.
         bool wasOccupied = comp.IsOccupied;
         var occupant = comp.OccupiedPlayer;
         bool result;
@@ -118,11 +137,8 @@ internal static class ComputerSession
         }
         finally
         {
-            if (wasOccupied)
-            {
-                comp.IsOccupied = true;
-                comp.OccupiedPlayer = occupant;
-            }
+            comp.IsOccupied = wasOccupied;
+            comp.OccupiedPlayer = occupant;
         }
 
         if (!result)
@@ -134,6 +150,7 @@ internal static class ComputerSession
         // PlayerInteraction.Interact activates the interaction of m_CurrentInteractable's type right after
         // this returns; point it at the store computer so ComputerInteraction takes over as usual.
         player.PlayerInteraction.m_CurrentInteractable = new IInteractable(comp.Pointer);
+        Presence.SetUse(viewId);
         Plugin.Debug($"Opened extra computer at {prop.transform.position}" +
                      (wasOccupied ? " (the store computer is in use by another player)" : ""));
         return true;
@@ -196,11 +213,23 @@ internal static class ComputerSession
         }
     }
 
+    private static void RaiseInUseWarning()
+    {
+        try
+        {
+            if (NoktaSingletonPunCallbacks<WarningSystem>.HasInstance)
+                NoktaSingletonPunCallbacks<WarningSystem>.Instance.RaiseInteractionWarning(InteractionWarningType.IN_USE_BY_OTHER_PLAYER);
+        }
+        catch (Exception e) { Plugin.Debug("Showing the in-use warning failed: " + e.Message); }
+    }
+
     /// <summary>Puts the store computer's screen, camera and exit point back.</summary>
     internal static void End(string reason)
     {
         if (!Active) return;
         Active = false;
+        InBack = false;
+        Presence.SetUse(0);
         for (int i = MovedParts.Count - 1; i >= 0; i--)
         {
             var m = MovedParts[i];
@@ -246,6 +275,7 @@ internal static class ComputerSession
         if (Active && _comp != null) { End("reset"); }
         Active = false;
         InBack = false;
+        Presence.SetUse(0);
         MovedParts.Clear();
         HiddenRenderers.Clear();
         _prop = null;
