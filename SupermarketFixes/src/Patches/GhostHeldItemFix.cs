@@ -67,8 +67,11 @@ namespace SupermarketFixes.Patches;
 ///
 /// Limitation: dropping an orphan only fixes this machine's view. Other players ran the same HoldObject,
 /// so on their machines the orphan may still look attached to this player (the game never re-syncs
-/// parents), and for an orphan box the host keeps it marked as held by this player until this player
-/// picks it up again (allowed by StuckBoxFix's host-side regrant) or the session is reloaded.
+/// parents), and for an orphan box or furniture box the host keeps it marked as held by this player
+/// (IsNetworkOccupied; it rejects every pickup meanwhile). When this machine is the host (or offline) the
+/// flag is cleared here. For a guest's orphan box, StuckBoxFix's host-side regrant lets that guest pick it
+/// up again; there is no such regrant for furniture boxes, so a modded host doesn't help there and the
+/// furniture box stays unpickable until the session is reloaded (no worse than vanilla).
 /// </summary>
 internal static class GhostHeldItemFix
 {
@@ -416,6 +419,22 @@ internal static class GhostHeldItemFix
             ReleaseNetworkState(b, nb);
             var p = HeldState.LocalPlayer();
             if (p != null) ClearOccupy(p, b);
+        }
+        else
+        {
+            // A furniture box has the same host-side lock as a box (NetworkFurnitureBox.IsNetworkOccupied,
+            // set by AvailabilityCallback_RPC, which rejects while it is set). Only the host reads it.
+            try
+            {
+                var fb = go.GetComponent<FurnitureBox>();
+                var nfb = fb != null ? fb.m_NetworkFurnitureBox : null;
+                if (nfb != null && (!PhotonNetwork.IsConnected || PhotonNetwork.IsMasterClient))
+                    nfb.IsNetworkOccupied = false;
+            }
+            catch (Exception e)
+            {
+                Plugin.Logger.LogWarning($"[GhostHeld] Couldn't free the furniture box lock: {e.Message}");
+            }
         }
         Plugin.Logger.LogInfo($"[GhostHeld] Dropped: {Describe(go, b)}");
     }
