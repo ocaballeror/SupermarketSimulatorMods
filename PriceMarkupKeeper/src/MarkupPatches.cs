@@ -30,10 +30,15 @@
 //   This happens before the game's broadcast, so the broadcast already carries the new price.
 // - TryChangingBasePrices postfix: do what FinishBulkPricingApply does, minus its sale sign reroll
 //   (it sets _saleIndex = Random.Range(0,4) for discounted products, which would change their sale
-//   sign style every morning): PricingProductViewer.RefreshUnlockedProducts per product,
-//   CalculateTotalDiscountPoints, onPriceSet per product (price tags), and when online
-//   BulkPricingApplied_Broadcast (only sends BulkPricingApplied_RPC; guests copy Price, DiscountRate and
-//   the unchanged _saleIndex, refresh and fire onPriceSet / onSaleSignSet).
+//   sign style every morning): CalculateTotalDiscountPoints, onPriceSet per product (price tags), and
+//   when online BulkPricingApplied_Broadcast (only sends BulkPricingApplied_RPC; guests copy Price,
+//   DiscountRate and the unchanged _saleIndex, refresh and fire onPriceSet / onSaleSignSet).
+//   PricingProductViewer.RefreshUnlockedProducts is not called: the game's own loop in
+//   TryChangingBasePrices already calls it for each product right after ChangeCurrentCost, i.e. after
+//   our ChangeCurrentCost postfix has set the new price.
+// - ChangeCurrentCost skips products that have no m_CurrentCosts entry, but PriceManager.CurrentCost(id)
+//   (and so Pricing.MarketPrice) creates one. The prefix therefore checks for an existing entry first and
+//   never touches such products, so the mod can't give them a cost change vanilla wouldn't.
 // Guests never run TryChangingBasePrices: PriceManager.Start only subscribes it to OnStartedNewDay when
 // !IsConnectedAndSlave. The authority check below is a second guard.
 
@@ -52,12 +57,27 @@ internal static class MarkupKeeper
 
     private static bool _tracking;
     private static float _ratio;
+    private static int _costCalls; // ChangeCurrentCost calls seen today (proves the hooks fire)
     private static readonly Dictionary<int, Pricing> Changed = new(); // by product id (a product can change twice a day)
 
     internal static void Reset()
     {
         _tracking = false;
+        _costCalls = 0;
         Changed.Clear();
+    }
+
+    /// <summary>True when m_CurrentCosts already has an entry (CurrentCost(id) would create one otherwise).</summary>
+    private static bool HasCostEntry(PriceManager pm, int productID)
+    {
+        var list = pm.m_CurrentCosts;
+        if (list == null) return false;
+        for (int i = 0; i < list.Count; i++)
+        {
+            var c = list[i];
+            if (c != null && c.ProductID == productID) return true;
+        }
+        return false;
     }
 
     /// <summary>Same formula and rounding as PriceManager.ApplyBulkMarkup.</summary>
@@ -70,31 +90,30 @@ internal static class MarkupKeeper
     {
         Reset();
         if (!Plugin.KeepMarkup.Value) return;
-        if (!IsAuthority())
-        {
-            if (Plugin.Verbose.Value) Plugin.Logger.LogInfo("[Markup] Guest: the host reprices products, skipping");
-            return;
-        }
+        // Defensive: guests never get here (PriceManager.Start doesn't subscribe the handler for them).
+        if (!IsAuthority()) return;
         _ratio = pm.BulkMarkupRatio;
         _tracking = true;
-        if (Plugin.Verbose.Value)
-            Plugin.Logger.LogInfo($"[Markup] New day price changes starting, bulk markup is {_ratio:0.##}%");
     }
 
     /// <summary>Before the cost changes: should this product get the markup afterwards?</summary>
     internal static bool ShouldReprice(PriceManager pm, int productID)
     {
         if (!_tracking) return false;
+        _costCalls++;
+
+        // Vanilla skips products without a cost entry; don't let our reads create one for it.
+        if (!HasCostEntry(pm, productID)) return false;
 
         var idm = NoktaSingleton<IDManager>.Instance;
         var so = idm != null ? idm.ProductSO(productID) : null;
         if (so == null || so.IsHiddenForCustomer) return false; // the bulk tab skips these too
 
-        if (!Plugin.OnlyFollowingProducts.Value) return true;
-
+        bool onlyFollowing = Plugin.OnlyFollowingProducts.Value;
         var p = pm.GetPriceSetByPlayer(productID);
         if (p == null)
         {
+            if (!onlyFollowing) return true;
             if (Plugin.Verbose.Value)
                 Plugin.Logger.LogInfo($"[Markup] Product {productID}: no price set by the player, left alone");
             return false;
@@ -102,9 +121,14 @@ internal static class MarkupKeeper
         float expected = MarkupPrice(p.MarketPrice, _ratio);
         bool follows = Math.Abs(p.Price - expected) < Tolerance;
         if (!follows && Plugin.Verbose.Value)
-            Plugin.Logger.LogInfo($"[Markup] Product {productID}: price {p.Price:0.00} was set by hand " +
-                                  $"(markup price would be {expected:0.00}), left alone");
-        return follows;
+        {
+            Plugin.Logger.LogInfo(onlyFollowing
+                ? $"[Markup] Product {productID}: price {p.Price:0.00} was set by hand " +
+                  $"(markup price would be {expected:0.00}), left alone"
+                : $"[Markup] Product {productID}: price {p.Price:0.00} doesn't match the markup price " +
+                  $"{expected:0.00}; OnlyProductsFollowingMarkup is off, so it is overridden");
+        }
+        return !onlyFollowing || follows;
     }
 
     /// <summary>After the cost changed: apply the markup to the new market price.</summary>
@@ -135,19 +159,18 @@ internal static class MarkupKeeper
     {
         if (!_tracking) return;
         _tracking = false;
-        if (Changed.Count == 0)
-        {
-            if (Plugin.Verbose.Value) Plugin.Logger.LogInfo("[Markup] No products repriced today");
-            return;
-        }
+        // One summary line per day while verbose; it also proves the TryChangingBasePrices and
+        // ChangeCurrentCost hooks fired (costCalls = products the game tried to change today).
+        if (Plugin.Verbose.Value)
+            Plugin.Logger.LogInfo($"[Markup] New day: the game tried to change {_costCalls} product(s), " +
+                                  $"markup {_ratio:0.##}%, {Changed.Count} to reprice");
+        if (Changed.Count == 0) return;
 
         var repriced = new List<Pricing>(Changed.Values);
         Changed.Clear();
 
-        // Same steps as PriceManager.FinishBulkPricingApply, without its sale sign reroll.
-        var viewer = pm.m_PricingProductViewer;
-        foreach (var p in repriced)
-            if (viewer != null) viewer.RefreshUnlockedProducts(p.ProductID);
+        // Same steps as PriceManager.FinishBulkPricingApply, without its sale sign reroll. The viewer
+        // refresh isn't repeated: the game's own loop does it after each ChangeCurrentCost.
         pm.CalculateTotalDiscountPoints();
         var onPriceSet = pm.onPriceSet;
         foreach (var p in repriced)
@@ -155,10 +178,15 @@ internal static class MarkupKeeper
             try { onPriceSet?.Invoke(p.ProductID); }
             catch (Exception e) { Plugin.Logger.LogError($"[Markup] onPriceSet({p.ProductID}) failed: {e}"); }
         }
+        bool sent = false;
         if (PhotonNetwork.IsConnected)
+        {
             pm.BulkPricingApplied_Broadcast(new Il2CppReferenceArray<Pricing>(repriced.ToArray()), false, _ratio);
+            sent = true;
+        }
 
-        Plugin.Logger.LogInfo($"[Markup] Repriced {repriced.Count} product(s) to {_ratio:0.##}% above market price");
+        Plugin.Logger.LogInfo($"[Markup] Repriced {repriced.Count} product(s) to {_ratio:0.##}% above market price" +
+                               (sent ? " (sent to guests)" : ""));
     }
 }
 
