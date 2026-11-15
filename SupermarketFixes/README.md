@@ -16,11 +16,11 @@ Three causes are fixed:
 
 Ghost boxes already saved into a rack before this version are not removed automatically. F8 lists them as `STALE` (see `Diagnostics` below).
 
-### Bug #2: an image of an item stays in your hands after putting it down (v0.4.0, awaiting in-game confirmation)
+### Bug #2: an image of an item stays in your hands after putting it down (v0.6.1, awaiting in-game confirmation)
 
-After putting a held box down, a copy of it could stay in front of the camera, blocking the view, until the game was reloaded. Now a stray box left in your hands is dropped to the floor automatically after 2 seconds.
+After putting a held item down, a copy of it could stay in front of the camera, blocking the view, until the game was reloaded. This is suspected to happen to multiplayer guests when the host's answer to a box pickup arrives late, while the guest is already holding or using something else. Now a stray item left in your hands (a box, or another item such as a furniture box, paint bucket or paper bag) is dropped automatically after 2 seconds. It is never dropped inside a shelf or wall: if the spot in front of you is blocked, it waits until you step into open space.
 
-Limitation: this only fixes your own view. Other players may still see the box attached to you, and the host still counts it as held by you, so only you can pick it up again until the game is reloaded.
+Where it can, the mod uses the game's own drop, so other players see the item leave your hands too. In one case it can't: when the stray item is one you were holding before the late box arrived. Then only your own view is fixed. Other players may still see it attached to you until the game is reloaded, and if it's a box, the host still counts it as held by you. A host running this mod (with `RegrantToSameHolder`) lets you pick it up again; with a host without the mod, nobody can pick that box up until the game is reloaded.
 
 ### Bug #3: stuck on a box after buying it in a market (v0.4.0, awaiting in-game confirmation)
 
@@ -49,8 +49,8 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes either of
 | RackMove | `AdoptRackedBoxesAfterJoining` | `true` | Guest only: after joining a game in progress, puts boxes the host has on racks back into their rack instead of leaving loose copies that float when the rack moves. |
 | RackMove | `RemoveFromRackOnDirectPickup` | `true` | When a box is picked up straight off a rack, removes it from the rack properly, so it doesn't come back as a ghost for players who join later or as a duplicate when the save is loaded. Matters most on the host. |
 | RackMove | `Diagnostics` | `true` | Logs `[RackMove]` consistency checks when racks are picked up or placed. **F8** scans the whole store for orphan, duplicate and stale (ghost) rack boxes. |
-| GhostHeldItem | `AutoRecover` | `true` | Drops boxes that are stuck in your hands without being held. |
-| GhostHeldItem | `DelaySeconds` | `2` | How long (0.5–10 s) a stray box must stay in your hands before it is dropped. |
+| GhostHeldItem | `AutoRecover` | `true` | Drops items that are stuck in your hands without being held. |
+| GhostHeldItem | `DelaySeconds` | `2` | How long (0.5–10 s) a stray item must stay in your hands before it is dropped. |
 | GhostHeldItem | `Diagnostics` | `true` | Logs `[GhostHeld]` lines about stray objects in your hands. |
 | StuckBox | `AutoRecover` | `true` | Frees your controls when they stay locked onto a box that isn't in your hands. |
 | StuckBox | `StuckSeconds` | `2` | How long (0.5–10 s) that state must last before it is fixed. |
@@ -65,4 +65,5 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes either of
 
 - **Bug #1: both.** The floating boxes come from things that happen on the guest's machine (rack updates from the host, joining a game in progress), so the guest needs the mod for those. The host needs it so that grabbing a box off a rack doesn't leave a ghost record in the save. When a box is grabbed off a rack, a host with the mod sends the game's own "remove this box from the rack" message to everyone, so guests without the mod stay in sync too.
 - **Bug #5: whoever has the problem.** It only repairs your own controls, so it must be installed on the machine where placing fails. Nothing it does is sent over the network, so other players don't need it.
-- **Bugs #2 and #3: whoever gets stuck.** Both fixes repair the state of your own player, so they only help on the machine where the problem shows up. The host should run the mod too: `RegrantToSameHolder` runs there and lets a guest's retry succeed. A guest without the mod is not affected by it.
+- **Bug #2: the guest.** The suspected cause (a late pickup answer from the host) can only happen on a guest, so the guest who sees the item in their hands needs the mod. Installing it only on the host doesn't fix anything in a guest's hands. The host can run it too: its `RegrantToSameHolder` lets a guest pick up a box again after the mod dropped it from their hands.
+- **Bug #3: whoever gets stuck.** The fix repairs the state of your own player, so it only helps on the machine where the problem shows up. The host should run the mod too: `RegrantToSameHolder` runs there and lets a guest's retry succeed. A guest without the mod is not affected by it.
