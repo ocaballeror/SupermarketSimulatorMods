@@ -35,9 +35,14 @@
  *      their own settings say. Patches therefore stay installed even when [General] Enabled is off,
  *      and Enabled only decides the speed when you host or play solo.
  *   2. Catch-up: when the host's finish message reaches a guest while that guest's scanning
- *      coroutine for the same checkout is still running (network lag, or a host without the mod after
- *      a guest-side difference), every remaining wait of that coroutine becomes 0, so the remaining
- *      items are scanned on the next frames.
+ *      coroutine for the same checkout is still running (network lag, frame-rounding of short waits),
+ *      every remaining wait of that coroutine becomes 0, so the remaining items are scanned on the next
+ *      frames. The guest's employee-scanning loop (ScanningOrder) also stops when the host's
+ *      FinishHelperCheckout_RPC clears SelfCheckout.IsScanning, so while catching up a MoveNext prefix
+ *      keeps IsScanning set as long as products are left on the belt. A coroutine's first step
+ *      (<>1__state == 0) clears any record left under its address by a coroutine stopped from outside.
+ *   3. Online, the host's payment wait keeps at least 0.5 s (vanilla 2 s): it is the slack a guest has
+ *      to finish scanning before the customer leaves.
  * An unmodded guest still scans at normal speed; nothing on the host can change that.
  */
 using System;
@@ -56,13 +61,24 @@ internal static class SelfCheckoutPatches
     private enum Kind { Self, Help }
 
     /// <summary>Native names of the SelfCheckout coroutine classes to speed up, and whose speed applies.</summary>
+    private const string PaymentName = "<<FinishSelfCheckout>g__Payment|26_0>d";
+    // Guest copy of employee scanning; it loops only while SelfCheckout.IsScanning.
+    private const string HelpOrderName = "<<StartCustomerHelperCheckoutOrder>g__ScanningOrder|51_0>d";
+
     private static readonly (string Name, Kind Kind)[] TargetList =
     {
         ("<<StartSelfCheckout>g__Scanning|23_0>d", Kind.Self),
-        ("<<FinishSelfCheckout>g__Payment|26_0>d", Kind.Self),
+        (PaymentName, Kind.Self),
         ("<<StartCustomerHelperCheckout>g__Scanning|24_0>d", Kind.Help),
-        ("<<StartCustomerHelperCheckoutOrder>g__ScanningOrder|51_0>d", Kind.Help),
+        (HelpOrderName, Kind.Help),
     };
+
+    /// <summary>
+    /// Online, the host's payment wait is never cut below this. In vanilla the 2 s payment wait is the
+    /// slack a lagging guest has to finish its own scanning before the customer leaves; dividing it by 10
+    /// would leave 0.2 s.
+    /// </summary>
+    private const float MinOnlinePaymentWait = 0.5f;
 
     internal static int TargetCount => TargetList.Length;
 
@@ -71,6 +87,9 @@ internal static class SelfCheckoutPatches
         public Kind Kind;
         public PropertyInfo Current;   // <>2__current
         public PropertyInfo This;      // <>4__this (the SelfCheckout)
+        public PropertyInfo State;     // <>1__state (0 = not started yet)
+        public bool IsPayment;
+        public bool IsHelpOrder;
     }
 
     private static readonly Dictionary<Type, Coro> Coros = new();
@@ -92,6 +111,7 @@ internal static class SelfCheckoutPatches
         Rushed.Clear();
         _postfixErrorLogged = false;
         var postfix = new HarmonyMethod(typeof(SelfCheckoutPatches), nameof(MoveNextPostfix));
+        var prefix = new HarmonyMethod(typeof(SelfCheckoutPatches), nameof(MoveNextPrefix));
         foreach (var nested in typeof(SelfCheckout).GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
         {
             string native = NativeName(nested);
@@ -108,8 +128,13 @@ internal static class SelfCheckoutPatches
                     Plugin.Logger.LogError($"[SelfCheckout] {native}: MoveNext or <>2__current not found");
                     continue;
                 }
-                Coros[nested] = new Coro { Kind = TargetList[idx].Kind, Current = current, This = self };
-                harmony.Patch(moveNext, postfix: postfix);
+                Coros[nested] = new Coro
+                {
+                    Kind = TargetList[idx].Kind, Current = current, This = self,
+                    State = AccessTools.Property(nested, "__1__state"),
+                    IsPayment = native == PaymentName, IsHelpOrder = native == HelpOrderName,
+                };
+                harmony.Patch(moveNext, prefix: prefix, postfix: postfix);
                 applied++;
                 Plugin.Logger.LogDebug($"[SelfCheckout] patched {native} ({nested.Name})");
             }
@@ -153,6 +178,50 @@ internal static class SelfCheckoutPatches
         catch { return null; }
     }
 
+    /// <summary>Guest bookkeeping before a coroutine step (see the catch-up notes in the header).</summary>
+    private static void MoveNextPrefix(Il2CppObjectBase __instance)
+    {
+        try
+        {
+            if (Running.Count == 0 && Rushed.Count == 0) return;
+            IntPtr me = __instance.Pointer;
+            if (!Coros.TryGetValue(__instance.GetType(), out var coro)) return;
+            // A coroutine's first step: anything recorded under this address belongs to an earlier
+            // coroutine that was stopped from outside (the IL2CPP GC reuses addresses).
+            if (coro.State != null && coro.State.GetValue(__instance) is int st && st == 0)
+            {
+                Running.Remove(me);
+                Rushed.Remove(me);
+                return;
+            }
+            // The guest's employee-scanning loop stops as soon as the host's FinishHelperCheckout_RPC clears
+            // SelfCheckout.IsScanning, leaving the rest on the belt. While catching up, keep it scanning
+            // as long as products are left (then let it end as usual).
+            if (coro.IsHelpOrder && Rushed.Contains(me) && coro.This != null)
+            {
+                var sc = coro.This.GetValue(__instance) as SelfCheckout;
+                var belt = sc != null && sc.m_Checkout != null ? sc.m_Checkout.m_Belt : null;
+                var products = belt != null ? belt.m_Products : null;
+                if (sc != null) sc.IsScanning = products != null && products.Count > 0;
+            }
+        }
+        catch (Exception e)
+        {
+            if (!_postfixErrorLogged)
+            {
+                _postfixErrorLogged = true;
+                Plugin.Logger.LogError($"[SelfCheckout] MoveNext prefix failed (further failures are not logged): {e}");
+            }
+        }
+    }
+
+    internal static void ClearGuestState()
+    {
+        if (Running.Count == 0 && Rushed.Count == 0) return;
+        Running.Clear();
+        Rushed.Clear();
+    }
+
     private static void MoveNextPostfix(Il2CppObjectBase __instance, bool __result)
     {
         try
@@ -168,12 +237,13 @@ internal static class SelfCheckoutPatches
             if (!Coros.TryGetValue(__instance.GetType(), out var coro)) return;
 
             bool guest = HostSync.IsGuest;
-            if (guest && coro.This != null && !Running.ContainsKey(me))
+            if (guest && coro.This != null)
             {
                 var sc = coro.This.GetValue(__instance) as SelfCheckout;
                 var checkout = sc != null ? sc.m_Checkout : null;
                 if (checkout != null)
                 {
+                    if (Running.TryGetValue(me, out var known) && known != checkout.Pointer) Rushed.Remove(me);
                     if (Running.Count > 256) { Running.Clear(); Rushed.Clear(); } // stopped coroutines never report false
                     Running[me] = checkout.Pointer;
                 }
@@ -186,7 +256,10 @@ internal static class SelfCheckoutPatches
             var wait = (coro.Current.GetValue(__instance) as Il2CppSystem.Object)?.TryCast<WaitForSeconds>();
             if (wait == null) return;
             float before = wait.m_Seconds;
-            wait.m_Seconds = rush ? 0f : before / mult;
+            float after = rush ? 0f : before / mult;
+            if (!rush && coro.IsPayment && !guest && InRoom())
+                after = Math.Max(after, Math.Min(before, MinOnlinePaymentWait));
+            wait.m_Seconds = after;
             if (Plugin.Verbose.Value)
                 Plugin.Logger.LogInfo($"[SelfCheckout] {coro.Kind} wait {before:0.###}s -> {wait.m_Seconds:0.###}s" +
                                       (rush ? " (catching up with the host)" : ""));
@@ -199,6 +272,12 @@ internal static class SelfCheckoutPatches
                 Plugin.Logger.LogError($"[SelfCheckout] MoveNext postfix failed (further failures are not logged): {e}");
             }
         }
+    }
+
+    private static bool InRoom()
+    {
+        try { return Photon.Pun.PhotonNetwork.InRoom && !Photon.Pun.PhotonNetwork.OfflineMode; }
+        catch (Exception) { return false; }
     }
 
     // Host's "customer finished paying" reaching a guest.

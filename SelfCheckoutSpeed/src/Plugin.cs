@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.selfcheckoutspeed";
     public const string Name = "Self Checkout Speed";
-    public const string Version = "1.1.0";
+    public const string Version = "1.1.1";
 
     internal const float MaxMultiplier = 10f;
 
@@ -21,6 +21,8 @@ public class Plugin : BasePlugin
     internal static ConfigEntry<float> SpeedMultiplier;
     internal static ConfigEntry<bool> SpeedUpEmployeeHelp;
     internal static ConfigEntry<bool> Verbose;
+
+    internal static bool Unloaded { get; private set; }
 
     private Harmony _harmony;
 
@@ -69,6 +71,7 @@ public class Plugin : BasePlugin
 
     public override bool Unload()
     {
+        Unloaded = true; // stops SyncBehaviour publishing
         _harmony.UnpatchSelf();
         HostSync.Reset();
         return true;

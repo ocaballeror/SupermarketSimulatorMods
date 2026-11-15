@@ -7,8 +7,8 @@ namespace SelfCheckoutSpeed;
 /// Keeps a float setting between Min and Max, like <c>AcceptableValueRange&lt;float&gt;</c>, but without
 /// the public <c>MinValue</c>/<c>MaxValue</c> properties. Config managers (Mod Settings Tool,
 /// BepInExConfigManager) look for those properties to draw a slider; without them they draw a text
-/// field you can type a number into, and BepInEx still clamps whatever is typed through
-/// <see cref="Clamp"/>.
+/// field you can type a number into, and BepInEx clamps whatever is typed through <see cref="Clamp"/>
+/// (50 becomes 10).
 /// </summary>
 internal sealed class ClampedFloat : AcceptableValueBase
 {
@@ -28,8 +28,10 @@ internal sealed class ClampedFloat : AcceptableValueBase
         return Math.Clamp(v, _min, _max);
     }
 
+    // Any finite number is accepted so that it reaches Clamp: Mod Settings Tool checks IsValid before it
+    // commits a typed value and silently restores the old one when IsValid is false.
     public override bool IsValid(object value) =>
-        value is float f && !float.IsNaN(f) && f >= _min && f <= _max;
+        value is float f && !float.IsNaN(f) && !float.IsInfinity(f);
 
     public override string ToDescriptionString() => $"# Acceptable value range: From {_min} to {_max}";
 }

@@ -81,8 +81,9 @@ internal static class HostSync
     /// <summary>Called every frame; publishes the host's values when they change (checked once a second).</summary>
     internal static void Tick()
     {
-        if (Time.unscaledTime < _nextCheck) return;
+        if (Plugin.Unloaded || Time.unscaledTime < _nextCheck) return;
         _nextCheck = Time.unscaledTime + 1f;
+        if (!IsGuest) SelfCheckoutPatches.ClearGuestState();
         if (!PhotonNetwork.InRoom || PhotonNetwork.OfflineMode || !PhotonNetwork.IsMasterClient)
         {
             _sentSelf = _sentHelp = null;
