@@ -31,9 +31,9 @@ Rules:
 | Bug #4 | open | — | — | Question, not a code task: answer how to collect guest crash logs |
 | Bug #5 | reviewed | `SupermarketFixes/src/Patches/BoxPlaceFix.cs` | 2026-11-15, 1 round, 5066b4084b02 | In-game test + logs. Trigger path unproven; delete the stale `plugins/SupermarketFixes/` subfolder dll and set `[General] Enabled = true` before testing |
 | Bug #6 | open | — | — | No data to reproduce; may be related to Bug #1 |
-| Improvement #1 | reviewed | `PriceMarkupKeeper/` | 2026-11-15, 1 round, 3b91551c72a5 | In-game test. Check: with `OnlyProductsFollowingMarkup` off and no bulk markup ever applied, every changed product is forced to market price |
+| Improvement #1 | in-progress | `PriceMarkupKeeper/` | — | Approved with open minor/nit findings; fixing them, then re-review. In-game test after |
 | Improvement #2 | done 2026-11-14 | — | — | |
-| Improvement #3 | reviewed | `PlayerCrouch/` | 2026-11-15, 1 round, a15e7a9c8add | In-game test + `[Crouch]` log lines. Open: does the vcam follow `CinemachineCameraTarget`, is the Animator humanoid, does leg IK (`PlayerIKHandler`) fight the pose on remote players. Unreviewed-as-minor: hold mode keeps crouch while placing after Ctrl release |
+| Improvement #3 | in-progress | `PlayerCrouch/` | — | Approved with open minor/nit findings; fixing them, then re-review. In-game test after (`[Crouch]` log lines) |
 | Improvement #4 | done 2026-11-14 | — | — | |
 | Improvement #5 | in-progress | `RestockerDoubleCarry/` | — | In-game test |
 | Improvement #6 | in-progress | `FurnitureMoveCancel/` | — | In-game test |

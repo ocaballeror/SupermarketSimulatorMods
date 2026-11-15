@@ -95,7 +95,7 @@ Use the Agent tool (`general-purpose`). Give it a self-contained prompt with:
 - an instruction to review **the code as it exists on disk**: the patch file(s), `Plugin.cs`, the csproj, config entries, and whether the docs match the behaviour;
 - an instruction to judge whether the change **correctly and safely achieves the intent**, including: failing open on exceptions, behaviour when the config entry is off, the `Enabled` master switch, multiplayer and desync risk, IL2CPP pitfalls from CLAUDE.md section 5, and version sync between `Plugin.Version` and the csproj;
 - an instruction that it **may read dumps and run read-only commands, and may build to check compilation, but must not edit any source files**;
-- the required output format: findings **ranked by severity** (blocker / major / minor / nit), each with file and line, the concrete failure scenario, and a suggested direction. End with an explicit verdict line: `VERDICT: APPROVED` (no blocker or major findings remain), `VERDICT: CHANGES REQUIRED`, or `VERDICT: INCOMPLETE` (the intent isn't fully implemented yet: missing features, stubs, placeholders, or it doesn't build; list the missing parts).
+- the required output format: findings **ranked by severity** (blocker / major / minor / nit), each with file and line, the concrete failure scenario, and a suggested direction. End with an explicit verdict line: `VERDICT: APPROVED` (**no findings of any severity remain open**, nits and minors included), `VERDICT: CHANGES REQUIRED` (at least one finding of any severity is open), or `VERDICT: INCOMPLETE` (the intent isn't fully implemented yet: missing features, stubs, placeholders, or it doesn't build; list the missing parts).
 
 Don't include: your reasoning, what you expect it to find, which areas to focus on or ignore, or any hint that the change is safe or risky.
 
@@ -103,7 +103,7 @@ Record the reviewer's agent id so you can continue it with SendMessage.
 
 ### 2. Forward to the implementer
 
-If the verdict is `APPROVED`, go to step 5.
+If the verdict is `APPROVED` **and the report lists no findings at all (any severity, including minor and nit)**, go to step 5. If a reviewer says `APPROVED` but its report still lists minor or nit findings, treat the verdict as `CHANGES REQUIRED`: **every finding, whatever its severity, goes to the implementer**. A finding that is "unverifiable without the game" or "documented" is still forwarded; the implementer either fixes it, adds a safeguard or diagnostic, or rejects it with a concrete reason.
 
 If the verdict is `INCOMPLETE` and you haven't implemented in step 0c yet, go to step 0c with the reviewer's list of missing parts, then return to step 1 and ask the same reviewer to re-review (SendMessage). Implementation from step 0c doesn't count as a review round. If it is `INCOMPLETE` again after step 0c, treat it as `CHANGES REQUIRED`.
 
@@ -135,7 +135,7 @@ If a reviewer can't be continued (SendMessage unavailable or the agent is gone),
 
 Go back to step 2 while the verdict is `CHANGES REQUIRED`. You are only the courier: pass messages along unedited, and don't take sides in a disagreement.
 
-**Agreement** means: the reviewer says `VERDICT: APPROVED`, and the implementer has no unaddressed findings. A finding the implementer rejected with a reason that the reviewer accepts counts as resolved.
+**Agreement** means: the reviewer says `VERDICT: APPROVED` **after re-reviewing the code that resulted from the fixes**, and every finding it ever raised (blocker, major, minor and nit) is resolved: fixed, already handled, or rejected with a reason the reviewer accepted. **A review is not finished while any finding is open, and an item is never marked `reviewed` before then.** An approval given on code that was changed afterwards doesn't count; the reviewer must see the final code.
 
 **Round limit: 5.** If you reach it, or the two agents keep disputing the same point across two rounds, stop. Don't mark the item. Summarise the open disagreement for the user, with both positions, and let them decide.
 
@@ -168,4 +168,5 @@ If the user asked for `start` or `continue`, finish after one item and wait for 
 - You can't run the game. A review pass is never confirmation that a fix works, so the item gets `reviewed`, not `done`.
 - If an implementer change would touch another mod, add cross-mod dependencies, or change plugin GUIDs or public settings in a breaking way, stop and ask the user.
 - If the loop uncovers new game knowledge that most future sessions would need, have the implementer add it to the root `CLAUDE.md` (per its section 2a). Knowledge about a single mod goes in that mod's docs.
+- Never close out an item with open findings of any severity. Minor and nit findings get the same fix-and-re-review loop as blockers.
 - Be terse in relays. Pass the full text of findings and responses, but don't add commentary.
