@@ -112,6 +112,8 @@ tools/readconst.py 0x1838CEBA8 [--type f|d|i|q]                     # value of a
 tools/bindings.py escape                                            # default input bindings: map/action -> key (filter optional)
 ```
 
+**Game assets** (textures, sprites, names) aren't in the dumps. Inspect them with UnityPy in a throwaway venv (`python3 -m venv <scratch>/upy && <scratch>/upy/bin/pip install UnityPy`), loading `<game>/Supermarket Simulator_Data/sharedassets*.assets` / `resources.assets` and saving `obj.read().image` as PNG. `strings -n 5 <file> | grep -i <name>` is a quick first check. The Addressables bundles in `StreamingAssets/aa` hold only localization. Furniture shop icons are one atlas, `T_IconAtlas_Furnitures` (sharedassets2); it has no computer.
+
 `Il2CppDump` uses the Cpp2IL that ships in `<game>/BepInEx/core`, which already supports this metadata version. Don't download other Cpp2IL or Il2CppDumper builds unless that one stops working.
 
 Typical loop for a task:
@@ -251,6 +253,7 @@ Verified in the dumps unless marked otherwise. Addresses and offsets are specifi
   - Online (master only): it branches on the prefab's component type to `NetworkObjectGenerator.SpawnNetwork<Type>`, which calls `PhotonNetwork.InstantiateRoomObject("Furnitures/<Type>/" + prefab.name, pos, rot, 0, {boxViewId})`.
   - Photon uses the stock `DefaultPool`: `ResourceCache` first, then `Resources.Load`. Adding a GameObject to `((DefaultPool)PhotonNetwork.PrefabPool).ResourceCache[id]` makes any prefab network-instantiable.
   - `NetworkFurniture.OnPhotonInstantiate` reads `data[0]` (the box interaction's view id), transfers ownership to that player and calls `FurnitureBoxInteraction.OpenBoxOrder` to start placing.
+- There are **no `Furniture` subclasses**: every furniture prefab uses the plain `Furniture` class plus type scripts (`Display`, `Rack`, `Trash`, ...), and every type in the shop has its own network spawner. A mod can't count on finding a "plain" furniture prefab to copy (ExtraComputers' donor search found none in-game).
 - `Furniture.m_ID` is serialized in the prefab; nothing sets it at runtime. Saves are `FurnitureManager.m_FurnituresDatas`. `LoadFurnitureDatas` logs "Can't spawn furniture with id" for unknown ids and continues.
 - Moving/placing uses `FurniturePlacingMode` (base `IPlacingMode`).
   - Serialized: placing tags, `m_PlacingModeCollider` (overlap box), `m_Renderers` (hologram), `m_OwnerCollider`, `m_PhysicalColliders`, `m_NavMeshObstacles`, `m_Furniture` (the transform that gets moved), `m_ParentPhotonView`.
