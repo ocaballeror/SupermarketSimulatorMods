@@ -4,19 +4,23 @@ Player-facing info is in [README.md](README.md). Shared rules and game internals
 
 ## Status
 
-v1.1.2 (TODO Improvement #7): written, review rounds 1 to 3 applied (below), builds, **not yet run in-game**. Much of it depends on prefab and hierarchy details that the dumps can't show, so the first run is expected to need fixes. `VerboseLogging` dumps the store computer's hierarchy, the chosen base furniture prefab, the built computer prefab and the full furniture list to `LogOutput.log`. Ask for those lines first.
+v1.2.0 (TODO Improvement #7). First in-game test (host alone, 2026-11-15) failed: `Building the computer furniture failed: no usable furniture prefab to copy the network setup from`. The old template needed a "donor" furniture prefab (plain `Furniture` + `NetworkFurniture` + `PhotonView` + placing mode, no type scripts) and none qualified (which check failed wasn't logged). Consequences seen by the user: the shop showed the drawn placeholder icon (the model render needs the template), and opening the delivered box despawned it and spawned nothing (`Can't spawn a computer`), leaving the player in an empty placing mode with drop/throw/sell/place hints that did nothing.
 
-Open questions to settle from the first logs:
-- Which base ("donor") furniture gets picked, and which of its components get stripped (`Removed from the base furniture copy: ...`).
-- Whether the store computer's `FurniturePlacingMode` was found and copied (`Placing settings copied: ...`). This decides whether placing, overlap checks and the hologram work.
-- Whether the icon render works under URP (`Computer icon rendered from the model`), or fell back to the drawn icon.
-- Whether the root box collider's layer (the `Computer` object's layer) is clickable, and whether inner model colliders block clicks when standing very close.
-- Whether the box label material (a copy of `atlasedMaterials[0]` with our texture, scale 1, offset 0) looks right.
+v1.2.0 fixes:
+- The template is now a stripped copy of the store computer's own root, plus added `Furniture` + `NetworkFurniture` (see Design). No donor.
+- The icon is rendered from the template, or from the store computer itself if the template is missing; a drawn placeholder is retried up to 3 times. The game has **no** computer icon: the furniture icon atlas (`T_IconAtlas_Furnitures`) has none, and the only computer-named sprite (`T_Vending_ComputerIcon`) is a vending machine silhouette (checked with UnityPy, 2026-11-15).
+- `OpenBoxGate` also refuses to open a computer box while the template can't be built, on all three paths (offline `OpenBox`, host `NetworkOpenBox`, guest request), so the player keeps the box instead of getting stuck.
+
+Still unverified in-game: everything after the template builds. Expect fixes. Open questions for the next logs:
+- `Removed from the computer copy: ...` and `PhotonView: ownership X -> Y (from <prefab>), sync ..., observes [...]`.
+- `Placing settings: ...` (tags, renderers, owner colliders, placing box, zone canvas).
+- Whether `Computer icon rendered from the model` appears, and how the box label looks.
+- Whether placing, moving, boxing up and saving work with the computer's own colliders and placing mode.
 
 ## First in-game test (send these back)
 
 Host alone, then with a modded guest, then with an unmodded guest. Log tag `[ExtraComputers]` in `BepInEx/LogOutput.log` (host and guest).
-1. Startup/scene load: `Computer furniture registered`, `Using furniture id ... as the base`, `Computer furniture prefab built`, `Placing settings copied`, `Computer icon rendered from the model`, any `Failed`/`error` lines, and the hierarchy dumps (`Store computer hierarchy`, `Base furniture prefab`, `Computer furniture prefab`, `Base furniture keeps a Rigidbody ...`).
+1. Startup/scene load: `Computer furniture registered`, `Computer furniture prefab built from a copy of the store computer`, `Removed from the computer copy`, `PhotonView: ownership ...`, `Placing settings: ...`, `Computer icon rendered from the model`, any `Failed`/`error` lines, and the hierarchy dumps (`Store computer hierarchy`, `Computer furniture prefab`).
 2. Buy one ($500) in the furniture shop, take the delivery, check the box icon, unbox, place, use it (shop/pricing/hire), move it, box it up, save and reload. Report what looks wrong (collider too big or blocking, label, screen).
 3. Two players, two computers (and one on the store computer): independent screens. Two players on the same extra computer: the second gets "in use by another player" (`Computer view N is in use by another player`).
 4. Modded guest: price shown equals the host's (`Computer price is now ...`), computer appears in their shop, they can buy it, the box and computer show for them. Lines `Published player properties (mod=True ...)` on both.
@@ -32,12 +36,14 @@ Host alone, then with a modded guest, then with an unmodded guest. Log tag `[Ext
   - `IDManager.FurnitureSO(917001)` is answered directly.
   - Name: `LocalizationManager.LocalizedFurnitureName` → "Computer".
   - Box label: `ProductAtlasManager.SetFurnitureIcon` → our own material.
-- The prefab template lives under an inactive `DontDestroyOnLoad` holder, so nothing in it ever runs `Awake`. It's built once per game run, from:
-  - a donor furniture prefab: plain `Furniture` + `NetworkFurniture` + `PhotonView`, with no Rack, Display, ... scripts. The donor's visuals, colliders, navmesh data and non-Photon scripts are removed;
-  - a stripped clone of the real computer, as child `ExtraComputerModel`: canvases and PC camera removed, every script except `FurniturePlacingMode`, `NavmeshBuildSourceObject` and `NavMeshObstacle` removed. Renderers left over from `m_ComputerScreen` are renamed with suffix `#ecscreen`.
-  - The clone's `FurniturePlacingMode` settings are copied onto the donor's component, keeping only references inside the template. Then the clone's component is removed.
-  - The root gets a box collider around the model (+1 cm per side), on the `Computer` object's layer, because `PlayerInteraction.Raycast` needs the `IInteractable` on the hit collider's object.
+- The prefab template lives under an inactive `DontDestroyOnLoad` holder, so nothing in it ever runs `Awake`. It's built once per game run as a copy of the store computer's root (`m_PlacingMode.m_Furniture`, "Computer &&"):
+  - kept: meshes, the root's layer-6 box colliders (what the interaction raycast hits, so `Furniture` on the root is the `IInteractable`), `PhotonView`, `PhotonTransformView(Optimized)`, `NavMeshObstacle`, `Highlightable`, snap points, the "Placing Mode" child (`Rigidbody`, `BoxCollider`, `FurniturePlacingMode`) and the placing mode's `m_InteractionZoneCanvas` subtree untouched;
+  - removed: the PC camera (`m_PCCam`), every other canvas subtree (the screen UI), and every other script (`Computer`, `ComputerOperatingSystem`, `MusicPlayerManager`, `NetworkComputer`, `NetworkMarketShoppingCart`, ...). Renderers left under `m_ComputerScreen` get suffix `#ecscreen` (none expected: the screen is all canvases);
+  - `FurniturePlacingMode` references were remapped into the copy by `Instantiate`; `m_Furniture` and `m_ParentPhotonView` are re-set explicitly;
+  - added: `Furniture` (`m_ID` 917001, `m_PlacingMode`, `m_PhotonView`, `m_NetworkFurniture`) and `NetworkFurniture`. The game has no `Furniture` subclasses; `Furniture.Start` only lazily looks up `InteriorSpotLight`/`Speaker`, and `get_PhotonView`/`OwnNetworkFurniture` fall back to `GetComponent`;
+  - `PhotonView`: `sceneViewId` = 0 (else an offline `LeanPool.Spawn` copy would take the store computer's view id in `Awake`), `RpcMonoBehaviours` cleared, `ObservedComponents` filtered to surviving components, `OwnershipTransfer`/`Synchronization` copied from the first furniture prefab with a root `PhotonView` (`NetworkFurniture.OnPhotonInstantiate` transfers ownership to the unboxing player; `Fixed` would ignore that).
   - `Furniture.m_ID` = 917001 is serialized, so it survives `Instantiate`.
+  - The session code uses the furniture root itself as the "model" (same layout as the store computer's root).
 - Spawning: both `FurnitureGenerator.SpawnFurniture` overloads are replaced for our id.
   - Offline: `LeanPool.Spawn(template)`.
   - Host: `PhotonNetwork.InstantiateRoomObject("Furnitures/ExtraComputers/ExtraComputer", ..., {boxViewId})`. Box view id is `-1` when loading a save, as in vanilla.
@@ -99,5 +105,4 @@ Host alone, then with a modded guest, then with an unmodded guest. Log tag `[Ext
 
 - While a session is active, this client's store computer shows a blank monitor, because its screen is borrowed. That's cosmetic. A fix would need a second screen, i.e. cloning the UI, which isn't possible (singletons).
 - If another player moves the store computer during a session, its `StartComputerPlacingMode_RPC` path wasn't checked. Restoring falls back to the computer root if the original parent is gone.
-- `SpecialFurnitureTypes` and `IsKeptDonorBehaviour` in `ComputerFurniture` decide the donor. Revisit them with the logged furniture list.
 - Template build failures retry at most 3 times per game run (`_buildAttempts`).

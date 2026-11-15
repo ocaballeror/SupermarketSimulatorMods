@@ -157,15 +157,30 @@ internal static class OpenBoxRequestGatePatch
         !OpenBoxGate.Refuse(__instance.FurnitureBoxInteraction, "guest");
 }
 
+/// <summary>Offline, OnUse calls OpenBox directly (no NetworkOpenBox).</summary>
+[HarmonyPatch(typeof(FurnitureBoxInteraction), nameof(FurnitureBoxInteraction.OpenBox))]
+internal static class OpenBoxOfflineGatePatch
+{
+    private static bool Prefix(FurnitureBoxInteraction __instance) => !OpenBoxGate.Refuse(__instance, "local");
+}
+
 internal static class OpenBoxGate
 {
-    /// <summary>True when this is a computer box and a player without the mod is in the room.</summary>
+    /// <summary>True when this is a computer box and either the computer furniture couldn't be built on this client,
+    /// or a player without the mod is in the room.</summary>
     internal static bool Refuse(FurnitureBoxInteraction interaction, string side)
     {
         try
         {
             var data = interaction?.CurrentFurnitureBox?.Data;
             if (data == null || data.FurnitureID != ComputerFurniture.FurnitureId) return false;
+            if (!ComputerFurniture.EnsureTemplate())
+            {
+                // Opening would despawn the box and spawn nothing, leaving the player in an empty placing mode.
+                Plugin.Error($"Computer box not opened ({side} side): the computer furniture couldn't be built " +
+                             "(see the 'Building the computer furniture failed' error earlier in this log).");
+                return true;
+            }
             if (!Presence.Blocked(out var who)) return false;
             Plugin.Warn($"Computer box not opened ({side} side): {who} doesn't have the Extra Computers mod " +
                         "(or turn Multiplayer/ProtectUnmoddedPlayers off). Keep the box until everybody has the mod.");

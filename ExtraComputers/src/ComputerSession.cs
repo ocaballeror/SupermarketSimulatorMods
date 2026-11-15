@@ -83,8 +83,8 @@ internal static class ComputerSession
         var player = NoktaSingleton<PlayerManager>.HasInstance ? NoktaSingleton<PlayerManager>.Instance.LocalPlayer : null;
         if (player == null || player.PlayerInteraction == null) return false;
 
-        var model = prop.transform.Find(ComputerFurniture.ModelName);
-        if (model == null) { Plugin.Warn("This computer has no model; can't open it"); return false; }
+        // The furniture is a copy of the store computer (same layout as its root), see ComputerFurniture.
+        var model = prop.transform;
 
         // Another player on this very computer: their avatar would overlap ours (the store computer prevents that
         // with IsOccupied; extra computers use a player property, see Presence).

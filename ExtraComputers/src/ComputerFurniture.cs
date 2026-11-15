@@ -26,18 +26,21 @@
  *  - A FurnitureSO copied from an existing one, with our id, price, icon, the most common furniture
  *    box size and IsMainFurniture = true. It is added to IDManager.m_Furnitures, and
  *    IDManager.FurnitureSO(our id) is answered directly so lookups work even before that.
- *  - A prefab template, kept under an inactive DontDestroyOnLoad holder (so nothing in it ever wakes):
- *      root = copy of a simple "donor" furniture prefab (Furniture + NetworkFurniture + PhotonView +
- *             transform view + FurniturePlacingMode), with its own visuals, colliders and
- *             type-specific scripts removed;
- *      child "ExtraComputerModel" = copy of the store's real computer with every script, camera,
- *             UI canvas and network component removed (meshes, colliders, navmesh data kept).
- *    The donor's FurniturePlacingMode gets the real computer's placing settings (remapped to the copy).
- *    The root gets a box collider around the whole model (+1 cm per side) for interaction raycasts; it is
- *    listed in m_OwnerCollider (IPlacingMode.OverlapBoxes ignores those). m_PhysicalColliders is not read by
- *    any native code (only its own getter exists), so it is left as copied.
+ *  - A prefab template, kept under an inactive DontDestroyOnLoad holder (so nothing in it ever wakes): a copy
+ *    of the store computer's root. That root already has what a movable networked object needs (layer 6
+ *    colliders that the interaction raycast hits, PhotonView + PhotonTransformView, NavMeshObstacle,
+ *    Highlightable, snap points, and a "Placing Mode" child with its FurniturePlacingMode, whose references
+ *    Instantiate remaps into the copy). The PC camera, the screen UI canvases and every computer script
+ *    (Computer, ComputerOperatingSystem, MusicPlayerManager, NetworkComputer, ...) are removed; the placing
+ *    mode's interaction-zone canvas is kept. Furniture + NetworkFurniture are added (the game has no
+ *    Furniture subclasses, every furniture uses the plain class plus type scripts). The PhotonView loses its
+ *    scene view id and takes the ownership option of a real furniture prefab.
+ *    Before v1.2.0 the template was built on a "donor" furniture prefab; no furniture qualified in-game
+ *    ("no usable furniture prefab", 2026-11-15), so nothing could be spawned and opening a computer box left
+ *    the player in an empty placing mode.
  *    The template is registered in Photon's DefaultPool.ResourceCache under PrefabId.
- *  - An icon rendered from the model (fallback: a drawn monitor icon).
+ *  - An icon rendered from the model (fallback: a drawn monitor icon). The game ships no computer icon.
+ *  - If the template can't be built, computer boxes refuse to open (OpenBoxGate), so the player keeps the box.
  *
  * The furniture can then be bought, delivered in a box, unboxed, placed, moved, boxed up and saved
  * through the game's own code. Using it is handled by ComputerSession.
@@ -61,7 +64,6 @@ internal static class ComputerFurniture
 {
     public const int FurnitureId = 917001;
     public const string PrefabId = "Furnitures/ExtraComputers/ExtraComputer";
-    public const string ModelName = "ExtraComputerModel";
     public const string ScreenMarker = "#ecscreen";
     public const string DisplayName = "Computer";
 
@@ -71,6 +73,8 @@ internal static class ComputerFurniture
     internal static FurnitureSalesItem ShopItem;
     internal static Texture2D IconTexture;
     private static Sprite _iconSprite;
+    private static bool _iconRendered;
+    private static int _iconRenderAttempts;
     private static Material _boxIconMaterial;
     private static GameObject _holder;
     private static int _buildAttempts;
@@ -98,6 +102,22 @@ internal static class ComputerFurniture
         }
         catch (Exception e) { Plugin.Warn("Looking for the store computer failed: " + e.Message); }
         return _computer;
+    }
+
+    /// <summary>The transform the game moves when the store computer is moved.</summary>
+    internal static Transform ComputerRoot(Computer comp)
+    {
+        var pm = comp.m_PlacingMode;
+        return pm != null && pm.m_Furniture != null ? pm.m_Furniture.transform : comp.transform;
+    }
+
+    /// <summary>Where the front of the computer is (the side the PC camera looks from), for the icon.</summary>
+    private static void MeasureFront(Computer comp, Transform compRoot)
+    {
+        if (comp.m_PCCam == null || comp.m_ComputerScreen == null) return;
+        CamLocalPos = compRoot.InverseTransformPoint(comp.m_PCCam.transform.position);
+        ScreenLocalPos = compRoot.InverseTransformPoint(comp.m_ComputerScreen.transform.position);
+        HaveFrontDirection = true;
     }
 
     internal static IDManager Ids => NoktaSingleton<IDManager>.HasInstance ? NoktaSingleton<IDManager>.Instance : null;
@@ -256,164 +276,125 @@ internal static class ComputerFurniture
     {
         // The transform the game moves when the computer itself is moved is the computer's root.
         var compPm = comp.m_PlacingMode;
-        Transform compRoot = compPm != null && compPm.m_Furniture != null ? compPm.m_Furniture.transform : comp.transform;
+        Transform compRoot = ComputerRoot(comp);
 
         if (Plugin.Verbose.Value)
             Plugin.Debug("Store computer hierarchy:\n" + Dump(compRoot) +
                          $"\n  PCCam={Path(compRoot, comp.m_PCCam?.transform)} Screen={Path(compRoot, comp.m_ComputerScreen?.transform)} " +
-                         $"PlayerPosition={Path(compRoot, comp.m_PlayerPosition)} PlacingMode={Path(compRoot, compPm?.transform)}");
+                         $"PlayerPosition={Path(compRoot, comp.m_PlayerPosition)} PlacingMode={Path(compRoot, compPm?.transform)} " +
+                         $"ZoneCanvas={Path(compRoot, compPm?.m_InteractionZoneCanvas?.transform)}");
+        if (compPm == null) throw new Exception("the store computer has no FurniturePlacingMode");
 
-        var donor = PickDonor(ids);
-        if (donor == null) throw new Exception("no usable furniture prefab to copy the network setup from");
-        Plugin.Info($"Using furniture id {donor.ID} ('{donor.FurniturePrefab.name}') as the base for the computer's network setup");
-        if (Plugin.Verbose.Value) Plugin.Debug("Base furniture prefab:\n" + Dump(donor.FurniturePrefab.transform));
+        string camPath = comp.m_PCCam != null ? Path(compRoot, comp.m_PCCam.transform) : null;
+        string screenPath = comp.m_ComputerScreen != null ? Path(compRoot, comp.m_ComputerScreen.transform) : null;
+        string zonePath = compPm.m_InteractionZoneCanvas != null ? Path(compRoot, compPm.m_InteractionZoneCanvas.transform) : null;
+        MeasureFront(comp, compRoot);
 
         _holder = new GameObject("ExtraComputers.TemplateHolder");
         _holder.SetActive(false);
         Object.DontDestroyOnLoad(_holder);
 
-        var tpl = Object.Instantiate(donor.FurniturePrefab, _holder.transform);
+        // A copy of the store computer. It is created under the inactive holder, so none of its scripts wake up.
+        // Its own setup is already what a movable networked object needs: the root (layer, colliders, PhotonView,
+        // transform view, navmesh obstacle, highlight, snap points) and a FurniturePlacingMode whose references
+        // (m_Furniture, renderers, colliders, parent PhotonView) Instantiate has remapped into this copy.
+        var tpl = Object.Instantiate(compRoot.gameObject, _holder.transform);
         tpl.name = "ExtraComputer";
         tpl.transform.localPosition = Vector3.zero;
         tpl.transform.localRotation = Quaternion.identity;
-        StripDonor(tpl);
-        // The interaction raycast only hits layers in PlayerInteraction.m_InteractableLayer; the store
-        // computer's own object is hit by it, so its layer is a safe choice for our root collider.
-        Plugin.Debug($"Root layer: base furniture {tpl.layer}, store computer {comp.gameObject.layer}");
-        tpl.layer = comp.gameObject.layer;
+        tpl.transform.localScale = compRoot.lossyScale;
 
-        // Copy of the real computer, as a child at identity.
-        var model = Object.Instantiate(compRoot.gameObject, tpl.transform);
-        model.name = ModelName;
-        model.transform.localPosition = Vector3.zero;
-        model.transform.localRotation = Quaternion.identity;
-        model.transform.localScale = Div(compRoot.lossyScale, tpl.transform.lossyScale);
+        var zone = zonePath != null ? Find(tpl.transform, zonePath) : null;
+        StripComputerCopy(tpl.transform, camPath, screenPath, zone);
 
-        string pmPath = compPm != null ? Path(compRoot, compPm.transform) : null;
-        string camPath = comp.m_PCCam != null ? Path(compRoot, comp.m_PCCam.transform) : null;
-        string screenPath = comp.m_ComputerScreen != null ? Path(compRoot, comp.m_ComputerScreen.transform) : null;
-        if (comp.m_PCCam != null && comp.m_ComputerScreen != null)
-        {
-            CamLocalPos = compRoot.InverseTransformPoint(comp.m_PCCam.transform.position);
-            ScreenLocalPos = compRoot.InverseTransformPoint(comp.m_ComputerScreen.transform.position);
-            HaveFrontDirection = true;
-        }
-
-        var modelPm = pmPath != null ? Find(model.transform, pmPath)?.GetComponent<FurniturePlacingMode>() : null;
-        StripComputerCopy(model.transform, camPath, screenPath);
-
-        var furniture = tpl.GetComponent<Furniture>();
-        var tplPm = furniture.m_PlacingMode;
-        if (tplPm == null || !tplPm.transform.IsChildOf(tpl.transform)) tplPm = tpl.GetComponentInChildren<FurniturePlacingMode>(true);
-        if (tplPm == null) throw new Exception("the base furniture has no FurniturePlacingMode");
-
-        var rootBox = AddInteractionCollider(tpl, model.transform);
-        if (modelPm != null)
-        {
-            CopyPlacingMode(modelPm, tplPm, tpl.transform, rootBox);
-            Object.DestroyImmediate(modelPm);
-        }
-        else
-        {
-            Plugin.Warn("The store computer has no placing settings to copy; using the base furniture's.");
-            FillPlacingModeFromModel(tplPm, tpl.transform, rootBox);
-        }
+        var tplPm = Find(tpl.transform, Path(compRoot, compPm.transform))?.GetComponent<FurniturePlacingMode>();
+        if (tplPm == null) throw new Exception("the placing settings weren't found in the computer copy");
         tplPm.m_Furniture = tpl;
-        tplPm.m_ParentPhotonView = tpl.GetComponent<PhotonView>();
 
+        var view = tpl.GetComponent<PhotonView>();
+        if (view == null) throw new Exception("the store computer has no PhotonView on its root");
+        SetUpPhotonView(view, tpl.transform, ids);
+        tplPm.m_ParentPhotonView = view;
+
+        // The furniture scripts, which the store computer doesn't have.
+        var furniture = tpl.AddComponent<Furniture>();
+        var net = tpl.AddComponent<NetworkFurniture>();
         furniture.m_ID = FurnitureId;
         furniture.m_PlacingMode = tplPm;
+        furniture.m_PhotonView = view;
+        furniture.m_NetworkFurniture = net;
+        net.m_PhotonView = view;
+        net.m_Furniture = furniture;
 
         Template = tpl;
-        Plugin.Info("Computer furniture prefab built");
+        Plugin.Info("Computer furniture prefab built from a copy of the store computer");
+        Plugin.Debug($"Placing settings: tags [{string.Join(",", Strings(tplPm.m_PlacingTag))}], " +
+                     $"renderers {tplPm.m_Renderers?.Length ?? 0}, owner colliders {tplPm.m_OwnerCollider?.Count ?? 0}, " +
+                     $"placing box {(tplPm.m_PlacingModeCollider == null ? "none" : tplPm.m_PlacingModeCollider.name)}, " +
+                     $"zone canvas {(tplPm.m_InteractionZoneCanvas == null ? "none" : tplPm.m_InteractionZoneCanvas.name)}");
         if (Plugin.Verbose.Value) Plugin.Debug("Computer furniture prefab:\n" + Dump(tpl.transform));
     }
 
-    private static readonly HashSet<string> SpecialFurnitureTypes = new()
+    /// <summary>The copy's PhotonView: only components that are still there are observed, no scene view id (the clone
+    /// would otherwise claim the store computer's id offline), and the ownership settings of a real furniture prefab
+    /// (NetworkFurniture.OnPhotonInstantiate transfers ownership to the player who opened the box).</summary>
+    private static void SetUpPhotonView(PhotonView view, Transform tpl, IDManager ids)
     {
-        "Rack", "Display", "Checkout", "CategorySign", "Scale", "IceCreamStand", "VendingMachine",
-        "SelfCheckout", "Computer",
-    };
+        view.sceneViewId = 0;
+        view.RpcMonoBehaviours = null;
+        var observed = new Il2CppSystem.Collections.Generic.List<Component>();
+        var src = view.ObservedComponents;
+        if (src != null)
+            for (int i = 0; i < src.Count; i++)
+                if (src[i] != null && src[i].transform.IsChildOf(tpl)) observed.Add(src[i]);
+        view.ObservedComponents = observed;
 
-    private static FurnitureSO PickDonor(IDManager ids)
-    {
+        PhotonView reference = null;
+        string refName = null;
         var list = ids.m_Furnitures;
-        FurnitureSO best = null;
-        int bestScore = int.MaxValue;
-        for (int i = 0; i < list.Count; i++)
+        for (int i = 0; i < list.Count && reference == null; i++)
         {
             var s = list[i];
-            if (s == null || s.ID == FurnitureId) continue;
-            var p = s.FurniturePrefab;
-            if (p == null) continue;
-            var f = p.GetComponent<Furniture>();
-            if (f == null || f.GetIl2CppType().Name != "Furniture") continue;
-            if (p.GetComponent<NetworkFurniture>() == null || p.GetComponent<PhotonView>() == null) continue;
-            if (p.GetComponentInChildren<FurniturePlacingMode>(true) == null) continue;
-
-            int score = 0;
-            bool special = false;
-            var behaviours = p.GetComponentsInChildren<MonoBehaviour>(true);
-            for (int b = 0; b < behaviours.Length; b++)
-            {
-                var name = behaviours[b]?.GetIl2CppType().Name;
-                if (name == null) continue;
-                if (SpecialFurnitureTypes.Contains(name)) { special = true; break; }
-                if (!IsKeptDonorBehaviour(name)) score += 10;
-            }
-            if (special) continue;
-            if (!s.IsMainFurniture) score += 1;
-            if (score < bestScore) { bestScore = score; best = s; }
+            if (s == null || s.ID == FurnitureId || s.FurniturePrefab == null) continue;
+            if (s.FurniturePrefab.GetComponent<Furniture>() == null) continue;
+            reference = s.FurniturePrefab.GetComponent<PhotonView>();
+            refName = s.FurniturePrefab.name;
         }
-        return best;
-    }
-
-    private static bool IsKeptDonorBehaviour(string name) =>
-        name == "Furniture" || name == "NetworkFurniture" || name == "FurniturePlacingMode" || name.Contains("Photon");
-
-    /// <summary>Removes the donor's look, colliders, navmesh data and type-specific scripts.</summary>
-    private static void StripDonor(GameObject tpl)
-    {
-        DestroyCanvasSubtrees(tpl.transform);
-        var removed = new List<string>();
-        for (int pass = 0; pass < 3; pass++)
+        var before = view.OwnershipTransfer;
+        if (reference != null)
         {
-            var comps = tpl.GetComponentsInChildren<Component>(true);
-            for (int i = 0; i < comps.Length; i++)
-            {
-                var c = comps[i];
-                if (c == null) continue;
-                var name = c.GetIl2CppType().Name;
-                if (name == "Transform" || name == "RectTransform" || name == "Rigidbody") continue;
-                if (c.TryCast<MonoBehaviour>() != null && IsKeptDonorBehaviour(name)) continue;
-                if (pass == 0 && c.TryCast<Behaviour>() == null && c.TryCast<Renderer>() == null) continue; // scripts first
-                removed.Add(name);
-                Object.DestroyImmediate(c);
-            }
+            view.OwnershipTransfer = reference.OwnershipTransfer;
+            view.Synchronization = reference.Synchronization;
         }
-        if (removed.Count > 0)
-            Plugin.Debug("Removed from the base furniture copy: " + string.Join(", ", removed.Distinct()));
-        var bodies = tpl.GetComponentsInChildren<Rigidbody>(true);
-        for (int i = 0; i < bodies.Length; i++)
-            Plugin.Debug($"Base furniture keeps a Rigidbody on '{bodies[i].name}': kinematic={bodies[i].isKinematic}, gravity={bodies[i].useGravity}");
+        else if (view.OwnershipTransfer == OwnershipOption.Fixed)
+        {
+            view.OwnershipTransfer = OwnershipOption.Takeover;
+        }
+        var names = new List<string>();
+        for (int i = 0; i < observed.Count; i++) names.Add(observed[i].GetIl2CppType().Name);
+        Plugin.Debug($"PhotonView: ownership {before} -> {view.OwnershipTransfer} (from {refName ?? "no furniture prefab"}), " +
+                     $"sync {view.Synchronization}, observes [{string.Join(",", names)}]");
     }
 
     private static readonly HashSet<string> KeptModelComponents = new()
     {
         "Transform", "RectTransform", "MeshFilter", "MeshRenderer", "SkinnedMeshRenderer", "LODGroup",
-        "BoxCollider", "MeshCollider", "SphereCollider", "CapsuleCollider",
-        "NavMeshObstacle", "NavmeshBuildSourceObject", "FurniturePlacingMode",
+        "BoxCollider", "MeshCollider", "SphereCollider", "CapsuleCollider", "Rigidbody",
+        "NavMeshObstacle", "NavmeshBuildSourceObject", "FurniturePlacingMode", "Highlightable",
+        "FurnitureSnapPointSetup", "FurnitureSnapPoint",
+        "PhotonView", "PhotonTransformView", "PhotonTransformViewOptimized",
     };
 
-    /// <summary>Removes the camera, the UI and every script from the computer copy.</summary>
-    private static void StripComputerCopy(Transform model, string camPath, string screenPath)
+    /// <summary>Removes the PC camera, the screen UI and every computer script from the copy. The placing mode's
+    /// interaction-zone canvas is kept as it is (the placing mode shows it while moving).</summary>
+    private static void StripComputerCopy(Transform model, string camPath, string screenPath, Transform keep)
     {
         if (camPath != null)
         {
             var cam = Find(model, camPath);
             if (cam != null && cam != model) Object.DestroyImmediate(cam.gameObject);
         }
-        DestroyCanvasSubtrees(model);
+        DestroyCanvasSubtrees(model, keep);
 
         // Mark what's left of the screen object so a session can hide it while the real screen sits there.
         if (screenPath != null)
@@ -434,6 +415,7 @@ internal static class ComputerFurniture
             {
                 var c = comps[i];
                 if (c == null) continue;
+                if (keep != null && c.transform.IsChildOf(keep)) continue;
                 var name = c.GetIl2CppType().Name;
                 if (KeptModelComponents.Contains(name)) continue;
                 if (pass == 0 && c.TryCast<Behaviour>() == null) continue; // scripts first, then the rest
@@ -445,134 +427,19 @@ internal static class ComputerFurniture
             Plugin.Debug("Removed from the computer copy: " + string.Join(", ", removed.Distinct()));
     }
 
-    private static void DestroyCanvasSubtrees(Transform root)
+    private static void DestroyCanvasSubtrees(Transform root, Transform keep)
     {
         var canvases = root.GetComponentsInChildren<Canvas>(true);
         var gos = new List<GameObject>();
         for (int i = 0; i < canvases.Length; i++)
-            if (canvases[i] != null && canvases[i].transform != root) gos.Add(canvases[i].gameObject);
+        {
+            var c = canvases[i];
+            if (c == null || c.transform == root) continue;
+            if (keep != null && c.transform.IsChildOf(keep)) continue;
+            gos.Add(c.gameObject);
+        }
         foreach (var go in gos)
             if (go != null) Object.DestroyImmediate(go);
-    }
-
-    /// <summary>A box around the whole model on the furniture root, slightly larger than the model,
-    /// so the interaction raycast always hits the root (where the Furniture component is) first.</summary>
-    private static BoxCollider AddInteractionCollider(GameObject tpl, Transform model)
-    {
-        var b = ModelBounds(tpl.transform, model);
-        var box = tpl.GetComponent<BoxCollider>() ?? tpl.AddComponent<BoxCollider>();
-        box.isTrigger = false;
-        box.center = b.center;
-        box.size = b.size + new Vector3(0.02f, 0.02f, 0.02f);
-        return box;
-    }
-
-    /// <summary>Bounds of all meshes under <paramref name="model"/>, in <paramref name="space"/>'s local space
-    /// (works on inactive objects, unlike Renderer.bounds).</summary>
-    internal static Bounds ModelBounds(Transform space, Transform model)
-    {
-        bool any = false;
-        var b = new Bounds();
-        var filters = model.GetComponentsInChildren<MeshFilter>(true);
-        for (int i = 0; i < filters.Length; i++)
-        {
-            var mf = filters[i];
-            if (mf == null || mf.sharedMesh == null) continue;
-            var mb = mf.sharedMesh.bounds;
-            for (int k = 0; k < 8; k++)
-            {
-                var corner = mb.center + Vector3.Scale(mb.extents,
-                    new Vector3((k & 1) == 0 ? -1 : 1, (k & 2) == 0 ? -1 : 1, (k & 4) == 0 ? -1 : 1));
-                var p = space.InverseTransformPoint(mf.transform.TransformPoint(corner));
-                if (!any) { b = new Bounds(p, Vector3.zero); any = true; }
-                else b.Encapsulate(p);
-            }
-        }
-        if (!any) b = new Bounds(new Vector3(0, 0.5f, 0), Vector3.one);
-        return b;
-    }
-
-    /// <summary>Gives the donor's placing component the real computer's settings (references already
-    /// point into our copy because they were cloned together).</summary>
-    private static void CopyPlacingMode(FurniturePlacingMode from, FurniturePlacingMode to, Transform tpl, BoxCollider rootBox)
-    {
-        to.m_PositionOffset = from.m_PositionOffset;
-        to.m_RaycastIgnoresWalls = from.m_RaycastIgnoresWalls;
-        to.m_OverrideAvailability = from.m_OverrideAvailability;
-        to.m_PlacingTag = CopyStrings(from.m_PlacingTag);
-        to.m_ExcludeTag = CopyStrings(from.m_ExcludeTag);
-
-        to.m_Renderers = Keep(from.m_Renderers, tpl);
-        to.m_PhysicalColliders = Keep(from.m_PhysicalColliders, tpl);
-        to.m_NavMeshObstacles = Keep(from.m_NavMeshObstacles, tpl);
-        to.m_OwnerCollider = KeepList(from.m_OwnerCollider, tpl);
-        to.m_Triggers = KeepList(from.m_Triggers, tpl);
-        to.m_PlacingModeCollider = Inside(from.m_PlacingModeCollider, tpl);
-        to.m_PlacingModeCollider2 = Inside(from.m_PlacingModeCollider2, tpl);
-        to.m_PlacingCollider = Inside(from.m_PlacingCollider, tpl);
-        to.m_InteractionZoneCanvas = from.m_InteractionZoneCanvas != null && from.m_InteractionZoneCanvas.transform.IsChildOf(tpl)
-            ? from.m_InteractionZoneCanvas : null;
-
-        to.m_OwnerCollider ??= new Il2CppSystem.Collections.Generic.List<Collider>();
-        to.m_OwnerCollider.Add(rootBox);
-
-        if (to.m_Renderers == null || to.m_Renderers.Length == 0)
-            to.m_Renderers = ModelRenderers(tpl);
-        if (to.m_PlacingModeCollider == null)
-            Plugin.Warn("The store computer's placing box wasn't found in the copy; overlap checks use the base furniture's settings.");
-
-        Plugin.Debug($"Placing settings copied: tags [{string.Join(",", Strings(to.m_PlacingTag))}], " +
-                     $"renderers {to.m_Renderers?.Length ?? 0}, owner colliders {to.m_OwnerCollider?.Count ?? 0}, " +
-                     $"placing box {(to.m_PlacingModeCollider == null ? "none" : to.m_PlacingModeCollider.name)}, " +
-                     $"offset {to.m_PositionOffset}");
-    }
-
-    private static void FillPlacingModeFromModel(FurniturePlacingMode pm, Transform tpl, BoxCollider rootBox)
-    {
-        pm.m_Renderers = ModelRenderers(tpl);
-        pm.m_OwnerCollider = new Il2CppSystem.Collections.Generic.List<Collider>();
-        var cols = tpl.GetComponentsInChildren<Collider>(true);
-        for (int i = 0; i < cols.Length; i++) pm.m_OwnerCollider.Add(cols[i]);
-        if (pm.m_PlacingModeCollider == null) pm.m_PlacingModeCollider = rootBox;
-    }
-
-    private static Il2CppReferenceArray<Renderer> ModelRenderers(Transform tpl)
-    {
-        var r = tpl.GetComponentsInChildren<Renderer>(true);
-        var arr = new Il2CppReferenceArray<Renderer>(r.Length);
-        for (int i = 0; i < r.Length; i++) arr[i] = r[i];
-        return arr;
-    }
-
-    private static T Inside<T>(T c, Transform root) where T : Component =>
-        c != null && c.transform.IsChildOf(root) ? c : null;
-
-    private static Il2CppReferenceArray<T> Keep<T>(Il2CppReferenceArray<T> src, Transform root) where T : Component
-    {
-        if (src == null) return null;
-        var kept = new List<T>();
-        for (int i = 0; i < src.Length; i++)
-            if (src[i] != null && src[i].transform.IsChildOf(root)) kept.Add(src[i]);
-        var arr = new Il2CppReferenceArray<T>(kept.Count);
-        for (int i = 0; i < kept.Count; i++) arr[i] = kept[i];
-        return arr;
-    }
-
-    private static Il2CppSystem.Collections.Generic.List<T> KeepList<T>(Il2CppSystem.Collections.Generic.List<T> src, Transform root) where T : Component
-    {
-        if (src == null) return null;
-        var list = new Il2CppSystem.Collections.Generic.List<T>();
-        for (int i = 0; i < src.Count; i++)
-            if (src[i] != null && src[i].transform.IsChildOf(root)) list.Add(src[i]);
-        return list;
-    }
-
-    private static Il2CppSystem.Collections.Generic.List<string> CopyStrings(Il2CppSystem.Collections.Generic.List<string> src)
-    {
-        if (src == null) return null;
-        var list = new Il2CppSystem.Collections.Generic.List<string>();
-        for (int i = 0; i < src.Count; i++) list.Add(src[i]);
-        return list;
     }
 
     private static IEnumerable<string> Strings(Il2CppSystem.Collections.Generic.List<string> l)
@@ -583,15 +450,32 @@ internal static class ComputerFurniture
 
     // ---------------------------------------------------------------- icon
 
+    /// <summary>The game has no computer furniture icon (the furniture icon atlas has none, and the only computer-named
+    /// sprite, T_Vending_ComputerIcon, is a vending machine silhouette), so the icon is rendered from the computer's
+    /// model, like the other furniture icons. The drawn fallback is retried a few times, because the store computer
+    /// may not exist yet when the shop first asks for the icon.</summary>
     internal static void EnsureIcon()
     {
         if (So == null) return;
-        if (IconTexture == null)
+        if (!_iconRendered && _iconRenderAttempts < 3)
         {
-            IconTexture = (EnsureTemplate() ? IconMaker.Render(Template.transform.Find(ModelName)) : null) ?? IconMaker.Draw();
-            IconTexture.name = "ExtraComputerIcon";
-            IconTexture.hideFlags = HideFlags.DontUnloadUnusedAsset;
+            Transform model = EnsureTemplate() ? Template.transform : null;
+            if (model == null)
+            {
+                var comp = FindRealComputer();
+                if (comp != null) { model = ComputerRoot(comp); MeasureFront(comp, model); }
+            }
+            Texture2D tex = null;
+            if (model != null)
+            {
+                _iconRenderAttempts++;
+                tex = IconMaker.Render(model);
+            }
+            if (tex != null) _iconRendered = true;
+            else if (IconTexture == null) tex = IconMaker.Draw();
+            if (tex != null) SetIconTexture(tex);
         }
+        if (IconTexture == null) return;
         if (_iconSprite == null)
         {
             _iconSprite = Sprite.Create(IconTexture, new Rect(0, 0, IconTexture.width, IconTexture.height), new Vector2(0.5f, 0.5f), 100f);
@@ -599,6 +483,18 @@ internal static class ComputerFurniture
             _iconSprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
         }
         if (So.FurnitureIcon == null || So.FurnitureIcon.Pointer != _iconSprite.Pointer) So.FurnitureIcon = _iconSprite;
+    }
+
+    private static void SetIconTexture(Texture2D tex)
+    {
+        tex.name = "ExtraComputerIcon";
+        tex.hideFlags = HideFlags.DontUnloadUnusedAsset;
+        IconTexture = tex;
+        _iconSprite = null; // rebuilt from the new texture
+        if (_boxIconMaterial != null)
+            foreach (var prop in new[] { "_BaseMap", "_MainTex" })
+                if (_boxIconMaterial.HasProperty(prop)) _boxIconMaterial.SetTexture(prop, tex);
+        Plugin.Debug(_iconRendered ? "Computer icon rendered from the model" : "Computer icon: using the drawn placeholder for now");
     }
 
     /// <summary>The furniture box's label: a copy of the game's icon-atlas material showing our icon.</summary>
