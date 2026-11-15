@@ -39,7 +39,7 @@ Rules:
 | Improvement #6 | done 2026-11-15 | `FurnitureMoveCancel/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
 | Improvement #7 | reviewed | `ExtraComputers/` | 2026-11-15, 4 rounds, 4426fb32469d | In-game test: follow "First in-game test" in the mod's CLAUDE.md (host alone, modded guest, unmodded guest, config toggle). Much of it can't be verified from the dumps: donor furniture choice and prefab building, collider/placing behaviour, Photon property reads, shop hiding, box icon, save/load. Send back the `[ExtraComputers]` log lines |
 | Improvement #8 | done 2026-11-15 | `GridModeDefault/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
-| Improvement #9 | in-progress | `BulkShelfTransfer/` | — | Being implemented |
+| Improvement #9 | reviewed | `BulkShelfTransfer/` | 2026-11-15, 1 round, 45be1793f004 | In-game test (steps in the mod's CLAUDE.md), send the `[Bulk]` lines. Unconfirmed: the animation speed-up catches new tweens ("N animation(s) sped up" > 0), the crate loop ends on its own, guest box bursts don't overfill |
 | Improvement #10 | in-progress | `PlayerDoubleCarry/` | — | Being implemented |
 
 Example of a reviewed row:
