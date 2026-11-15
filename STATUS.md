@@ -31,7 +31,7 @@ Rules:
 | Bug #4 | open | — | — | Guest crash logs (2026-11-15) analysed: hard kill, no managed or Unity crash trace. Need the guest's Windows crash folder + Event Viewer entry |
 | Bug #5 | needs-rework | `SupermarketFixes/src/Patches/BoxPlaceFix.cs` | 2026-11-15, 1 round, 5066b4084b02 | In-game test 2026-11-15: still happening, no improvement |
 | Bug #6 | open | — | — | In-game 2026-11-15: still happening |
-| Improvement #1 | in-progress | `PriceMarkupKeeper/` | — | Rework v1.1.0 written (markup on license purchase); review pending |
+| Improvement #1 | reviewed | `PriceMarkupKeeper/` | 2026-11-15, rework v1.1.1, 1 round, b88bc963388e | In-game test of new-license pricing (steps in the mod's CLAUDE.md), send the `[Markup]` lines |
 | Improvement #2 | done 2026-11-14 | — | — | |
 | Improvement #3 | in-progress | `PlayerCrouch/` | — | v1.0.3: pose the active skin's Animator (was posing an inactive skin); review pending |
 | Improvement #4 | in-progress | `SelfCheckoutSpeed/` | — | Rework v1.1.0 written (host-authoritative speed, guest catch-up, text field, employee help); review pending |

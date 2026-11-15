@@ -119,7 +119,7 @@ Currently, orders are only removed when they have been delivered to the customer
 
 ## Improvement #1: Make Global Pricing Settings Persist Across Days
 
-**Status:** IN PROGRESS — Rework v1.1.0 in `PriceMarkupKeeper/`, under review  
+**Status:** REVIEWED 2026-11-15 — Rework v1.1.1 in `PriceMarkupKeeper/`, awaiting in-game test  
 **First completed:** 2026-11-15
 
 Make prices respect the global settings configured through the pricing tab on the computer.
