@@ -21,6 +21,12 @@
  * for a second or runs longer than 30 s; ending it clears the loop's flag, which stops the loop at its
  * next step exactly like a release.
  * Multiplayer is the game's own: we only run its loop faster, on the acting client.
+ *
+ * Review round 1: the loop re-reads its targets every step (display slot, vending slot, floor product
+ * m_CurrentInteractable, m_CurrentCrate). Because the release is swallowed, turning away mid-burst would
+ * move products elsewhere, so the targets at the start are pinned and every step checks them (MoveNext
+ * prefix) and ends the burst if they changed. Ending outside the loop also StopCoroutine's it, as a
+ * release does, so a re-press can't leave two loops running.
  */
 using System;
 using System.Collections.Generic;
@@ -42,6 +48,9 @@ internal static class CrateBulk
         public float Started;
         public float LastStep;
         public int Steps;
+        public DisplaySlot Slot;          // the loop re-reads its targets every step; we pin them
+        public IntPtr Interactable;       // m_CurrentInteractable at start (floor products etc.)
+        public IntPtr CurrentCrate;       // m_CurrentCrate at start (another crate being looked at)
     }
 
     private static Burst _active;
@@ -49,7 +58,8 @@ internal static class CrateBulk
     // interop coroutine type -> (is the take loop, <>4__this, <>2__current)
     private static readonly Dictionary<Type, (bool take, PropertyInfo self, PropertyInfo current)> Loops = new();
 
-    internal static void Reset() => _active = null;
+    /// <summary>Ends a running burst like a release (used when the mod is switched off).</summary>
+    internal static void Reset() => Finish("mod reset", stopLoop: true);
 
     internal static void PatchCoroutines(Harmony harmony)
     {
@@ -100,16 +110,21 @@ internal static class CrateBulk
         if (!down)
             return !(mine && b.Take == take); // swallow the release of the burst's own button
 
-        if (mine) Finish("button pressed again");
+        if (mine) Finish("button pressed again", stopLoop: true);
         if (Loops.Count < 2) return true;
         if (!Plugin.Crates.Value || !(take ? Plugin.BulkTake.Value : Plugin.BulkPlace.Value)) return true;
         if (!Bulk.ModifierHeld() || !Bulk.IsLocal(ci.PlayerInstance)) return true;
-        if (ci.m_CurrentDisplaySlot == null) return true; // only shelves; vending/baker/guard stay vanilla
+        var slot = ci.m_CurrentDisplaySlot;
+        if (slot == null || ci.m_CurrentVendingSlot != null) return true; // only shelves; vending/baker/guard stay vanilla
         var crate = ci.m_Crate;
         if (crate == null || crate.IsGuardCrate || crate.IsBakerCrate) return true;
 
         TweenBoost.Boosted = 0;
-        _active = new Burst { Ci = ci, Take = take, Started = Time.time, LastStep = Time.time };
+        _active = new Burst
+        {
+            Ci = ci, Take = take, Started = Time.time, LastStep = Time.time, Slot = slot,
+            Interactable = Ptr(ci.m_CurrentInteractable), CurrentCrate = Ptr(ci.m_CurrentCrate),
+        };
         Bulk.Info($"crate {(take ? "take" : "place")}: start");
         return true; // the game starts its loop as usual
     }
@@ -119,22 +134,46 @@ internal static class CrateBulk
         var b = _active;
         if (b == null || !Bulk.Same(b.Ci, ci)) return;
         float now = Time.time;
-        if (now - b.LastStep > 1f) Finish("loop not running");
-        else if (now - b.Started > 30f) Finish("timeout");
+        if (now - b.LastStep > 1f) Finish("loop not running", stopLoop: true);
+        else if (now - b.Started > 30f) Finish("timeout", stopLoop: true);
     }
 
-    private static void Finish(string why)
+    private static IntPtr Ptr(Il2CppObjectBase o) => o == null ? IntPtr.Zero : o.Pointer;
+
+    /// <summary>Why the loop must stop before this step, or null. Checked at the start of every loop step.</summary>
+    private static string TargetChanged(Burst b)
+    {
+        var ci = b.Ci;
+        if (ci == null || !ci.isActiveAndEnabled) return "crate interaction disabled";
+        if (Time.time - b.Started > 30f) return "timeout";
+        if (!Bulk.Same(ci.m_CurrentDisplaySlot, b.Slot)) return "looked away from the slot";
+        if (ci.m_CurrentVendingSlot != null) return "looking at a vending machine";
+        if (Ptr(ci.m_CurrentInteractable) != b.Interactable) return "looking at something else";
+        if (Ptr(ci.m_CurrentCrate) != b.CurrentCrate) return "looking at another crate";
+        return null;
+    }
+
+    /// <summary>
+    /// Ends the burst like a release: clear the loop's flag (the loop exits at its next flag check) and, when
+    /// not called from inside the loop itself, StopCoroutine it as OnTake/OnUse(false) do.
+    /// </summary>
+    private static void Finish(string why, bool stopLoop = false)
     {
         var b = _active;
         _active = null;
         if (b == null) return;
         try
         {
-            // Same as releasing the button: the loop exits at its next step.
-            if (b.Ci != null)
+            var ci = b.Ci;
+            if (ci != null)
             {
-                if (b.Take) b.Ci.m_IsOnUse = false;
-                else b.Ci.m_IsOnTake = false;
+                if (b.Take) ci.m_IsOnUse = false;
+                else ci.m_IsOnTake = false;
+                if (stopLoop)
+                {
+                    var routine = b.Take ? ci.m_OnUseCoroutine : ci.m_OnTakeCoroutine;
+                    if (routine != null) ci.StopCoroutine(routine);
+                }
             }
         }
         catch (Exception e) { Bulk.Error("crate finish", e); }
@@ -157,6 +196,9 @@ internal static class CrateBulk
         {
             var b = Match(__instance);
             if (b == null) return;
+            string stop = TargetChanged(b);
+            // Inside the loop: only clear the flag; this very step then exits at the loop's flag check.
+            if (stop != null) { Finish(stop); return; }
             b.LastStep = Time.time;
             __state = TweenBoost.Begin();
         }

@@ -5,7 +5,7 @@ Improvement #9 (`TODO`). Modifier (LeftShift) + Take/Use moves every product bet
 
 ## Status
 
-- v0.1.0 written and builds. **Not tested in-game.** Nothing about the runtime behaviour is confirmed yet.
+- v0.1.1 written and builds; review round 1 applied (see below). **Not tested in-game.** Nothing about the runtime behaviour is confirmed yet.
 - Open questions to settle from the first test logs (see "In-game test"):
   1. Does the tween speed-up catch anything? (`N animation(s) sped up` in the `[Bulk] ... stopped` lines.
      0 means `DOTween.PlayingTweens` doesn't list freshly created tweens as playing; then switch to
@@ -60,6 +60,28 @@ Improvement #9 (`TODO`). Modifier (LeftShift) + Take/Use moves every product bet
 - The speed-up is local only; other players see normal-speed animations in quick succession.
 - Only the acting player needs the mod.
 
+## Review round 1 (v0.1.1)
+
+Applied:
+- Guest box guard (`BoxBulk.Guarded`): while a guest burst runs or its answers are pending (box count !=
+  expected, 2 s timeout), OnTake/OnUse presses (all OnUse branches, incl. rack/trash/placement area), OnDrop and
+  OnThrow are swallowed. Reason: `TakeProduct_RPC`/`PlaceProduct_RPC` are dropped by a client whose
+  `BoxInteraction.m_Box` isn't the message's box ("Boxes are not same"), and DropBox clears m_Box at once.
+- TryStart consumes the click if a burst on the same interaction is running (no stacked bursts / overfill);
+  a stale burst for a different box is finished first.
+- Placing mode: TryStart refuses, Tick stops (OnDrop sets m_PlacingMode but leaves m_CurrentDisplaySlot).
+- Box place also refuses when `m_TargetPlacementArea` is set.
+- Crate: start targets pinned (slot, vending slot, m_CurrentInteractable, m_CurrentCrate) and checked in the
+  MoveNext prefix every step; a change clears the flag so the step exits at the loop's flag check. Finish outside
+  the loop also StopCoroutine's `m_OnUseCoroutine`/`m_OnTakeCoroutine` like a release; Reset (mod disabled)
+  finishes the burst; the 30 s timeout and an `isActiveAndEnabled` check also run in the MoveNext prefix.
+- Bag take refuses when the bag is already full, so the game's "bag full" warning shows; bag bursts don't
+  start while the weapon wheel is open / wheel interaction (`WeaponWheelController.IsOpen`/`IsWheelInteraction`).
+- `Bulk.IsLocal` also requires `PlayerInstance.m_PhotonView.IsMine` online (the game's crate/bag input guard).
+- TweenBoost only speeds tweens whose target is (inside) a `Product`, plus target-less Sequences (the bag's
+  PlayProductMove). Warning popups, sale signs, highlights keep their speed.
+- Online the step interval is at least 0.02 s.
+
 ## Not handled (on purpose)
 
 - Vending slots (`m_CurrentVendingSlot`), baker crate, guard crate: left vanilla.
@@ -74,6 +96,8 @@ Improvement #9 (`TODO`). Modifier (LeftShift) + Take/Use moves every product bet
    (warning, nothing moves) and a full box (game's warning).
 2. Same with a paper bag (online order) and with the crate.
 3. Multiplayer, guest with the mod, host without: box take/place, check counts on both screens (no overfilled box).
+   Right after a guest burst, try to drop/throw the box and to click again: should be ignored briefly
+   (`waiting for the host ... ignored` lines), then work.
 4. Host with the mod: same, check the guest sees the products.
 5. Toggle `Enabled` off in the config manager: plain clicks only.
 

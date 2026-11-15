@@ -33,6 +33,12 @@
  * nothing ends the burst. Box.AddProduct / DisplaySlot.AddProduct are wrapped in TweenBoost while the
  * box / slot is marked, which speeds up the fly animation on this client (including on a guest, where
  * the products arrive through the host's RPC a little later).
+ *
+ * Guest safety (review round 1): TakeProduct_RPC / PlaceProduct_RPC are only applied by a client if the
+ * message's box is that client's BoxInteraction.m_Box ("Boxes are not same" otherwise), and DropBox clears
+ * m_Box at once. So while a guest burst is running, and until the box shows the expected count (2 s
+ * timeout), Take/Use presses (incl. rack, trash, placement area branches of OnUse), Drop and Throw are
+ * swallowed: the box can't leave the hands and nothing can count from stale numbers.
  */
 using System;
 using HarmonyLib;
@@ -58,8 +64,9 @@ internal static class BoxBulk
     private static Burst _active;
 
     // Guest only: after a burst, the host's answers arrive over the next moments. Until the box shows the
-    // expected count (or a short timeout), a new burst on that box would count from stale numbers and could
-    // ask for more than fits, so it is refused.
+    // expected count (or a short timeout), any new take/place on that box would count from stale numbers and
+    // could ask for more than fits, and letting the box leave the hands would make this client reject the late
+    // answers ("Boxes are not same"), so those inputs are swallowed (see Guarded).
     private static IntPtr _pendingBox;
     private static int _pendingExpected;
     private static float _pendingUntil;
@@ -74,9 +81,41 @@ internal static class BoxBulk
         _pendingBox = IntPtr.Zero;
     }
 
+    /// <summary>
+    /// Guest only: true while a burst on this interaction is running or its answers from the host are still
+    /// arriving for the held box. While guarded, presses that would take/place more products or make the box
+    /// leave the hands (drop, throw, rack, trash, placement area) are swallowed.
+    /// </summary>
+    internal static bool Guarded(BoxInteraction bi)
+    {
+        if (!Bulk.IsGuest) return false;
+        var b = _active;
+        if (b != null && Bulk.Same(b.Bi, bi) && Bulk.Same(b.Box, bi.m_Box)) return true;
+        return PendingUnresolved(bi.m_Box);
+    }
+
+    private static bool PendingUnresolved(Box box)
+    {
+        if (box == null || _pendingBox == IntPtr.Zero || _pendingBox != box.Pointer) return false;
+        if (Time.time < _pendingUntil && box.ProductCount != _pendingExpected) return true;
+        _pendingBox = IntPtr.Zero;
+        return false;
+    }
+
     /// <summary>Called from OnTake/OnUse(down=true). Returns true if the click was consumed by a burst.</summary>
     internal static bool TryStart(BoxInteraction bi, bool take)
     {
+        var running = _active;
+        if (running != null && Bulk.Same(running.Bi, bi))
+        {
+            if (Bulk.Same(running.Box, bi.m_Box))
+            {
+                Bulk.Info("box: a bulk transfer is still running, click ignored");
+                return true;
+            }
+            Finish("box changed");
+        }
+
         if (!Plugin.Boxes.Value || !(take ? Plugin.BulkTake.Value : Plugin.BulkPlace.Value)) return false;
         if (!Bulk.ModifierHeld()) return false;
         if (!Bulk.IsLocal(bi.PlayerInstance)) return false;
@@ -87,15 +126,7 @@ internal static class BoxBulk
         if (box == null || slot == null) return false;
         if (!box.IsOpen) return false;
 
-        if (_pendingBox == box.Pointer)
-        {
-            if (Time.time < _pendingUntil && box.ProductCount != _pendingExpected)
-            {
-                Bulk.Info($"box: still waiting for the host ({box.ProductCount}/{_pendingExpected}), click ignored");
-                return true;
-            }
-            _pendingBox = IntPtr.Zero;
-        }
+        if (bi.m_PlacingMode) return false;
 
         int target;
         if (take)
@@ -106,8 +137,9 @@ internal static class BoxBulk
         }
         else
         {
-            if (bi.m_holdingTake || !bi.m_IsBoxOpen || !box.HasProducts || bi.m_PlacingMode) return false;
-            if (bi.m_CurrentRackSlot != null || bi.m_CurrentPlacementArea != null || bi.m_CurrentTrashBin != null) return false;
+            if (bi.m_holdingTake || !bi.m_IsBoxOpen || !box.HasProducts) return false;
+            if (bi.m_CurrentRackSlot != null || bi.m_CurrentPlacementArea != null || bi.m_CurrentTrashBin != null ||
+                bi.m_TargetPlacementArea != null) return false;
             bool special = slot.TryCast<IceCreamConeDisplaySlot>() != null || slot.TryCast<IceCreamFlavourDisplaySlot>() != null;
             if (special && Bulk.IsGuest) return false; // custom capacity rules; can't count them safely from a guest
             int count = slot.ProductCount;
@@ -154,6 +186,7 @@ internal static class BoxBulk
         else if (b.Sent >= b.Target) stop = "done";
         else if (now - b.Started > 30f) stop = "timeout";
         else if (!box.IsOpen) stop = "box closed";
+        else if (bi.m_PlacingMode) stop = "placing mode";
         else if (b.Take ? bi.m_holdingUse : bi.m_holdingTake) stop = "other button held";
         else if (b.Take ? (!slot.HasProduct || box.Full) : (!box.HasProducts || slot.Full)) stop = "nothing left to move";
         if (stop != null) { Finish(stop); return; }
@@ -201,7 +234,12 @@ internal static class BoxOnTakePatch
 {
     private static bool Prefix(BoxInteraction __instance, bool down)
     {
-        try { if (down && BoxBulk.TryStart(__instance, take: true)) return false; }
+        try
+        {
+            if (!down) return true;
+            if (BoxBulk.Guarded(__instance)) { Bulk.Info("box: waiting for the host, Take ignored"); return false; }
+            if (BoxBulk.TryStart(__instance, take: true)) return false;
+        }
         catch (Exception e) { Bulk.Error("BoxInteraction.OnTake", e); }
         return true;
     }
@@ -212,8 +250,36 @@ internal static class BoxOnUsePatch
 {
     private static bool Prefix(BoxInteraction __instance, bool down)
     {
-        try { if (down && BoxBulk.TryStart(__instance, take: false)) return false; }
+        try
+        {
+            if (!down) return true;
+            if (BoxBulk.Guarded(__instance)) { Bulk.Info("box: waiting for the host, Use ignored"); return false; }
+            if (BoxBulk.TryStart(__instance, take: false)) return false;
+        }
         catch (Exception e) { Bulk.Error("BoxInteraction.OnUse", e); }
+        return true;
+    }
+}
+
+/// <summary>Guest: the box must stay in the hands until the host's answers for a burst have arrived.</summary>
+[HarmonyPatch(typeof(BoxInteraction), nameof(BoxInteraction.OnDrop))]
+internal static class BoxOnDropPatch
+{
+    private static bool Prefix(BoxInteraction __instance)
+    {
+        try { if (BoxBulk.Guarded(__instance)) { Bulk.Info("box: waiting for the host, Drop ignored"); return false; } }
+        catch (Exception e) { Bulk.Error("BoxInteraction.OnDrop", e); }
+        return true;
+    }
+}
+
+[HarmonyPatch(typeof(BoxInteraction), nameof(BoxInteraction.OnThrow))]
+internal static class BoxOnThrowPatch
+{
+    private static bool Prefix(BoxInteraction __instance)
+    {
+        try { if (BoxBulk.Guarded(__instance)) { Bulk.Info("box: waiting for the host, Throw ignored"); return false; } }
+        catch (Exception e) { Bulk.Error("BoxInteraction.OnThrow", e); }
         return true;
     }
 }

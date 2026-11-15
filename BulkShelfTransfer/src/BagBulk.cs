@@ -24,6 +24,7 @@
 using System;
 using HarmonyLib;
 using UnityEngine;
+using __Project__.Scripts.UI;
 
 namespace BulkShelfTransfer;
 
@@ -57,10 +58,16 @@ internal static class BagBulk
         // Leave every other use of the click to the game.
         if (oi.m_CurrentCourier != null || oi.m_CurrentCustomer != null || oi.m_CurrentTrashBin != null) return false;
         if (oi.m_TargetPlacementArea != null || oi.m_CurrentPlacementArea != null || oi.m_PlacingMode) return false;
+        if (NoktaSingleton<WeaponWheelController>.HasInstance)
+        {
+            var wheel = NoktaSingleton<WeaponWheelController>.Instance;
+            if (wheel != null && (wheel.IsOpen || wheel.IsWheelInteraction)) return false;
+        }
 
         if (take)
         {
             if (oi.m_holdingUse || oi.m_CurrentProduct != null || !slot.HasProduct) return false;
+            if (bag.ProductCount >= oi.m_MaxBagItemCount) return false; // the game shows its "bag full" warning
         }
         else
         {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using DG.Tweening;
+using Il2CppInterop.Runtime;
 using Il2CppInterop.Runtime.InteropTypes;
 using Photon.Pun;
 using UnityEngine;
@@ -30,11 +31,22 @@ internal static class Bulk
 
     internal static bool IsLocal(PlayerInstance p)
     {
-        try { return p != null && p.IsLocalPlayerInstance; }
+        try
+        {
+            if (p == null || !p.IsLocalPlayerInstance) return false;
+            // The game's crate/bag input handlers also require the player's PhotonView to be ours online.
+            if (PhotonNetwork.IsConnected)
+            {
+                var pv = p.m_PhotonView;
+                if (pv == null || !pv.IsMine) return false;
+            }
+            return true;
+        }
         catch (Exception) { return false; }
     }
 
-    internal static float Interval => Math.Max(0f, Plugin.SecondsBetweenItems.Value);
+    /// <summary>Time between steps. Online at least 0.02 s, so a high frame rate can't flood the room with RPCs.</summary>
+    internal static float Interval => Math.Max(PhotonNetwork.IsConnected ? 0.02f : 0f, Plugin.SecondsBetweenItems.Value);
 
     internal static void Info(string msg)
     {
@@ -147,12 +159,26 @@ internal static class TweenBoost
             {
                 var t = list[i];
                 if (t == null || Before.Contains(t.Pointer)) continue;
+                if (!IsProductTween(t)) continue;
                 t.timeScale = speed;
                 Boosted++;
             }
         }
         catch (Exception e) { Bulk.Error("TweenBoost.End", e); }
         finally { Before.Clear(); }
+    }
+
+    /// <summary>
+    /// Only product movement: tweens whose target is (part of) a Product, plus target-less Sequences (the paper
+    /// bag's PlayProductMove). Warning popups, sale signs, crate highlights etc. keep their normal speed.
+    /// </summary>
+    private static bool IsProductTween(Tween t)
+    {
+        var target = t.target;
+        if (target == null) return true;
+        var comp = target.TryCast<Component>();
+        if (comp == null) return false;
+        return comp.GetComponentInParent(Il2CppType.Of<Product>(), true) != null;
     }
 
     private static Il2CppSystem.Collections.Generic.List<Tween> Playing()

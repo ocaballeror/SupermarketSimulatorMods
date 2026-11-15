@@ -32,8 +32,8 @@ Vending machines, the baker's crate and the security guard's crate are left as t
 | Containers | `Boxes` | `true` | Use bulk transfer with product boxes. |
 | Containers | `PaperBags` | `true` | Use bulk transfer with online-order paper bags. |
 | Containers | `Crates` | `true` | Use bulk transfer with the multi-product crate. |
-| Speed | `SecondsBetweenItems` | `0.02` | Time between two products (0 to 0.5 s; 0 = one per frame). |
-| Speed | `AnimationSpeed` | `5` | How much faster the products fly (1 = the game's normal speed, up to 20). Only affects your own screen. |
+| Speed | `SecondsBetweenItems` | `0.02` | Time between two products (0 to 0.5 s; 0 = one per frame offline; online it is never below 0.02 s). |
+| Speed | `AnimationSpeed` | `5` | How much faster the products fly (1 = the game's normal speed, up to 20). Only the products are sped up, and only on your own screen. |
 | Diagnostics | `VerboseLogging` | `true` | Writes `[Bulk]` lines to `BepInEx/LogOutput.log` for each bulk transfer. |
 
 The modifier is a keyboard key; there is no gamepad shortcut.
@@ -42,9 +42,13 @@ The modifier is a keyboard key; there is no gamepad shortcut.
 
 Only the player who wants to use it, host or guest. Each product still moves through the game's normal per-product actions and network messages, so the other players (with or without the mod) see the products move as usual, just in quick succession and at the normal animation speed.
 
-When a guest fills or empties a **box**, every product goes through the host as in the normal game, so it can take a moment longer to finish on a slow connection. While those products are still on their way, a second Shift-click on the same box is ignored for up to two seconds.
+When a guest fills or empties a **box**, every product goes through the host as in the normal game, so it can take a moment longer to finish on a slow connection. While a bulk transfer is running and its products are still on their way (at most about two seconds after it ends), the box stays in your hands: clicks, drop and throw on that box are ignored until everything has arrived. This keeps the box contents the same on every screen.
+
+On the host and offline, a second Shift-click during a running transfer is ignored too.
+
+With the crate, the transfer stops if you look away from the shelf slot before it is done.
 
 ## Notes
 
 - Compatible with mods that don't change how products are placed on or taken from shelves.
-- Status: written, not yet tested in-game.
+- Status: version 0.1.1, written and code-reviewed, not yet tested in-game.
