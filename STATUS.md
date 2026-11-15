@@ -33,7 +33,7 @@ Rules:
 | Bug #6 | open | — | — | No data to reproduce; may be related to Bug #1 |
 | Improvement #1 | reviewed | `PriceMarkupKeeper/` | 2026-11-15, 1 round, 3b91551c72a5 | In-game test. Check: with `OnlyProductsFollowingMarkup` off and no bulk markup ever applied, every changed product is forced to market price |
 | Improvement #2 | done 2026-11-14 | — | — | |
-| Improvement #3 | in-progress | `PlayerCrouch/` | — | In-game test |
+| Improvement #3 | reviewed | `PlayerCrouch/` | 2026-11-15, 1 round, a15e7a9c8add | In-game test + `[Crouch]` log lines. Open: does the vcam follow `CinemachineCameraTarget`, is the Animator humanoid, does leg IK (`PlayerIKHandler`) fight the pose on remote players. Unreviewed-as-minor: hold mode keeps crouch while placing after Ctrl release |
 | Improvement #4 | done 2026-11-14 | — | — | |
 | Improvement #5 | in-progress | `RestockerDoubleCarry/` | — | In-game test |
 | Improvement #6 | in-progress | `FurnitureMoveCancel/` | — | In-game test |
