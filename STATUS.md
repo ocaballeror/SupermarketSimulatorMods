@@ -39,8 +39,8 @@ Rules:
 | Improvement #6 | reviewed | `FurnitureMoveCancel/` | 2026-11-15, 2 rounds, bfe4f8234204 | In-game test, incl. multiplayer (exact-position sync before the place RPC, unmodded guest); steps and `[MoveCancel]` lines in the mod's CLAUDE.md. Unconfirmed: surface probe calibration on offset-pivot pieces |
 | Improvement #7 | reviewed | `ExtraComputers/` | 2026-11-15, 4 rounds, 4426fb32469d | In-game test: follow "First in-game test" in the mod's CLAUDE.md (host alone, modded guest, unmodded guest, config toggle). Much of it can't be verified from the dumps: donor furniture choice and prefab building, collider/placing behaviour, Photon property reads, shop hiding, box icon, save/load. Send back the `[ExtraComputers]` log lines |
 | Improvement #8 | reviewed | `GridModeDefault/` | 2026-11-15, 2 rounds, aaa2ae1d9e15 | In-game test (steps in the mod's CLAUDE.md). Look for the `[GridMode] placement started` line (proves the delegate-only patch is hit), and report which furniture types showed no grid. Grid toggle is X, not Ctrl |
-| Improvement #9 | open | — | — | |
-| Improvement #10 | open | — | — | |
+| Improvement #9 | in-progress | `BulkShelfTransfer/` | — | Being implemented |
+| Improvement #10 | in-progress | `PlayerDoubleCarry/` | — | Being implemented |
 
 Example of a reviewed row:
 `| Bug #1 | reviewed | SupermarketFixes/src/Patches/RackMoveFix.cs | 2026-11-15, 3 rounds, eb7de42e7b56 | In-game test + host F8 log |`
