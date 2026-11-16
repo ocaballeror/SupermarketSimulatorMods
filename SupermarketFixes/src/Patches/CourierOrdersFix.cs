@@ -50,7 +50,11 @@ namespace SupermarketFixes.Patches;
 ///    release that is followed at once by the order's removal (delivery) doesn't flash it back. A
 ///    take-back by this player (OnlineOrderInteraction.ReceiveParcelFromCourier prefix) re-creates it
 ///    immediately, because that method selects the order's notebook for the bag in hand.
-///  - Turning the fix (or the whole mod) off restores the removed notebooks.
+///  - The subscription exists whenever the mod is active, whatever HideCourierOrders says; only hiding is
+///    gated by the setting. Turning HideCourierOrders off (SettingChanged) or the whole mod off restores the
+///    removed notebooks and refreshes the badge; turning it on hides what the courier holds at that moment.
+///    Re-showing an order this patch hid never depends on the setting. Nothing touches game objects while
+///    BasePlugin.Load runs (Plugin.Loaded); the CourierManager.Start postfix makes the first subscription.
 ///
 /// Where it runs: every machine that should see the effect, since the lists are local UI. On the host it
 /// fixes the host's screen; a guest needs the mod too. An unmodded guest keeps the vanilla list (the game
@@ -72,6 +76,24 @@ internal static class CourierOrdersFix
         Diagnostics = cfg.Bind("CourierOrders", "Diagnostics", true,
             "Log a [CourierOrders] line whenever an order is hidden from or shown again in the notebook. " +
             "Turn off once the fix is confirmed.");
+        HideCourierOrders.SettingChanged += (_, _) => OnSettingChanged();
+    }
+
+    /// <summary>Live toggle of HideCourierOrders: hide what the courier holds now, or restore everything hidden.</summary>
+    private static void OnSettingChanged()
+    {
+        try
+        {
+            if (!Plugin.Active || !Plugin.Loaded) return;
+            if (HideCourierOrders.Value)
+            {
+                SubscribeToExisting();
+                SweepClaimed();
+            }
+            else RestoreAll();
+            RefreshBadge();
+        }
+        catch (Exception e) { LogError("SettingChanged", e); }
     }
 
     internal static bool On => Plugin.Active && HideCourierOrders != null && HideCourierOrders.Value;
@@ -87,6 +109,9 @@ internal static class CourierOrdersFix
     internal static void ResetState()
     {
         s_loggedError = false;
+        // Called from BasePlugin.Load too (before the game runs): don't touch game objects until the plugin
+        // has finished loading. The CourierManager.Start postfix covers the first subscription.
+        if (!Plugin.Loaded) return;
         try
         {
             if (Plugin.Active) SubscribeToExisting();
@@ -95,6 +120,7 @@ internal static class CourierOrdersFix
                 Unsubscribe();
                 RestoreAll();
             }
+            RefreshBadge();
         }
         catch (Exception e) { LogError("ResetState", e); }
         if (!Plugin.Active) s_hidden.Clear();
@@ -131,6 +157,7 @@ internal static class CourierOrdersFix
         if (mgr == null) return;
         if (s_subscribed != null && s_subscribedPtr == mgr.Pointer) return;
         Unsubscribe();
+        s_hidden.Clear(); // a new CourierManager means a new session or save; ids of the old one are meaningless
         s_handler ??= (Action<int>)OnClaimChanged;
         mgr.add_ClaimChanged(s_handler);
         s_subscribed = mgr;
@@ -224,11 +251,12 @@ internal static class CourierOrdersFix
     {
         try
         {
-            if (!On) return;
+            if (!Plugin.Active) return;
             if (IsClaimed(orderId))
             {
-                if (Hide(LocalContainer(), orderId, "taken by the courier")) RefreshBadge();
-                else RefreshBadge(); // the badge may still count it (never had a notebook yet)
+                if (!On) return; // only hiding is gated by the setting; showing what we hid never is
+                Hide(LocalContainer(), orderId, "taken by the courier");
+                RefreshBadge(); // also when there was no notebook: the badge may still have counted it
             }
             else if (s_hidden.Contains(orderId))
             {
@@ -237,7 +265,7 @@ internal static class CourierOrdersFix
                 {
                     try
                     {
-                        if (!On || IsClaimed(orderId)) return;
+                        if (!Plugin.Active || IsClaimed(orderId)) return;
                         Show(orderId, "released by the courier");
                     }
                     catch (Exception e) { LogError("delayed show", e); }
@@ -258,7 +286,7 @@ internal static class CourierOrdersFix
     /// <summary>The player takes a bag back from the courier: make sure its notebook exists before the game selects it.</summary>
     internal static void BeforeReceiveParcel(OrderPaperBag bag)
     {
-        if (!On || bag == null) return;
+        if (!Plugin.Active || bag == null) return;
         var order = bag.m_OrderData;
         if (order == null || !s_hidden.Contains(order.ID)) return;
         Show(order.ID, "taken back from the courier");
@@ -286,7 +314,7 @@ internal static class CourierOrders_CourierManagerStart_Patch
 {
     private static void Postfix(CourierManager __instance)
     {
-        try { if (CourierOrdersFix.On) CourierOrdersFix.Subscribe(__instance); }
+        try { if (Plugin.Active) CourierOrdersFix.Subscribe(__instance); }
         catch (Exception e) { CourierOrdersFix.LogError("CourierManager.Start postfix", e); }
     }
 }
@@ -301,7 +329,7 @@ internal static class CourierOrders_OnOrderIssued_Patch
     }
 }
 
-[HarmonyPatch(typeof(OrderManager), "GetUnreadOrderCount")]
+[HarmonyPatch(typeof(OrderManager), nameof(OrderManager.GetUnreadOrderCount))]
 internal static class CourierOrders_GetUnreadOrderCount_Patch
 {
     private static void Postfix(OrderManager __instance, ref int __result)

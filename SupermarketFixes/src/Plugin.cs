@@ -20,6 +20,9 @@ public class Plugin : BasePlugin
     /// <summary>True while the mod's patches are applied.</summary>
     internal static bool Active { get; private set; }
 
+    /// <summary>False until <see cref="Load"/> has finished; game objects must not be touched before that.</summary>
+    internal static bool Loaded { get; private set; }
+
     private Harmony _harmony;
 
     public override void Load()
@@ -43,6 +46,7 @@ public class Plugin : BasePlugin
         AddComponent<DiagnosticsBehaviour>();
 
         SetActive(Enabled.Value);
+        Loaded = true;
         Log.LogInfo($"{Name} {Version} loaded ({(Active ? "enabled" : "disabled")})");
     }
 

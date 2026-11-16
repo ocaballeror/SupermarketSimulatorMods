@@ -219,6 +219,7 @@ Game systems that only one mod touches are documented next to that mod, not in s
 | Shelf slots, crates and paper bags, product fly animations | `BulkShelfTransfer/CLAUDE.md` |
 | Carrying two boxes (player) | `PlayerDoubleCarry/CLAUDE.md` |
 | Janitor (cleaning lady): state machine, stains, mop, movement | `SupermarketFixes/CLAUDE.md` (Game reference: janitor) |
+| Online orders: pending list, notebooks, unread badge, courier claims | `SupermarketFixes/CLAUDE.md` (Game reference: online orders and the courier) |
 
 Boxes, holding objects, interactions, input and networking are used by several mods, so they stay in section 8.
 
@@ -311,8 +312,6 @@ Verified in the dumps unless marked otherwise. Addresses and offsets are specifi
 - `BoxInteraction.OnTake` only sets `m_holdingTake`. Pickup wait: the 3 s timeout sets `m_AvailabilityTimedOut`, clears `IsWaitingAvailability` and ends the interaction; the next `EndAvailabilityWait` clears that flag and returns, so a late refusal ends nothing and a late `PickUP_RPC` still calls `Box.PickUp` (a ghost-item source). Vanilla ignores drop, throw and use while `IsWaitingAvailability` is set.
 - `BoxInteraction.UpdateOpeningBoxHint` re-adds the USE `_open` hint for a closed box; `RackHints` calls it and then adds its own USE `_place`.
 - Other containers: online-order paper bags (`OnlineOrderInteraction`) apply moves on the acting client and broadcast them; taking goes through `OnlineOrderService.TryTakeProductIntoBag` (returns `TakeProductStatus`). `CrateInteraction` has the names swapped: `OnTake` (right click) sets `m_IsOnUse` and runs `<OnUseLoop>` (shelf → crate); `OnUse` (left click) sets `m_IsOnTake` and runs `<OnTakeLoop>` (crate → shelf). Both yield `WaitForSeconds(TotalProductInteractionInterval)`.
-
-- **Online orders and the courier.** The pending-orders list is per client: `OrderManager.GeneratedOrderLists` (synced; orders leave it only through `RemoveOrderOfId`, reached by `OrderCompleted`/`OrderExpired`/`CancelOrder` and the `RemoveOrder_Broadcast`/`RemoveOrder_RPC` pair) plus the local `OrderNotebookContainer` (one `OrderNotebook` per order; `CurrentInstance` = `m_NotebookInstances[0]`). The badge number is `GetUnreadOrderCount`, orders with `OrderListData.IsRead == false`; `IsRead` is **not** networked. Courier handover doesn't remove the order: it only sets `CourierManager.m_ClaimedOrders[orderId]` (host in `Courier.ReceiveBag`, then `NetworkCourier.Claim_Broadcast` to all) and fires `CourierManager.ClaimChanged`; removing the order itself would release the claim (`CourierManager.OnOrderRemoved`). Details in `SupermarketFixes/CLAUDE.md` (Bug #9).
 
 **Multiplayer patterns.**
 - Host-only branches show in ISIL as calls to `PhotonNetwork.get_IsMasterClient` or `get_IsConnectedAndMaster`. Guest-only branches call `get_IsConnectedAndSlave`. Grep a method's ISIL for these to find where its logic runs.
