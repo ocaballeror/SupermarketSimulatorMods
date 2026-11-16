@@ -97,10 +97,9 @@ This does not seem to be related to Bug #1.
 
 ## Bug #7: Cleaning Lady Is Visually Misaligned When Cleaning Stains
 
-**Status:** needs-rework  
+**Status:** in-progress  
 **Code:** `SupermarketFixes/src/Patches/JanitorCleanAlignFix.cs`  
-**Review:** 2026-11-16, 1 round, hash `0306ee22c3ec`  
-**Waiting on:** Rework per user feedback (aim the mop at the stain centre, stand where she fits), then review loop.
+**Waiting on:** Review loop (v0.10.0 rework).
 
 The cleaning lady successfully cleans stains on the floor, but she is not visually aligned with the stain.
 
