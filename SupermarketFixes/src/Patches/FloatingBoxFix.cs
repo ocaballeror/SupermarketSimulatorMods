@@ -70,10 +70,9 @@ internal static class FloatingBoxFix
     private static readonly HashSet<IntPtr> s_seenOther = new();
 
     /// <summary>A player picked this box up: its neighbours may have lost their support.</summary>
-    internal static void BoxPickedUp(Box box)
+    internal static void BoxPickedUp(Vector3 pos)
     {
-        if (!WakeUnsupported.Value || box == null) return;
-        var pos = box.transform.position;
+        if (!WakeUnsupported.Value) return;
         float now = Time.unscaledTime;
         foreach (var d in NearDelays) s_events.Add((pos, now + d));
         if (s_events.Count > 64) s_events.RemoveRange(0, s_events.Count - 64);
@@ -109,14 +108,14 @@ internal static class FloatingBoxFix
                 var c = near[k];
                 if (c == null) continue;
                 var box = c.GetComponentInParent<Box>();
-                if (box != null && seen.Add(box.Pointer)) SafeCheck(box);
+                if (box != null && seen.Add(box.Pointer)) SafeCheck(box, probe: false);
             }
         }
     }
 
-    private static void SafeCheck(Box box)
+    private static void SafeCheck(Box box, bool probe = true)
     {
-        try { Check(box); }
+        try { Check(box, probe); }
         catch (Exception e)
         {
             if (!s_loggedErrors)
@@ -134,7 +133,7 @@ internal static class FloatingBoxFix
         return view == null || view.IsMine;
     }
 
-    private static void Check(Box box)
+    private static void Check(Box box, bool probe)
     {
         if (!box.gameObject.activeInHierarchy || box.Racked) return;
         var rb = box.RigidBody;
@@ -156,11 +155,16 @@ internal static class FloatingBoxFix
         }
         if (!any) return;
 
-        if (Supported(box, bounds)) return;
+        // Right after a pickup every sleeping neighbour is woken without the support test: a box left half
+        // overhanging (one of its two supports taken) counts as "supported" by the slab, yet would fall. PhysX
+        // puts stable boxes back to sleep within about half a second, so a needless wake costs nothing.
+        if ((probe || rb.isKinematic) && Supported(box, bounds)) return;
 
         if (rb.isKinematic)
         {
-            LogOther(box, rb, bounds, "kinematic and nothing under it (not touched)");
+            // Carried boxes (employees, customers) are kinematic and parented: not interesting.
+            if (box.transform.parent == null)
+                LogOther(box, rb, bounds, "kinematic and nothing under it (not touched)");
             return;
         }
 
@@ -215,17 +219,31 @@ internal static class FloatingBoxFix
 [HarmonyLib.HarmonyPatch(typeof(Box), nameof(Box.PickUp), new Type[0])]
 internal static class FloatBox_PickUp_Patch
 {
-    private static void Postfix(Box __instance)
+    // Prefix: afterwards the box is parented to the hand, so its position would no longer be the pile's.
+    private static void Prefix(Box __instance, out Vector3 __state)
     {
-        try { FloatingBoxFix.BoxPickedUp(__instance); } catch (Exception) { }
+        __state = Vector3.zero;
+        try { __state = __instance.transform.position; } catch (Exception) { }
+    }
+
+    private static void Postfix(Vector3 __state)
+    {
+        try { FloatingBoxFix.BoxPickedUp(__state); } catch (Exception) { }
     }
 }
 
 [HarmonyLib.HarmonyPatch(typeof(Box), nameof(Box.PickUp), new[] { typeof(PlayerInstance) })]
 internal static class FloatBox_PickUpPlayer_Patch
 {
-    private static void Postfix(Box __instance)
+    // Prefix: afterwards the box is parented to the hand, so its position would no longer be the pile's.
+    private static void Prefix(Box __instance, out Vector3 __state)
     {
-        try { FloatingBoxFix.BoxPickedUp(__instance); } catch (Exception) { }
+        __state = Vector3.zero;
+        try { __state = __instance.transform.position; } catch (Exception) { }
+    }
+
+    private static void Postfix(Vector3 __state)
+    {
+        try { FloatingBoxFix.BoxPickedUp(__state); } catch (Exception) { }
     }
 }
