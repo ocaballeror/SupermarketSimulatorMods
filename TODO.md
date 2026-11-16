@@ -82,8 +82,9 @@ The current workaround is:
 
 ## Bug #6: Boxes Sometimes Remain Floating When Removing Boxes from a Stack
 
-**Status:** open  
-**Waiting on:** Still happening (in-game test 2026-11-15).
+**Status:** in-progress  
+**Code:** `SupermarketFixes/src/Patches/FloatingBoxFix.cs`  
+**Waiting on:** Review loop (v0.8.0), then in-game test; send the `[FloatBox]` lines.
 
 When there is a pile of boxes, such as after placing a large online order, sometimes removing the box directly underneath another box does not cause the upper box to fall.
 

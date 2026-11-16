@@ -21,6 +21,9 @@ public class DiagnosticsBehaviour : MonoBehaviour
         try { Patches.RackMoveFix.Tick(now); }
         catch (Exception e) { Plugin.Logger.LogError($"[RackMove] Tick failed: {e}"); }
 
+        try { Patches.FloatingBoxFix.Tick(now); }
+        catch (Exception e) { Plugin.Logger.LogError($"[FloatBox] Tick failed: {e}"); }
+
         var kb = Keyboard.current;
         if (kb == null) return;
         if (kb.f8Key.wasPressedThisFrame)

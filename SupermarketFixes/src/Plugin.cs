@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.supermarketfixes";
     public const string Name = "Supermarket Fixes";
-    public const string Version = "0.7.2";
+    public const string Version = "0.8.0";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -35,6 +35,7 @@ public class Plugin : BasePlugin
         Patches.StuckBoxFix.Bind(Config);
         Patches.BoxPlaceFix.Bind(Config);
         Patches.CratePlaceFix.Bind(Config);
+        Patches.FloatingBoxFix.Bind(Config);
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
         AddComponent<DiagnosticsBehaviour>();
@@ -58,6 +59,7 @@ public class Plugin : BasePlugin
         Patches.StuckBoxFix.ResetState();
         Patches.BoxPlaceFix.ResetState();
         Patches.CratePlaceFix.ResetState();
+        Patches.FloatingBoxFix.ResetState();
     }
 
     private void ApplyPatches()
