@@ -5,7 +5,7 @@ Experienced restockers carry **two boxes per trip**, both when they restock shel
 1. It picks up a box for its next job, as the game decides: a box for a product that needs restocking (from a storage rack, the outside delivery area or a delivery vehicle), or a delivered box that goes to storage.
 2. If there is a second job, it fetches a second box for it before leaving. The second box rides on top of the first. The second job can be:
    - restocking a **different** product, with a box from a storage rack or from the outside delivery area;
-   - taking another box from the outside delivery area to storage.
+   - taking another box from the outside delivery area to storage (among the delivered boxes it takes the one nearest to it).
 
    So a trip can be two restocks, two boxes for storage, or one of each.
 3. A box picked up for storage always goes to storage, as in the normal game, even if its product's shelves have a little room left.

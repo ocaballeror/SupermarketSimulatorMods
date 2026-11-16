@@ -420,14 +420,15 @@ internal static class DoubleCarry
     /// <summary>
     /// Finds a second job the way the game's own search does: restock a product other than
     /// <paramref name="firstProduct"/> (street boxes first if allowed, then racks), else take another box
-    /// from the delivery area to storage. Never returns <paramref name="firstBox"/> itself. A storage job is
-    /// only returned if the racks have room for every box of the pair that will need a rack place (see
-    /// <see cref="StorageFits"/>). With
+    /// from the delivery area to storage (the one nearest to the clerk). Never returns
+    /// <paramref name="firstBox"/> itself. A storage job, and a street-box restock while box 1 goes to storage
+    /// (<paramref name="firstToStorage"/>), is only returned if the racks have room for every box of the pair
+    /// that will need a rack place (see <see cref="StorageFits"/>). With
     /// <paramref name="reserve"/> false it is a pure probe: the display reservations the game's search makes
     /// are undone.
     /// </summary>
     internal static bool TryFindSecondJob(SearchHandler h, ClerkT clerk, Box firstBox, int firstProduct,
-        bool reserve, out Job job)
+        bool reserve, bool firstToStorage, out Job job)
     {
         job = default;
         var mgmt = clerk.ManagementData;
@@ -461,6 +462,11 @@ internal static class DoubleCarry
                         var list = h.SearchBestFitDisplaySlotsForRestock(streetBox, cand);
                         if (snap != null) RestoreOwners(clerk, snap);
                         if (list == null || list.Count == 0) continue;
+                        // Box 1 goes to storage and this box's leftovers will need a rack place too: if they took
+                        // the last one, box 1 (set down in the store at a shelf) would be stranded. (Box 2 from a
+                        // rack slot needs no check: its leftovers return to the place it frees.)
+                        if (firstToStorage && firstBox != null
+                            && !StorageFits(clerk, new List<Box> { firstBox, streetBox })) continue;
                         job = new Job { Target = new IBoxTarget(new StreetBoxTarget(streetBox).Pointer), Displays = list,
                             Product = pid, Source = "the delivery area, to restock" };
                         return true;
@@ -487,6 +493,9 @@ internal static class DoubleCarry
         var boxes = street?.GetBoxesFromStreet();
         if (boxes == null) return false;
         int excluded = h.m_ExcludedProductId;
+        // Cheap per-box filters first; the survivors are tried nearest to the clerk first.
+        var near = new List<(float Dist, Box Box, int Pid)>();
+        var origin = self.position;
         for (int i = 0; i < boxes.Count; i++)
         {
             var box = boxes[i];
@@ -494,10 +503,28 @@ internal static class DoubleCarry
             int pid = ProductOf(box);
             if (pid < 0 || pid == excluded) continue;
             if (box.m_IsBoxOccupied || box.IsTargeted || box.IsOccupiedByAnother(self)) continue;
-            if (!street.IsWithinRestockableArea(box.transform.position)) continue;
+            var pos = box.transform.position;
+            if (!street.IsWithinRestockableArea(pos)) continue;
+            near.Add(((pos - origin).sqrMagnitude, box, pid));
+        }
+        near.Sort((a, b) => a.Dist.CompareTo(b.Dist));
+        // Per-call caches: space in a rack slot and rack capacity depend on the product (and box size), not on
+        // the individual box. The merge check stays per box.
+        var spaceCache = new Dictionary<int, RackSlot>();   // null = no rack slot with space for the product
+        var noFit = new HashSet<int>();                      // products for which StorageFits said no
+        foreach (var (_, box, pid) in near)
+        {
+            if (noFit.Contains(pid)) continue;
             // The vanilla rule for this box alone.
             if (!h.IsMergeAvailableWithBox(box, out RackSlot rack) || rack == null)
-                if (!h.HasSpaceInRackSlotForProduct(pid, out rack) || rack == null) continue;
+            {
+                if (!spaceCache.TryGetValue(pid, out rack))
+                {
+                    if (!h.HasSpaceInRackSlotForProduct(pid, out rack)) rack = null;
+                    spaceCache[pid] = rack;
+                }
+                if (rack == null) continue;
+            }
             // Both boxes may need a rack place: box 1 when it goes to storage, and also when it is restocked,
             // since its leftovers go to storage too (if they took the last place, this box would be left in
             // the store). Box 1 is unknown only in the trip-start probe when it is still in a rack slot: its
@@ -505,7 +532,7 @@ internal static class DoubleCarry
             var demand = new List<Box> { box };
             var b1 = firstBox ?? (pid == firstProduct ? box : null);
             if (b1 != null) demand.Insert(0, b1);
-            if (!StorageFits(clerk, demand)) continue;
+            if (!StorageFits(clerk, demand)) { noFit.Add(pid); continue; }
             job = new Job { Target = new IBoxTarget(new StreetBoxTarget(box).Pointer), Rack = rack,
                 Product = pid, Source = "the delivery area, for storage" };
             return true;
@@ -684,7 +711,7 @@ internal static class DoubleCarry
                 {
                     plan.First = cur;
                     if (plan.FirstToStorage) plan.Storage.Add(cur.Pointer);
-                    if (TryFindSecondJob(h, clerk, cur, plan.FirstProduct, true, out var job))
+                    if (TryFindSecondJob(h, clerk, cur, plan.FirstProduct, true, plan.FirstToStorage, out var job))
                     {
                         ApplyJob(h, job);
                         plan.SecondProduct = job.Product;
@@ -983,7 +1010,7 @@ internal static class DoubleCarry
         int p1 = bt.ProductID;
         if (p1 < 0) return;
         // Only checks that a second job exists right now; the actual job is picked once box 1 is in hand.
-        if (!TryFindSecondJob(h, clerk, BoxOf(bt), p1, false, out var job)) return;
+        if (!TryFindSecondJob(h, clerk, BoxOf(bt), p1, false, !restock, out var job)) return;
 
         PruneDeadPlans();
         Plans[clerk.Pointer] = new Plan
