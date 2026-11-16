@@ -47,7 +47,7 @@ Guests don't need the mod: every pick-up, product placement, racking and box put
 ## Notes
 
 - If a restocker is fired or deactivated while carrying two boxes, both are put down on the floor. A box it had already put down at a shelf stays there.
-- Turning the mod off while a box waits on the floor leaves it there, and so does saving and reloading at that moment. Restockers don't pick up boxes inside the store, so move it yourself. Turning the mod off while a restocker is on its way to the second box makes it put the first box down where it is.
+- Turning the mod off while a box waits on the floor leaves it there, and so does saving and reloading at that moment. Restockers don't pick up boxes inside the store, so move it yourself. Turning the mod off while a restocker is on its way to pick up a second box makes it put the box it holds down where it is.
 - With several restockers, another restocker may refill one of the two products in the meantime. Nothing breaks: the extra stock just goes back to storage.
 - A guest who joins in the middle of a two-box trip may see the second box floating near the restocker until the restocker next handles it.
 - A restocker that can't find anywhere to put a leftover box behaves as in the normal game: it waits, then puts the box on the floor. It then deals with the other box.

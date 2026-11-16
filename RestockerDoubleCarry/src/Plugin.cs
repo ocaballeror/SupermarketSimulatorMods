@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.restockerdoublecarry";
     public const string Name = "Restocker Double Carry";
-    public const string Version = "1.1.3";
+    public const string Version = "1.2.0";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -35,9 +35,9 @@ public class Plugin : BasePlugin
             "A restocker that is carrying two boxes at that moment puts the second one down on the floor, or takes it in hand if its hands are empty.");
         MinimumLevel = Config.Bind("Restockers", "MinimumLevel", 10,
             new ConfigDescription(
-                "Restockers at this level or higher fetch two boxes per trip: they pick up two boxes of different " +
-                "products. At the shelves they put the top box on the floor, restock from the other, then pick the " +
-                "first one up again for the rest. " +
+                "Restockers at this level or higher fetch two boxes per trip, for restocking shelves and for taking " +
+                "delivered boxes to storage (or one of each), and handle the closer destination first. They never " +
+                "unpack while holding two: at a shelf they put the other box on the floor, restock, then come back for it. " +
                 "Lower-level restockers work as normal.",
                 new AcceptableValueRange<int>(1, 100)));
         StackVisuals = Config.Bind("Restockers", "StackSecondBox", true,

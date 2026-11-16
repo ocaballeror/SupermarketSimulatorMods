@@ -30,14 +30,20 @@
  *     the hands.
  *
  * Approach (host only, no vanilla method replaced): drive the vanilla states through the search results.
- *   Phase None:        vanilla search finds a restock job for a non-carried box (product P1) and the
- *                      clerk is at least MinimumLevel -> if a second job (other product P2) exists,
- *                      the next Restocking run is "fetch only" (tasks after TakeBox removed) -> B1 in hand.
+ *   Phase None:        vanilla search finds a job for a non-carried box B1 (product P1): restock
+ *                      (DisplayTargets) or take it to storage (RackTarget, RackingState), and the clerk is
+ *                      at least MinimumLevel -> if a second job exists (restock another product, or another
+ *                      delivery-area box to storage), the next Restocking/Racking run is "fetch only"
+ *                      (tasks after TakeBox removed) -> B1 in hand.
  *   Phase FetchFirst:  next search: still holding B1 -> fill the search results with job 2 ourselves
  *                      (skip vanilla) and fetch only again. TakeBox(B2) makes B2 current; B1 stays in
  *                      the hands and becomes the "stash".
- *   Phase FetchSecond: next search: holding B2 with B1 stashed -> CarryBox(B1) (B2 becomes the stash, on
- *                      top), vanilla search then restocks P1 with B1.
+ *   Phase FetchSecond: next search: holding B2 with B1 stashed -> work out where each box would go next
+ *                      (the vanilla carried-box rule: displays of its product, else a rack slot) and make
+ *                      the box with the shorter NavMesh path to its destination the current one. Vanilla
+ *                      then handles that box; the other is the stash, on top.
+ *   Racking:           putting a box into a rack (RackBox, merge included) isn't unpacking, so it happens
+ *                      with the stash still in hand; when the hands empty the stash is handed over.
  *   Set down:          a clerk never unpacks while holding two boxes. When the first RestockDisplay task
  *                      begins (the clerk has walked to the first display and is about to open the box),
  *                      a RestockDisplay.OnBegin prefix puts the stashed box on the floor behind the clerk
@@ -45,9 +51,13 @@
  *                      Clerk-dropped boxes are subscribed to StorageStreet, but every street search also
  *                      requires StorageStreet.IsWithinRestockableArea (the outside delivery area), so no
  *                      restocker's search picks up a box lying inside the store: it waits for this clerk.
- *   Phase DeliverFirst: vanilla handles B1 to the end: more displays, then the trash if empty
- *                      (GoToTrash), or a rack if not (RackingState). The mod stays out of every search
- *                      made with a box in hand.
+ *   Phase DeliverFirst: vanilla handles the current box to the end: more displays, then the trash if
+ *                      empty (GoToTrash), or a rack if not (RackingState). The mod stays out of every
+ *                      search made with a box in hand, with one exception (regroup):
+ *   Regroup:           the unpacked box still has leftovers (vanilla wants to rack it) and the floor box also
+ *                      goes to storage (no display wants it, a rack slot has room) -> a search postfix
+ *                      replaces the result with a fetch-only Racking run for the floor box, so both are
+ *                      racked in one walk (phase FetchSecond again). Once per trip.
  *   Back for B2:       first search with empty hands and B2 still on the floor: fill the search results
  *                      ourselves with B2 as a StreetBoxTarget, plus its display slots (vanilla
  *                      SearchBestFitDisplaySlotsForRestock) or, if no display needs it any more, a rack
@@ -118,6 +128,21 @@ internal static class DoubleCarry
         public Box Floor;
         /// <summary>Time of the first empty-handed search that tried to fetch the floor box (-1: not yet).</summary>
         public float FloorRetryStart = -1f;
+        /// <summary>Rack slot vanilla chose for box 1 when the trip started as a storage job (else null).</summary>
+        public RackSlot FirstRack;
+        /// <summary>The clerk already went back for the floor box with leftovers in hand once this trip.</summary>
+        public bool Regrouped;
+    }
+
+    /// <summary>A job for a box that isn't in hand yet: restock (Displays) or take it to storage (Rack).</summary>
+    internal struct Job
+    {
+        public IBoxTarget Target;
+        public DisplaySlotList Displays;
+        public RackSlot Rack;
+        public int Product;
+        public string Source;
+        public bool IsRestock => Displays != null && Displays.Count > 0;
     }
 
     /// <summary>How long a clerk keeps trying to come back for a box it put down before giving up.</summary>
@@ -134,8 +159,8 @@ internal static class DoubleCarry
     // when they become the box in hand. Stale pointers are harmless: at worst a box gets one extra
     // re-tween to the hands.
     private static readonly HashSet<IntPtr> Raised = new();
-    // ClerkRestockingState currently running a shortened list -> (state, its full task list).
-    private static readonly Dictionary<IntPtr, (ClerkRestockingState State, List<SequenceTask> Original)> Stripped = new();
+    // Restocking/Racking sequence currently running a shortened list -> (sequence, its clerk, full task list).
+    private static readonly Dictionary<IntPtr, (SupermarketSimulator.Sequence.Sequence Seq, ClerkT Clerk, List<SequenceTask> Original)> Stripped = new();
 
     internal static bool InIdleTick;
     private static bool _dropping;
@@ -278,64 +303,228 @@ internal static class DoubleCarry
         if (dead != null) foreach (var k in dead) Plans.Remove(k);
     }
 
-    /// <summary>
-    /// Finds a restock job for a product other than <paramref name="excludedProduct"/>, the way the
-    /// game's own search does (street boxes first if allowed, then racks). With <paramref name="reserve"/>
-    /// false it is a pure probe: the display reservations the game's search makes are undone.
-    /// </summary>
-    internal static bool TryFindSecondJob(SearchHandler h, ClerkT clerk, int excludedProduct, bool reserve,
-        out IBoxTarget target, out DisplaySlotList displays, out int productId, out string source)
+    /// <summary>The box a not-yet-taken box target points at (street or vehicle box; null for a rack slot).</summary>
+    internal static Box BoxOf(IBoxTarget target)
     {
-        target = null; displays = null; productId = -1; source = null;
-        var mgmt = clerk.ManagementData;
-        if (mgmt == null || !mgmt.IsActive || !mgmt.RestockShelf) return false;
-        var all = h.GetDisplaySlotsRequiredRefill();
-        if (all == null || all.Count == 0) return false;
-        var self = clerk.transform;
-        var tried = new HashSet<int>();
+        if (target == null) return null;
+        var street = target.TryCast<StreetBoxTarget>();
+        if (street != null) return street.Box;
+        var vehicle = target.TryCast<VehicleBoxTarget>();
+        return vehicle?.Box;
+    }
 
-        for (int pass = 0; pass < 2; pass++)
+    /// <summary>
+    /// How many more boxes fit in the rack slot. A slot with no boxes yet counts as roomy (its capacity
+    /// depends on the box size of whatever goes in first).
+    /// </summary>
+    internal static int RoomFor(RackSlot slot)
+    {
+        try
         {
-            if (pass == 0 && !mgmt.PickUpBoxGround) continue;
-            tried.Clear();
-            for (int i = 0; i < all.Count; i++)
-            {
-                var slot = all[i];
-                if (slot == null) continue;
-                int pid = slot.ProductID;
-                if (pid < 0 || pid == excludedProduct || tried.Contains(pid)) continue;
-                if (slot.IsOccupiedByOthers(clerk)) continue;
-                tried.Add(pid);
+            var data = slot?.Data;
+            if (data == null) return int.MaxValue;
+            int count = data.BoxCount;
+            if (count <= 0) return int.MaxValue;
+            if (!NoktaSingleton<IDManager>.HasInstance) return int.MaxValue;
+            var layout = NoktaSingleton<IDManager>.Instance.BoxSO(data.BoxID)?.GridLayout;
+            return layout == null ? int.MaxValue : layout.boxCount - count;
+        }
+        catch (Exception) { return int.MaxValue; }
+    }
 
-                if (pass == 0)
+    /// <summary>
+    /// Finds a second job the way the game's own search does: restock a product other than
+    /// <paramref name="firstProduct"/> (street boxes first if allowed, then racks), else take another box
+    /// from the delivery area to storage. Never returns <paramref name="firstBox"/> itself. With
+    /// <paramref name="reserve"/> false it is a pure probe: the display reservations the game's search makes
+    /// are undone.
+    /// </summary>
+    internal static bool TryFindSecondJob(SearchHandler h, ClerkT clerk, Box firstBox, int firstProduct,
+        RackSlot firstRack, bool reserve, out Job job)
+    {
+        job = default;
+        var mgmt = clerk.ManagementData;
+        if (mgmt == null || !mgmt.IsActive) return false;
+        var self = clerk.transform;
+
+        var all = mgmt.RestockShelf ? h.GetDisplaySlotsRequiredRefill() : null;
+        if (all != null && all.Count > 0)
+        {
+            var tried = new HashSet<int>();
+            for (int pass = 0; pass < 2; pass++)
+            {
+                if (pass == 0 && !mgmt.PickUpBoxGround) continue;
+                tried.Clear();
+                for (int i = 0; i < all.Count; i++)
                 {
-                    if (!h.CheckStreetForRequiredProduct(pid, out Box streetBox) || streetBox == null) continue;
-                    if (streetBox.IsOccupiedByAnother(self) || streetBox.IsTargeted) continue;
-                    var cand = h.GetDisplaySlotsRequiredRefill(pid);
-                    var snap = reserve ? null : SnapshotOwners(cand);
-                    var list = h.SearchBestFitDisplaySlotsForRestock(streetBox, cand);
-                    if (snap != null) RestoreOwners(clerk, snap);
-                    if (list == null || list.Count == 0) continue;
-                    target = new IBoxTarget(new StreetBoxTarget(streetBox).Pointer);
-                    displays = list; productId = pid; source = "street";
-                    return true;
-                }
-                else
-                {
-                    if (!h.HasRackSlotForRequiredProduct(pid, out RackSlot rackSlot) || rackSlot == null) continue;
-                    var cand = h.GetDisplaySlotsRequiredRefill(pid);
-                    var snap = reserve ? null : SnapshotOwners(cand);
-                    var list = h.SearchBestFitDisplaySlotsForRestock(rackSlot, cand);
-                    if (snap != null) RestoreOwners(clerk, snap);
-                    if (list == null || list.Count == 0) continue;
-                    target = new IBoxTarget(new RackSlotBoxTarget(rackSlot).Pointer);
-                    displays = list; productId = pid; source = "rack";
-                    return true;
+                    var slot = all[i];
+                    if (slot == null) continue;
+                    int pid = slot.ProductID;
+                    if (pid < 0 || pid == firstProduct || tried.Contains(pid)) continue;
+                    if (slot.IsOccupiedByOthers(clerk)) continue;
+                    tried.Add(pid);
+
+                    if (pass == 0)
+                    {
+                        if (!h.CheckStreetForRequiredProduct(pid, out Box streetBox) || streetBox == null) continue;
+                        if (Same(streetBox, firstBox)) continue;
+                        if (streetBox.IsOccupiedByAnother(self) || streetBox.IsTargeted) continue;
+                        var cand = h.GetDisplaySlotsRequiredRefill(pid);
+                        var snap = reserve ? null : SnapshotOwners(cand);
+                        var list = h.SearchBestFitDisplaySlotsForRestock(streetBox, cand);
+                        if (snap != null) RestoreOwners(clerk, snap);
+                        if (list == null || list.Count == 0) continue;
+                        job = new Job { Target = new IBoxTarget(new StreetBoxTarget(streetBox).Pointer), Displays = list,
+                            Product = pid, Source = "the delivery area, to restock" };
+                        return true;
+                    }
+                    else
+                    {
+                        if (!h.HasRackSlotForRequiredProduct(pid, out RackSlot rackSlot) || rackSlot == null) continue;
+                        var cand = h.GetDisplaySlotsRequiredRefill(pid);
+                        var snap = reserve ? null : SnapshotOwners(cand);
+                        var list = h.SearchBestFitDisplaySlotsForRestock(rackSlot, cand);
+                        if (snap != null) RestoreOwners(clerk, snap);
+                        if (list == null || list.Count == 0) continue;
+                        job = new Job { Target = new IBoxTarget(new RackSlotBoxTarget(rackSlot).Pointer), Displays = list,
+                            Product = pid, Source = "storage, to restock" };
+                        return true;
+                    }
                 }
             }
         }
+
+        // Delivery-area box to storage: the vanilla street-to-rack branch (gated by PickUpBoxGround).
+        if (!mgmt.PickUpBoxGround || !NoktaSingleton<StorageStreet>.HasInstance) return false;
+        var street = NoktaSingleton<StorageStreet>.Instance;
+        var boxes = street?.GetBoxesFromStreet();
+        if (boxes == null) return false;
+        int excluded = h.m_ExcludedProductId;
+        for (int i = 0; i < boxes.Count; i++)
+        {
+            var box = boxes[i];
+            if (box == null || Same(box, firstBox) || !box.gameObject.activeInHierarchy) continue;
+            int pid = ProductOf(box);
+            if (pid < 0 || pid == excluded) continue;
+            if (box.m_IsBoxOccupied || box.IsTargeted || box.IsOccupiedByAnother(self)) continue;
+            if (!street.IsWithinRestockableArea(box.transform.position)) continue;
+            bool sameProduct = pid == firstProduct;
+            RackSlot rack = null;
+            // A same-product pair needs a slot with room for both, so don't count on a merge for it.
+            if (sameProduct || !h.IsMergeAvailableWithBox(box, out rack) || rack == null)
+                if (!h.HasSpaceInRackSlotForProduct(pid, out rack) || rack == null) continue;
+            // Box 1 is headed for this slot already: it holds one product, and needs room for two.
+            if (firstRack != null && Same(rack, firstRack) && !sameProduct) continue;
+            if (sameProduct && RoomFor(rack) < 2) continue;
+            job = new Job { Target = new IBoxTarget(new StreetBoxTarget(box).Pointer), Rack = rack,
+                Product = pid, Source = "the delivery area, for storage" };
+            return true;
+        }
         return false;
     }
+
+    /// <summary>Puts a job into the search results so the next state change runs it.</summary>
+    private static void ApplyJob(SearchHandler h, Job job)
+    {
+        h.BoxTarget = job.Target;
+        if (job.IsRestock)
+        {
+            h.DisplayTargets = job.Displays;
+            h.RackTarget = null;
+        }
+        else
+        {
+            if (h.DisplayTargets == null) h.DisplayTargets = new DisplaySlotList();
+            h.DisplayTargets.Clear();   // Idle -> Restocking needs Count > 0; this must go to Racking
+            h.RackTarget = job.Rack;
+        }
+    }
+
+    // ---------------------------------------------------------------- choosing the order
+
+    /// <summary>
+    /// Where a box in hand would go next under the vanilla carried-box rule: the first display slot the
+    /// game would restock (no refill threshold), else a rack slot. Display reservations made by the probe are
+    /// undone. Null when it has nowhere to go (or is empty).
+    /// </summary>
+    private static Vector3? Destination(SearchHandler h, ClerkT clerk, Box box, out string what)
+    {
+        what = "nowhere";
+        int pid = ProductOf(box);
+        if (box == null || pid < 0 || !box.HasProducts) return null;
+        var mgmt = clerk.ManagementData;
+        if (mgmt != null && mgmt.RestockShelf)
+        {
+            var cand = h.GetDisplaySlotsRequiredRefillWithoutCondition(pid);
+            if (cand != null && cand.Count > 0)
+            {
+                var snap = SnapshotOwners(cand);
+                var list = h.SearchBestFitDisplaySlotsForRestock(box, cand);
+                RestoreOwners(clerk, snap);
+                if (list != null && list.Count > 0 && list[0] != null)
+                {
+                    what = "shelf";
+                    return list[0].transform.position;
+                }
+            }
+        }
+        if ((h.IsMergeAvailableWithBox(box, out RackSlot rack) && rack != null)
+            || (h.HasSpaceInRackSlotForProduct(pid, out rack) && rack != null))
+        {
+            what = "storage";
+            var ip = rack.m_InteractionPosition;
+            return ip != null ? ip.position : rack.transform.position;
+        }
+        return null;
+    }
+
+    /// <summary>Walking distance along the NavMesh; straight-line distance if no path is found.</summary>
+    private static float PathLength(Vector3 from, Vector3 to)
+    {
+        try
+        {
+            if (UnityEngine.AI.NavMesh.SamplePosition(from, out var a, 2f, UnityEngine.AI.NavMesh.AllAreas)
+                && UnityEngine.AI.NavMesh.SamplePosition(to, out var b, 3f, UnityEngine.AI.NavMesh.AllAreas))
+            {
+                var path = new UnityEngine.AI.NavMeshPath();
+                if (UnityEngine.AI.NavMesh.CalculatePath(a.position, b.position, UnityEngine.AI.NavMesh.AllAreas, path)
+                    && path.status != UnityEngine.AI.NavMeshPathStatus.PathInvalid)
+                {
+                    var corners = path.corners;
+                    if (corners != null && corners.Length > 0)
+                    {
+                        float len = Vector3.Distance(from, corners[0]);
+                        for (int i = 1; i < corners.Length; i++) len += Vector3.Distance(corners[i - 1], corners[i]);
+                        return len + Vector3.Distance(corners[corners.Length - 1], to);
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Info($"path length failed, using straight-line distance: {e.Message}");
+        }
+        return Vector3.Distance(from, to);
+    }
+
+    /// <summary>
+    /// Both boxes are in hand (<paramref name="cur"/> current, <paramref name="other"/> stashed): make the one
+    /// with the shorter walk to its destination the current one.
+    /// </summary>
+    private static void ChooseOrder(SearchHandler h, ClerkT clerk, Box cur, Box other)
+    {
+        var here = clerk.transform.position;
+        var dCur = Destination(h, clerk, cur, out string wCur);
+        var dOther = Destination(h, clerk, other, out string wOther);
+        float lCur = dCur.HasValue ? PathLength(here, dCur.Value) : float.PositiveInfinity;
+        float lOther = dOther.HasValue ? PathLength(here, dOther.Value) : float.PositiveInfinity;
+        bool swap = lOther < lCur;
+        Info($"{Name(clerk)}: has both boxes: product {ProductOf(cur)} -> {wCur} ({Fmt(lCur)}), " +
+             $"product {ProductOf(other)} -> {wOther} ({Fmt(lOther)}); product {ProductOf(swap ? other : cur)} first");
+        if (swap) HandOver(clerk, other);
+    }
+
+    private static string Fmt(float metres) => float.IsInfinity(metres) ? "no destination" : $"{metres:0.0} m";
 
     // ---------------------------------------------------------------- the trip
 
@@ -367,20 +556,20 @@ internal static class DoubleCarry
                 if (cur != null && stash == null && ProductOf(cur) == plan.FirstProduct)
                 {
                     plan.First = cur;
-                    if (TryFindSecondJob(h, clerk, plan.FirstProduct, true, out var target, out var displays,
-                            out int p2, out string source))
+                    if (TryFindSecondJob(h, clerk, cur, plan.FirstProduct, plan.FirstRack, true, out var job))
                     {
-                        h.BoxTarget = target;
-                        h.DisplayTargets = displays;
-                        h.RackTarget = null;
-                        plan.SecondProduct = p2;
-                        plan.ReservedSecond = new List<DisplaySlot>();
-                        for (int i = 0; i < displays.Count; i++)
-                            if (displays[i] != null) plan.ReservedSecond.Add(displays[i]);
+                        ApplyJob(h, job);
+                        plan.SecondProduct = job.Product;
+                        if (job.IsRestock)
+                        {
+                            plan.ReservedSecond = new List<DisplaySlot>();
+                            for (int i = 0; i < job.Displays.Count; i++)
+                                if (job.Displays[i] != null) plan.ReservedSecond.Add(job.Displays[i]);
+                        }
                         plan.Phase = Phase.FetchSecond;
                         plan.FetchOnlyNext = true;
                         vanillaRan = false;
-                        Info($"{Name(clerk)}: has box 1 (product {plan.FirstProduct}), fetching box 2 (product {p2}) from {source}");
+                        Info($"{Name(clerk)}: has box 1 (product {plan.FirstProduct}), fetching box 2 (product {job.Product}) from {job.Source}");
                         return false;
                     }
                     EndPlan(clerk, "no second job any more, restocking box 1 normally");
@@ -390,16 +579,18 @@ internal static class DoubleCarry
                 return true;
 
             case Phase.FetchSecond:
-                if (cur != null && !Same(cur, plan.First) && IsStashed(clerk, plan.First))
+                // Just took a box (box 2, or the floor box again when regrouping) with another plan box
+                // still in hand.
+                if (cur != null && stash != null && !Same(cur, stash))
                 {
-                    plan.Second = cur;
+                    if (!Same(cur, plan.First) && !Same(cur, plan.Second)) plan.Second = cur;
+                    if (Same(cur, plan.Floor)) plan.Floor = null;
                     plan.Phase = Phase.DeliverFirst;
-                    HandOver(clerk, plan.First);
-                    Info($"{Name(clerk)}: has both boxes, restocking product {plan.FirstProduct} first (box 2 goes on the floor at the shelf)");
+                    ChooseOrder(h, clerk, cur, stash);
                     return true;
                 }
                 plan.Phase = Phase.Unwind;
-                Info($"{Name(clerk)}: could not take box 2, continuing with box 1");
+                Info($"{Name(clerk)}: could not take the other box, carrying on with the one in hand");
                 return UnwindStep(h, clerk, plan, cur, stash, ref vanillaRan);
 
             default:
@@ -499,7 +690,7 @@ internal static class DoubleCarry
             if (h.DisplayTargets == null) h.DisplayTargets = new DisplaySlotList();
             h.DisplayTargets.Clear();   // Idle -> Restocking needs Count > 0; this must go to Racking
             h.RackTarget = rack;
-            Info($"{Name(clerk)}: going back for the box it put down, product {pid} is full on the shelves, taking it to storage");
+            Info($"{Name(clerk)}: going back for the box it put down, taking product {pid} to storage");
         }
         plan.Phase = Phase.Unwind;
         return true;
@@ -619,45 +810,98 @@ internal static class DoubleCarry
         }
     }
 
-    /// <summary>Runs after the game's own search: decides whether to start a two-box trip.</summary>
+    /// <summary>
+    /// Runs after the game's own search: decides whether to start a two-box trip, or (during a trip) whether
+    /// to pick the floor box up again before taking leftovers to storage.
+    /// </summary>
     internal static void AfterSearch(SearchHandler h)
     {
         var clerk = h.m_Clerk;
         if (clerk == null) return;
         var plan = GetPlan(clerk);
-        if (plan != null && plan.Phase != Phase.None) return;
+        if (plan != null)
+        {
+            TryRegroup(h, clerk, plan);
+            return;
+        }
         if (Current(clerk) != null) return;
 
-        var displays = h.DisplayTargets;
-        if (displays == null || displays.Count == 0 || h.RackTarget != null) return;
         var bt = h.BoxTarget;
         if (bt == null || bt.TryCast<CarryBoxTarget>() != null) return;
+        var displays = h.DisplayTargets;
+        bool restock = displays != null && displays.Count > 0;
+        var rack = h.RackTarget;
+        if (!restock && rack == null) return;   // e.g. an empty box to throw away
 
         int level = Level(clerk);
         if (level < Plugin.MinimumLevel.Value) return;
 
         int p1 = bt.ProductID;
         if (p1 < 0) return;
+        var firstRack = restock ? null : rack;
         // Only checks that a second job exists right now; the actual job is picked once box 1 is in hand.
-        if (!TryFindSecondJob(h, clerk, p1, false, out _, out _, out int p2, out string source)) return;
+        if (!TryFindSecondJob(h, clerk, BoxOf(bt), p1, firstRack, false, out var job)) return;
 
         PruneDeadPlans();
         Plans[clerk.Pointer] = new Plan
         {
-            Clerk = clerk, Phase = Phase.FetchFirst, FetchOnlyNext = true, FirstProduct = p1,
+            Clerk = clerk, Phase = Phase.FetchFirst, FetchOnlyNext = true, FirstProduct = p1, FirstRack = firstRack,
         };
-        Info($"{Name(clerk)} (level {level}): two-box trip, box 1 = product {p1}, then product {p2} ({source})");
+        Info($"{Name(clerk)} (level {level}): two-box trip, box 1 = product {p1} ({(restock ? "to restock" : "for storage")}), " +
+             $"then product {job.Product} from {job.Source}");
+    }
+
+    /// <summary>
+    /// The clerk holds the box it unpacked, with leftovers that vanilla now wants to rack, and the box it put
+    /// on the floor also goes to storage: pick the floor box up first and rack both in one walk.
+    /// </summary>
+    private static void TryRegroup(SearchHandler h, ClerkT clerk, Plan plan)
+    {
+        if (plan.Regrouped || (plan.Phase != Phase.DeliverFirst && plan.Phase != Phase.Unwind)) return;
+        var floor = plan.Floor;
+        if (floor == null || !IsOnFloor(clerk, floor)) return;
+        var cur = Current(clerk);
+        if (cur == null || Stash(clerk, plan) != null) return;
+        if (!Same(cur, plan.First) && !Same(cur, plan.Second)) return;
+        // Vanilla decided to take the box in hand to storage.
+        var rack = h.RackTarget;
+        if (rack == null || (h.DisplayTargets != null && h.DisplayTargets.Count > 0)) return;
+        var bt = h.BoxTarget;
+        if (bt == null || bt.TryCast<CarryBoxTarget>() == null) return;
+
+        if (Destination(h, clerk, floor, out string where) == null || where != "storage") return;
+        int pid = ProductOf(floor);
+        if (pid == ProductOf(cur) && RoomFor(rack) < 2) return;
+
+        plan.Regrouped = true;
+        ApplyJob(h, new Job { Target = new IBoxTarget(new StreetBoxTarget(floor).Pointer), Rack = rack, Product = pid });
+        plan.Phase = Phase.FetchSecond;
+        plan.FetchOnlyNext = true;
+        Info($"{Name(clerk)}: box (product {ProductOf(cur)}) has leftovers and the box on the floor (product {pid}) " +
+             "goes to storage too, picking it up again first");
     }
 
     // ---------------------------------------------------------------- restocking state
 
     internal static void BeforeRestockEnter(ClerkRestockingState state)
-    {
-        var tasks = state.m_Sequence?.m_Tasks;
-        if (tasks == null) return;
-        RestoreTasks(state);
+        => BeforeStateEnter(state.m_Sequence, state.m_Clerk);
 
-        var clerk = state.m_Clerk;
+    internal static void BeforeRackingEnter(RackingState state)
+    {
+        var owner = state.m_OwnerTransform;
+        BeforeStateEnter(state.m_Sequence, owner != null ? owner.GetComponent<ClerkT>() : null);
+    }
+
+    /// <summary>
+    /// A Restocking or Racking run is about to start. Always restores a list shortened earlier; when the plan
+    /// asks for it, removes every task after TakeBox ("fetch only").
+    /// </summary>
+    private static void BeforeStateEnter(SupermarketSimulator.Sequence.Sequence seq, ClerkT clerk)
+    {
+        var tasks = seq?.m_Tasks;
+        if (tasks == null) return;
+        RestoreTasks(seq);
+
         var plan = clerk != null ? GetPlan(clerk) : null;
         if (plan == null || !plan.FetchOnlyNext) return;
         plan.FetchOnlyNext = false;
@@ -667,7 +911,7 @@ internal static class DoubleCarry
             if (tasks[i]?.TryCast<TakeBox>() != null) { takeIndex = i; break; }
         if (takeIndex < 0)
         {
-            Plugin.Logger.LogWarning("[DoubleCarry] restocking sequence has no TakeBox task, two-box trip cancelled");
+            Plugin.Logger.LogWarning("[DoubleCarry] restocker sequence has no TakeBox task, two-box trip cancelled");
             AbortPlan(clerk, true, null);
             return;
         }
@@ -676,13 +920,13 @@ internal static class DoubleCarry
         var original = new List<SequenceTask>();
         for (int i = 0; i < tasks.Count; i++) original.Add(tasks[i]);
         tasks.RemoveRange(takeIndex + 1, tasks.Count - takeIndex - 1);
-        Stripped[state.Pointer] = (state, original);
+        Stripped[seq.Pointer] = (seq, clerk, original);
     }
 
-    internal static void RestoreTasks(ClerkRestockingState state)
+    internal static void RestoreTasks(SupermarketSimulator.Sequence.Sequence seq)
     {
-        if (!Stripped.Remove(state.Pointer, out var entry)) return;
-        var tasks = state.m_Sequence?.m_Tasks;
+        if (seq == null || !Stripped.Remove(seq.Pointer, out var entry)) return;
+        var tasks = seq.m_Tasks;
         if (tasks == null) return;
         tasks.Clear();
         foreach (var t in entry.Original) tasks.Add(t);
@@ -832,7 +1076,7 @@ internal static class DoubleCarry
     private static bool IsFetching(ClerkT clerk)
     {
         foreach (var e in Stripped.Values)
-            if (e.State != null && Same(e.State.m_Clerk, clerk)) return true;
+            if (Same(e.Clerk, clerk)) return true;
         return false;
     }
 
@@ -854,10 +1098,10 @@ internal static class DoubleCarry
                     if (cur == null) HandOver(clerk, stash);
                     else DropStash(clerk, stash, cur);
                 }
-                else if (plan.Phase == Phase.FetchSecond && Same(cur, plan.First) && IsFetching(clerk))
+                else if (plan.Phase == Phase.FetchSecond && cur != null && IsFetching(clerk))
                 {
-                    // On its way to box 2 with box 1 in hand: once the full sequence is restored this run
-                    // would take box 2 and leave box 1 stuck in the hands, so put box 1 down now.
+                    // On its way to the other box with one in hand: once the full sequence is restored this
+                    // run would take the other box and leave this one stuck in the hands, so put it down now.
                     _dropping = true;
                     try { clerk.DropBoxToGround(); } finally { _dropping = false; }
                 }
@@ -867,11 +1111,11 @@ internal static class DoubleCarry
                 Plugin.Logger.LogWarning($"[DoubleCarry] releasing a second box failed: {e.Message}");
             }
         }
-        var stripped = new List<ClerkRestockingState>();
-        foreach (var e in Stripped.Values) stripped.Add(e.State);
-        foreach (var state in stripped)
+        var stripped = new List<SupermarketSimulator.Sequence.Sequence>();
+        foreach (var e in Stripped.Values) stripped.Add(e.Seq);
+        foreach (var seq in stripped)
         {
-            try { if (state != null) RestoreTasks(state); }
+            try { if (seq != null) RestoreTasks(seq); }
             catch (Exception e) { Plugin.Logger.LogWarning($"[DoubleCarry] restoring a restock sequence failed: {e.Message}"); }
         }
     }
@@ -938,8 +1182,28 @@ internal static class RestockExitPatch
 {
     private static void Postfix(ClerkRestockingState __instance)
     {
-        try { DoubleCarry.RestoreTasks(__instance); }
+        try { DoubleCarry.RestoreTasks(__instance.m_Sequence); }
         catch (Exception e) { Plugin.Logger.LogError($"[DoubleCarry] restock exit failed: {e}"); }
+    }
+}
+
+[HarmonyPatch(typeof(RackingState), nameof(RackingState.Enter))]
+internal static class RackingEnterPatch
+{
+    private static void Prefix(RackingState __instance)
+    {
+        try { DoubleCarry.BeforeRackingEnter(__instance); }
+        catch (Exception e) { Plugin.Logger.LogError($"[DoubleCarry] racking enter failed: {e}"); }
+    }
+}
+
+[HarmonyPatch(typeof(RackingState), nameof(RackingState.Exit))]
+internal static class RackingExitPatch
+{
+    private static void Postfix(RackingState __instance)
+    {
+        try { DoubleCarry.RestoreTasks(__instance.m_Sequence); }
+        catch (Exception e) { Plugin.Logger.LogError($"[DoubleCarry] racking exit failed: {e}"); }
     }
 }
 

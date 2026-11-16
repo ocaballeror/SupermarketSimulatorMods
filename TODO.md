@@ -199,7 +199,7 @@ Allow values up to `10x`.
 
 **Status:** in-progress  
 **Code:** `RestockerDoubleCarry/`  
-**Waiting on:** Implementing two-box storage and mixed trips (user request 2026-11-16, see `RestockerDoubleCarry/CLAUDE.md`), then review.
+**Waiting on:** Review of v1.2.0 (two-box storage and mixed trips, user request 2026-11-16).
 
 Make level 10 restockers capable of carrying two product boxes at a time.
 
