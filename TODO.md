@@ -260,7 +260,7 @@ Also, add this functionality to the list of help keys displayed on the side of t
 
 **Status:** in-progress  
 **Code:** `ExtraComputers/`  
-**Waiting on:** Review loop (v1.2.1), then in-game test (steps in the mod's `CLAUDE.md`).
+**Waiting on:** Review loop (v1.2.2; the template build fails in-game, no PhotonView, being fixed), then in-game test (steps in the mod's `CLAUDE.md`).
 
 Create a new furniture type: the computer.
 
