@@ -1,6 +1,0 @@
-my findings after a playing session with all mods enabled
-
-
-bugs:
-	Bug #5 is still happening. Does not seem to be improved in any way.
-	Bug #6 still happening.
