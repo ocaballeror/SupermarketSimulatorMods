@@ -8,13 +8,14 @@ Experienced restockers carry **two boxes per trip**, both when they restock shel
    - taking another box from the outside delivery area to storage.
 
    So a trip can be two restocks, two boxes for storage, or one of each.
-3. With both boxes in hand, it deals first with the box whose destination (its shelf, or its storage rack) is the shorter walk from where it picked up the second box.
-4. Putting a box in a storage rack (including topping up a box of the same product already there) works with both boxes in hand: the restocker racks one and keeps carrying the other. **But a restocker never unpacks onto a shelf while holding two boxes.** When it reaches a shelf with two boxes in hand, it puts the other box on the floor next to it, then opens the box for that shelf and restocks.
-5. Then it finishes with the box it unpacked:
+3. A box picked up for storage always goes to storage, as in the normal game, even if its product's shelves have a little room left.
+4. With both boxes in hand, it deals first with the box whose destination (its shelf, or its storage rack) is the shorter walk from where it picked up the second box.
+5. Putting a box in a storage rack (including topping up a box of the same product already there) works with both boxes in hand: the restocker racks one and keeps carrying the other. **But a restocker never unpacks onto a shelf while holding two boxes.** When it reaches a shelf with two boxes in hand, it puts the other box on the floor next to it, then opens the box for that shelf and restocks.
+6. Then it finishes with the box it unpacked:
    - **If the box is empty**, it takes it to the trash (as it normally would), then comes back for the box it left on the floor and deals with that one: it unpacks it at its own shelves, or takes it to storage.
    - **If the box still has products** and the box on the floor goes to storage too, it picks the floor box up again and takes both to storage (the closer rack first).
    - **If the box still has products** and the box on the floor is for a shelf, it takes the leftovers to storage, then comes back for the floor box and unpacks it.
-6. Whatever is left in the last box goes to storage, or in the trash if it's empty, as usual.
+7. Whatever is left in the last box goes to storage, or in the trash if it's empty, as usual.
 
 The box goes on the floor beside the restocker, away from the shelf (or to its left or right if that spot is taken). If the floor box's product was filled on the shelves in the meantime, the restocker takes it straight to storage. If there's nowhere to put it yet, or it can't reach it, it does other work and tries again later (it gives up after 3 minutes of trying; the box then stays on the floor like any box a restocker drops).
 
@@ -47,7 +48,7 @@ Guests don't need the mod: every pick-up, product placement, racking and box put
 ## Notes
 
 - If a restocker is fired or deactivated while carrying two boxes, both are put down on the floor. A box it had already put down at a shelf stays there.
-- Turning the mod off while a box waits on the floor leaves it there, and so does saving and reloading at that moment. Restockers don't pick up boxes inside the store, so move it yourself. Turning the mod off while a restocker is on its way to pick up a second box makes it put the box it holds down where it is.
+- Turning the mod off while a box waits on the floor leaves it there, and so does saving and reloading at that moment. Restockers don't pick up boxes inside the store, so move it yourself. Turning the mod off while a restocker is on its way to pick up a second box makes it put the box it holds down where it is. If that happens inside the store (on its way back to a box it put down), move that box yourself too.
 - With several restockers, another restocker may refill one of the two products in the meantime. Nothing breaks: the extra stock just goes back to storage.
 - A guest who joins in the middle of a two-box trip may see the second box floating near the restocker until the restocker next handles it.
 - A restocker that can't find anywhere to put a leftover box behaves as in the normal game: it waits, then puts the box on the floor. It then deals with the other box.

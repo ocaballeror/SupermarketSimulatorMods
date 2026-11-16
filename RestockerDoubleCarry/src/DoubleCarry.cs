@@ -44,6 +44,12 @@
  *                      then handles that box; the other is the stash, on top.
  *   Racking:           putting a box into a rack (RackBox, merge included) isn't unpacking, so it happens
  *                      with the stash still in hand; when the hands empty the stash is handed over.
+ *   Storage boxes:     a box picked up for storage (Plan.Storage) is racked by vanilla in one uninterrupted
+ *                      RackingState run. Here the run is cut after TakeBox, and the vanilla carried-box search
+ *                      would send it to any display of its product that isn't completely full (no refill
+ *                      threshold). So every search with such a box in hand is filled by the mod with the
+ *                      vanilla carried-box rack job (CarryBoxTarget + merge/space slot), and Destination /
+ *                      FetchFromFloor never send it to displays.
  *   Set down:          a clerk never unpacks while holding two boxes. When the first RestockDisplay task
  *                      begins (the clerk has walked to the first display and is about to open the box),
  *                      a RestockDisplay.OnBegin prefix puts the stashed box on the floor behind the clerk
@@ -130,6 +136,14 @@ internal static class DoubleCarry
         public float FloorRetryStart = -1f;
         /// <summary>The trip started with a storage job for box 1 (vanilla chose a rack, not displays).</summary>
         public bool FirstToStorage;
+        /// <summary>The second job fetched (or being fetched) is a storage job.</summary>
+        public bool SecondToStorage;
+        /// <summary>
+        /// Boxes picked up for storage. Vanilla racks those in one uninterrupted RackingState run; the mod stops
+        /// that run after TakeBox, so it must keep the box on its way to storage itself: the vanilla carried-box
+        /// search would otherwise top up any display of that product that isn't completely full.
+        /// </summary>
+        public readonly HashSet<IntPtr> Storage = new();
         /// <summary>The clerk already went back for the floor box with leftovers in hand once this trip.</summary>
         public bool Regrouped;
     }
@@ -413,7 +427,7 @@ internal static class DoubleCarry
     /// are undone.
     /// </summary>
     internal static bool TryFindSecondJob(SearchHandler h, ClerkT clerk, Box firstBox, int firstProduct,
-        bool firstToStorage, bool reserve, out Job job)
+        bool reserve, out Job job)
     {
         job = default;
         var mgmt = clerk.ManagementData;
@@ -484,16 +498,13 @@ internal static class DoubleCarry
             // The vanilla rule for this box alone.
             if (!h.IsMergeAvailableWithBox(box, out RackSlot rack) || rack == null)
                 if (!h.HasSpaceInRackSlotForProduct(pid, out rack) || rack == null) continue;
-            // Both boxes may need a rack place: box 1 when it goes to storage, or when it is the same product
-            // (its leftovers would go back to the same slots). Box 1 isn't known yet when it is still in a
-            // rack slot; then it is a restock box of this same product, so this box stands in for it.
+            // Both boxes may need a rack place: box 1 when it goes to storage, and also when it is restocked,
+            // since its leftovers go to storage too (if they took the last place, this box would be left in
+            // the store). Box 1 is unknown only in the trip-start probe when it is still in a rack slot: its
+            // own slot place then stays free for its leftovers, except for a box of this same product.
             var demand = new List<Box> { box };
-            if (firstToStorage || pid == firstProduct)
-            {
-                var b1 = firstBox ?? (pid == firstProduct ? box : null);
-                if (b1 == null) continue;
-                demand.Insert(0, b1);
-            }
+            var b1 = firstBox ?? (pid == firstProduct ? box : null);
+            if (b1 != null) demand.Insert(0, b1);
             if (!StorageFits(clerk, demand)) continue;
             job = new Job { Target = new IBoxTarget(new StreetBoxTarget(box).Pointer), Rack = rack,
                 Product = pid, Source = "the delivery area, for storage" };
@@ -526,13 +537,13 @@ internal static class DoubleCarry
     /// game would restock (no refill threshold), else a rack slot. Display reservations made by the probe are
     /// undone. Null when it has nowhere to go (or is empty).
     /// </summary>
-    private static Vector3? Destination(SearchHandler h, ClerkT clerk, Box box, out string what)
+    private static Vector3? Destination(SearchHandler h, ClerkT clerk, Plan plan, Box box, out string what)
     {
         what = "nowhere";
         int pid = ProductOf(box);
         if (box == null || pid < 0 || !box.HasProducts) return null;
         var mgmt = clerk.ManagementData;
-        if (mgmt != null && mgmt.RestockShelf)
+        if (!IsStorageBox(plan, box) && mgmt != null && mgmt.RestockShelf)
         {
             var cand = h.GetDisplaySlotsRequiredRefillWithoutCondition(pid);
             if (cand != null && cand.Count > 0)
@@ -543,7 +554,7 @@ internal static class DoubleCarry
                 if (list != null && list.Count > 0 && list[0] != null)
                 {
                     what = "shelf";
-                    return list[0].transform.position;
+                    return StandPoint(list[0]);
                 }
             }
         }
@@ -555,6 +566,43 @@ internal static class DoubleCarry
             return ip != null ? ip.position : rack.transform.position;
         }
         return null;
+    }
+
+    /// <summary>Where a restocker stands to fill the slot (falls back to the slot itself).</summary>
+    private static Vector3 StandPoint(DisplaySlot slot)
+    {
+        try { return slot.InteractionPosition; }
+        catch (Exception) { return slot.transform.position; }
+    }
+
+    internal static bool IsStorageBox(Plan plan, Box box) => plan != null && box != null && plan.Storage.Contains(box.Pointer);
+
+    /// <summary>
+    /// The box in hand was picked up for storage: fill the search results with the vanilla carried-box rack
+    /// job (merge into a rack box, else a slot with space; CarryBoxTarget, as the game's own search builds it)
+    /// instead of letting the carried-box search send it to displays. False (vanilla decides) when there is
+    /// no rack place.
+    /// </summary>
+    private static bool RackCarried(SearchHandler h, ClerkT clerk, Plan plan, Box cur)
+    {
+        if (cur == null || !IsStorageBox(plan, cur) || !cur.HasProducts) return false;
+        int pid = ProductOf(cur);
+        if (pid < 0) return false;
+        if (!h.IsMergeAvailableWithBox(cur, out RackSlot rack) || rack == null)
+            if (!h.HasSpaceInRackSlotForProduct(pid, out rack) || rack == null)
+            {
+                Info($"{Name(clerk)}: no rack place for the storage box (product {pid}) right now, normal search decides");
+                return false;
+            }
+        int excluded = h.m_ExcludedProductId;   // set by the idle drop timer; Reset() would clear it
+        h.Reset();
+        h.m_ExcludedProductId = excluded;
+        h.BoxTarget = new IBoxTarget(new CarryBoxTarget(pid, cur, clerk).Pointer);
+        if (h.DisplayTargets == null) h.DisplayTargets = new DisplaySlotList();
+        h.DisplayTargets.Clear();
+        h.RackTarget = rack;
+        Info($"{Name(clerk)}: taking the box in hand (product {pid}) to storage");
+        return true;
     }
 
     /// <summary>Walking distance along the NavMesh; straight-line distance if no path is found.</summary>
@@ -590,11 +638,11 @@ internal static class DoubleCarry
     /// Both boxes are in hand (<paramref name="cur"/> current, <paramref name="other"/> stashed): make the one
     /// with the shorter walk to its destination the current one.
     /// </summary>
-    private static void ChooseOrder(SearchHandler h, ClerkT clerk, Box cur, Box other)
+    private static void ChooseOrder(SearchHandler h, ClerkT clerk, Plan plan, Box cur, Box other)
     {
         var here = clerk.transform.position;
-        var dCur = Destination(h, clerk, cur, out string wCur);
-        var dOther = Destination(h, clerk, other, out string wOther);
+        var dCur = Destination(h, clerk, plan, cur, out string wCur);
+        var dOther = Destination(h, clerk, plan, other, out string wOther);
         float lCur = dCur.HasValue ? PathLength(here, dCur.Value) : float.PositiveInfinity;
         float lOther = dOther.HasValue ? PathLength(here, dOther.Value) : float.PositiveInfinity;
         bool swap = lOther < lCur;
@@ -635,10 +683,12 @@ internal static class DoubleCarry
                 if (cur != null && stash == null && ProductOf(cur) == plan.FirstProduct)
                 {
                     plan.First = cur;
-                    if (TryFindSecondJob(h, clerk, cur, plan.FirstProduct, plan.FirstToStorage, true, out var job))
+                    if (plan.FirstToStorage) plan.Storage.Add(cur.Pointer);
+                    if (TryFindSecondJob(h, clerk, cur, plan.FirstProduct, true, out var job))
                     {
                         ApplyJob(h, job);
                         plan.SecondProduct = job.Product;
+                        plan.SecondToStorage = !job.IsRestock;
                         if (job.IsRestock)
                         {
                             plan.ReservedSecond = new List<DisplaySlot>();
@@ -651,8 +701,10 @@ internal static class DoubleCarry
                         Info($"{Name(clerk)}: has box 1 (product {plan.FirstProduct}), fetching box 2 (product {job.Product}) from {job.Source}");
                         return false;
                     }
-                    EndPlan(clerk, "no second job any more, restocking box 1 normally");
-                    return true;
+                    // Stay in the plan while box 1 is in hand so a storage box still goes straight to storage.
+                    plan.Phase = Phase.Unwind;
+                    Info($"{Name(clerk)}: no second job any more, carrying on with box 1 alone");
+                    return UnwindStep(h, clerk, plan, cur, stash, ref vanillaRan);
                 }
                 EndPlan(clerk, "could not take box 1, back to normal");
                 return true;
@@ -662,11 +714,16 @@ internal static class DoubleCarry
                 // still in hand.
                 if (cur != null && stash != null && !Same(cur, stash))
                 {
-                    if (!Same(cur, plan.First) && !Same(cur, plan.Second)) plan.Second = cur;
+                    if (!Same(cur, plan.First) && !Same(cur, plan.Second))
+                    {
+                        plan.Second = cur;
+                        if (plan.SecondToStorage) plan.Storage.Add(cur.Pointer);
+                    }
                     if (Same(cur, plan.Floor)) plan.Floor = null;
                     plan.Phase = Phase.DeliverFirst;
-                    ChooseOrder(h, clerk, cur, stash);
-                    return true;
+                    ChooseOrder(h, clerk, plan, cur, stash);
+                    if (RackCarried(h, clerk, plan, Current(clerk))) vanillaRan = false;
+                    return vanillaRan;
                 }
                 plan.Phase = Phase.Unwind;
                 Info($"{Name(clerk)}: could not take the other box, carrying on with the one in hand");
@@ -681,15 +738,23 @@ internal static class DoubleCarry
     {
         // The clerk picked the floor box up again: it is a normal carried box from now on.
         if (plan.Floor != null && Same(cur, plan.Floor)) plan.Floor = null;
-        // A box in hand (box 1 with leftovers, or anything else): vanilla decides what to do with it.
-        // If a box is still stashed and vanilla restocks again, RestockDisplay.OnBegin sets the stash down first.
-        if (cur != null) return true;
+        // A box in hand (box 1 with leftovers, or anything else): vanilla decides what to do with it, except
+        // that a box picked up for storage goes to storage. If a box is still stashed and vanilla restocks
+        // again, RestockDisplay.OnBegin sets the stash down first.
+        if (cur != null)
+        {
+            if (!RackCarried(h, clerk, plan, cur)) return true;
+            vanillaRan = false;
+            return false;
+        }
         if (stash != null)
         {
             plan.Phase = Phase.Unwind;
             HandOver(clerk, stash);
             Info($"{Name(clerk)}: hands free, carrying on with the other box (product {ProductOf(stash)})");
-            return true;
+            if (!RackCarried(h, clerk, plan, stash)) return true;
+            vanillaRan = false;
+            return false;
         }
         if (plan.Floor != null)
         {
@@ -739,7 +804,7 @@ internal static class DoubleCarry
 
         // Same display rule as vanilla uses for a box already in hand (no refill threshold).
         DisplaySlotList displays = null;
-        if (pid >= 0 && box.HasProducts && mgmt != null && mgmt.RestockShelf)
+        if (pid >= 0 && box.HasProducts && mgmt != null && mgmt.RestockShelf && !IsStorageBox(plan, box))
         {
             var cand = h.GetDisplaySlotsRequiredRefillWithoutCondition(pid);
             if (cand != null && cand.Count > 0) displays = h.SearchBestFitDisplaySlotsForRestock(box, cand);
@@ -918,7 +983,7 @@ internal static class DoubleCarry
         int p1 = bt.ProductID;
         if (p1 < 0) return;
         // Only checks that a second job exists right now; the actual job is picked once box 1 is in hand.
-        if (!TryFindSecondJob(h, clerk, BoxOf(bt), p1, !restock, false, out var job)) return;
+        if (!TryFindSecondJob(h, clerk, BoxOf(bt), p1, false, out var job)) return;
 
         PruneDeadPlans();
         Plans[clerk.Pointer] = new Plan
@@ -947,12 +1012,15 @@ internal static class DoubleCarry
         var bt = h.BoxTarget;
         if (bt == null || bt.TryCast<CarryBoxTarget>() == null) return;
 
-        if (Destination(h, clerk, floor, out string where) == null || where != "storage") return;
+        if (Destination(h, clerk, plan, floor, out string where) == null || where != "storage") return;
         int pid = ProductOf(floor);
         // Both go to storage now: the racks must have room for both under the game's rules.
         if (!StorageFits(clerk, new List<Box> { cur, floor })) return;
 
         plan.Regrouped = true;
+        // Both are on their way to storage now; keep them off the displays.
+        plan.Storage.Add(cur.Pointer);
+        plan.Storage.Add(floor.Pointer);
         ApplyJob(h, new Job { Target = new IBoxTarget(new StreetBoxTarget(floor).Pointer), Rack = rack, Product = pid });
         plan.Phase = Phase.FetchSecond;
         plan.FetchOnlyNext = true;
