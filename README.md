@@ -13,7 +13,7 @@ Each mod folder has its own `README.md` (what it does, its settings, who needs i
 
 | Mod | Request | What it does |
 |---|---|---|
-| [Supermarket Fixes](SupermarketFixes) | Bugs | All bug fixes: rack-move ghost boxes, ghost items in hands, stuck boxes, shelf placing, floating boxes, janitor mop alignment |
+| [Supermarket Fixes](SupermarketFixes) | Bugs | All bug fixes: rack-move ghost boxes, ghost items in hands, stuck boxes, shelf placing, floating boxes, janitor mop alignment and stand spot |
 | [Paint Can Capacity](PaintCanCapacity) | Improvement #2 | Paint cans last longer (2x by default, configurable) |
 | [Price Markup Keeper](PriceMarkupKeeper) | Improvement #1 | Prices keep your global markup when market prices change; new products start at it |
 | [Player Crouch](PlayerCrouch) | Improvement #3 | Hold Ctrl to crouch; the character model crouches too (visible to modded players) |

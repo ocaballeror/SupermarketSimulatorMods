@@ -48,9 +48,12 @@ namespace SupermarketFixes.Patches;
 ///   the walk round the stain. Rings are searched nearest-to-reach first and the search stops once no
 ///   further ring can beat the best candidate.
 /// - Fallbacks: if no spot fits within 0.5 m of the reach, the nearest fitting spot further out is used (she
-///   still faces the stain with the mop aimed at its centre, but the mop falls short of it). If her body fits
-///   nowhere within 1.6 m, she stands on the walkable spot closest to the reach and a warning is logged (body
-///   overlap, mop still aimed). If no candidate is walkable at all, the vanilla destination is kept. She is
+///   still faces the stain with the mop aimed at its centre, but the mop falls short of it). If nothing on the
+///   rings fits (a stain in a niche or dead end), the stain centre and spots 0.1-0.2 m from it are tried: if her
+///   body fits there she stands there (the game's own spot; the mop can't reach the centre, but she is inside
+///   nothing). Only if her body fits nowhere at all does she stand on the walkable ring spot closest to the
+///   reach, and a warning is logged (body overlap, mop still aimed). If no candidate is walkable at all, the
+///   vanilla destination is kept. She is
 ///   never sent away without cleaning: the selected stain has already been taken off the janitors' list
 ///   (JanitorManager.SelectCleaningObject -> SafeRemove), so skipping it would leave it for the players.
 /// - DirtCleaningState.Enter prefix: remember the stain and the planned stand point; the per-frame Tick then
@@ -86,10 +89,12 @@ internal static class JanitorCleanAlignFix
     private const int Directions = 24;
 
     /// <summary>Layers that block her body: 0 Default, 6 Interactable, 10 Door, 14 Buildings, 15 Obstacle,
-    /// 18 WallLayer, 20 RackLayer (indices from the game's TagManager). Player (3) and Customer (28) are left
-    /// out on purpose: overlapping other characters is acceptable.</summary>
+    /// 18 WallLayer, 20 RackLayer, 25 Glass (the window dust panes), 29 TrashLayer (trash bins' only solid
+    /// collider); indices from the game's TagManager. Player (3) and Customer (28) are left out on purpose:
+    /// overlapping other characters is acceptable. Ignore Raycast (2) is left out: floor tiles and the entrance
+    /// doors are on it.</summary>
     private static readonly int BodyMask =
-        (1 << 0) | (1 << 6) | (1 << 10) | (1 << 14) | (1 << 15) | (1 << 18) | (1 << 20);
+        (1 << 0) | (1 << 6) | (1 << 10) | (1 << 14) | (1 << 15) | (1 << 18) | (1 << 20) | (1 << 25) | (1 << 29);
 
     internal static void Bind(ConfigFile cfg)
     {
@@ -281,15 +286,49 @@ internal static class JanitorCleanAlignFix
             how = bestHow;
             return true;
         }
+        // Nothing on the rings fits: try the stain itself and spots right next to it before accepting an overlap.
+        if (FindNearCentre(stain, stainNav, out var near, out bool nearRoom))
+        {
+            stand = near;
+            how = "her body fits only on or right next to the stain, so the mop can't reach the centre" +
+                  (nearRoom ? "" : ", tight fit");
+            return true;
+        }
         if (haveNoFit)
         {
             stand = noFit;
             warn = true;
-            how = "her body fits nowhere within 1.6 m of the stain; using the best walkable spot, she may overlap an obstacle";
+            how = "her body fits nowhere around the stain (not even on it); using the best walkable spot, she may overlap an obstacle";
             return true;
         }
         how = walkable == 0 ? "no spot around the stain is on the NavMesh" : "every spot around the stain is cut off from it";
         return false;
+    }
+
+    /// <summary>The stain's NavMesh point, then 8 directions at 0.1 and 0.2 m; a roomy fit beats a tight one.</summary>
+    private static bool FindNearCentre(Vector3 stain, Vector3 stainNav, out Vector3 spot, out bool room)
+    {
+        spot = default;
+        room = false;
+        bool found = false;
+        for (int r = 0; r <= 2; r++)
+        {
+            for (int k = 0; k < (r == 0 ? 1 : 8); k++)
+            {
+                Vector3 want = r == 0 ? stainNav
+                    : stainNav + Quaternion.Euler(0f, k * 45f, 0f) * Vector3.forward * (0.1f * r);
+                Vector3 cand = stainNav;
+                if (r > 0)
+                {
+                    if (!NavMesh.SamplePosition(want, out var hit, 0.2f, NavMesh.AllAreas)) continue;
+                    cand = hit.position;
+                    if (Flat(cand - want).magnitude > 0.1f || Blocked(stainNav, cand, stain)) continue;
+                }
+                if (Fits(cand, RoomRadius)) { spot = cand; room = true; return true; }
+                if (!found && Fits(cand, TightRadius)) { spot = cand; found = true; }
+            }
+        }
+        return found;
     }
 
     private static bool Fits(Vector3 feet, float radius) =>
