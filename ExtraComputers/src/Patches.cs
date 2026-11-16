@@ -260,9 +260,29 @@ internal static class ComputerSpawner
         Plugin.Debug($"Spawning computer at {pos} (online, box view {boxViewId})");
         return PhotonNetwork.InstantiateRoomObject(ComputerFurniture.PrefabId, pos, rot, 0, data);
     }
+
+    /// <summary>
+    /// Stand-in for a saved computer that couldn't be spawned: an inactive object with a <c>Furniture</c> of our id.
+    /// LoadFurnitureDatas only needs GetComponent&lt;Furniture&gt;() and set_Data on it, so the rest of the store
+    /// loads. It stays inactive, so Furniture.OnEnable never subscribes its OnSave (which only writes the pose back
+    /// into the data), and the computer's entry stays in FurnitureManager.m_FurnituresDatas unchanged: the computer
+    /// is still in the next save and comes back once the mod can build it again.
+    /// </summary>
+    internal static GameObject Placeholder(Vector3 pos, Quaternion rot, Transform parent)
+    {
+        var go = new GameObject("ExtraComputers.SavedComputerStandIn");
+        go.SetActive(false);
+        if (parent != null) go.transform.SetParent(parent, false);
+        go.transform.SetPositionAndRotation(pos, rot);
+        var f = go.AddComponent<Furniture>();
+        f.m_ID = ComputerFurniture.FurnitureId;
+        Plugin.Error($"A saved computer at {pos} couldn't be spawned; it is kept in the save but not shown this session.");
+        return go;
+    }
 }
 
-/// <summary>Unboxing: the game spawns the furniture facing the player.</summary>
+/// <summary>Unboxing: the computer arrives with its user side (where the PC camera and the exit point are) towards the
+/// player. Vanilla turns a furniture's +Z towards the player, but the computer's user side is its -Z.</summary>
 [HarmonyPatch(typeof(FurnitureGenerator), nameof(FurnitureGenerator.SpawnFurniture),
     new[] { typeof(int), typeof(Vector3), typeof(int) })]
 internal static class SpawnFromBoxPatch
@@ -279,7 +299,13 @@ internal static class SpawnFromBoxPatch
             {
                 var fwd = player.transform.forward;
                 fwd.y = 0;
-                if (fwd.sqrMagnitude > 1e-6f) rot = Quaternion.LookRotation(-fwd.normalized, Vector3.up);
+                if (fwd.sqrMagnitude > 1e-6f)
+                {
+                    // Turn the user side (local, horizontal) to point from the computer towards the player (-fwd).
+                    var front = ComputerFurniture.UserSideLocal();
+                    rot = Quaternion.LookRotation(-fwd.normalized, Vector3.up) *
+                          Quaternion.Inverse(Quaternion.LookRotation(front, Vector3.up));
+                }
             }
             __result = ComputerSpawner.Spawn(position, rot, __instance.transform, furnitureBoxInteractionViewId);
         }
@@ -288,7 +314,13 @@ internal static class SpawnFromBoxPatch
     }
 }
 
-/// <summary>Loading a save.</summary>
+/// <summary>
+/// Loading a save. This must never return null: FurnitureManager.LoadFurnitureDatas logs "Can't spawn furniture
+/// with id" for a null spawn and then dereferences it anyway (ISIL: the null test right after the LogError jumps
+/// to the NRE thrower; the loop only has a try/finally). The exception ends the whole load, so every furniture
+/// saved after the computer would be missing. A failed spawn returns an inactive placeholder instead (see
+/// <see cref="ComputerSpawner.Placeholder"/>).
+/// </summary>
 [HarmonyPatch(typeof(FurnitureGenerator), nameof(FurnitureGenerator.SpawnFurniture),
     new[] { typeof(int), typeof(Vector3), typeof(Quaternion), typeof(Transform) })]
 internal static class SpawnFromSavePatch
@@ -298,6 +330,11 @@ internal static class SpawnFromSavePatch
         if (id != ComputerFurniture.FurnitureId) return true;
         try { __result = ComputerSpawner.Spawn(position, rotation, parent, -1); }
         catch (Exception e) { Plugin.Error("Spawning a saved computer failed: " + e); __result = null; }
+        if (__result == null)
+        {
+            try { __result = ComputerSpawner.Placeholder(position, rotation, parent); }
+            catch (Exception e) { Plugin.Error("Creating a stand-in for a saved computer failed: " + e); }
+        }
         return false;
     }
 }
@@ -394,8 +431,20 @@ internal static class ComputerLateUpdatePatch
 {
     private static void Postfix()
     {
-        if (ComputerSession.Active) ComputerSession.SyncAnchors();
-        Presence.Tick();
+        try { if (ComputerSession.Active) ComputerSession.SyncAnchors(); }
+        catch (Exception e) { LogOnce("Moving the borrowed computer screen failed: " + e.Message); }
+        try { Presence.Tick(); }
+        catch (Exception e) { LogOnce("Multiplayer check failed: " + e.Message); }
+    }
+
+    private static string _lastError;
+
+    /// <summary>Runs every frame: log a repeated error only once.</summary>
+    private static void LogOnce(string msg)
+    {
+        if (msg == _lastError) return;
+        _lastError = msg;
+        Plugin.Error(msg);
     }
 }
 

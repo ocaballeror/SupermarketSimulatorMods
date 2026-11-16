@@ -121,6 +121,20 @@ internal static class ComputerFurniture
         HaveFrontDirection = true;
     }
 
+    /// <summary>The computer's user side (towards the PC camera, i.e. where the player stands) as a horizontal
+    /// direction in the furniture's local space. The store computer's camera and exit point are on its -Z side, which
+    /// is the fallback when the layout hasn't been measured.</summary>
+    internal static Vector3 UserSideLocal()
+    {
+        if (HaveFrontDirection)
+        {
+            var d = CamLocalPos - ScreenLocalPos;
+            d.y = 0;
+            if (d.sqrMagnitude > 1e-4f) return d.normalized;
+        }
+        return Vector3.back;
+    }
+
     internal static IDManager Ids => NoktaSingleton<IDManager>.HasInstance ? NoktaSingleton<IDManager>.Instance : null;
 
     internal static bool IsOurs(Furniture f) => f != null && f.m_ID == FurnitureId;
@@ -427,12 +441,30 @@ internal static class ComputerFurniture
                 var name = c.GetIl2CppType().Name;
                 if (KeptModelComponents.Contains(name)) continue;
                 if (pass == 0 && c.TryCast<Behaviour>() == null) continue; // scripts first, then the rest
-                removed.Add(name);
                 Object.DestroyImmediate(c);
+                // Unity refuses (with a log line only, no exception) to destroy a component another one requires.
+                if (c == null) removed.Add(name);
             }
         }
         if (removed.Count > 0)
             Plugin.Debug("Removed from the computer copy: " + string.Join(", ", removed.Distinct()));
+
+        // Whatever is left would come along on every computer. A game script would run its Awake there.
+        var survivors = new List<string>();
+        bool scriptSurvived = false;
+        var left = model.GetComponentsInChildren<Component>(true);
+        for (int i = 0; i < left.Length; i++)
+        {
+            var c = left[i];
+            if (c == null || (keep != null && c.transform.IsChildOf(keep))) continue;
+            var name = c.GetIl2CppType().Name;
+            if (KeptModelComponents.Contains(name)) continue;
+            survivors.Add($"{name} on '{c.gameObject.name}'");
+            if (c.TryCast<MonoBehaviour>() != null) scriptSurvived = true;
+        }
+        if (survivors.Count == 0) return;
+        Plugin.Error("Couldn't remove from the computer copy: " + string.Join(", ", survivors.Distinct()));
+        if (scriptSurvived) throw new Exception("a game script couldn't be removed from the computer copy (see the line above)");
     }
 
     private static void DestroyCanvasSubtrees(Transform root, Transform keep)

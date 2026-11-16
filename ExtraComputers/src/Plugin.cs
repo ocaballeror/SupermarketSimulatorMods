@@ -14,7 +14,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.extracomputers";
     public const string Name = "Extra Computers";
-    public const string Version = "1.2.1";
+    public const string Version = "1.2.2";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -35,16 +35,21 @@ public class Plugin : BasePlugin
         Enabled = Config.Bind("General", "Enabled", true,
             "Master switch. Turning it off removes all patches immediately (no restart needed): the computer leaves the " +
             "shop, and placed computers stay in the store as furniture but can't be used until it is turned back on. " +
-            "If the game STARTS with this off (or the mod is removed), saved extra computers and computer boxes " +
-            "(unopened, in storage, in a pending delivery or in the cart) can't be loaded and may cause errors or be lost. " +
-            "Unbox and place or sell every computer box, and empty the cart, before doing that.");
+            "If a store is LOADED while this is off (game started with it off, turned off before loading, or the mod " +
+            "removed), a placed extra computer stops the game from loading the furniture saved after it, and computer " +
+            "boxes (unopened, in storage, in a pending delivery or in the cart) can't be loaded and may cause errors or be " +
+            "lost. Before doing that, box up EVERY placed computer and sell or throw away the boxes, and empty the cart.");
         Price = Config.Bind("ExtraComputers", "Price", 500f,
-            new ConfigDescription("Price of one extra computer in the furniture shop.",
-                new AcceptableValueRange<float>(0f, 100000f)));
+            // ClampedFloat instead of AcceptableValueRange: config managers draw a text field, not a slider.
+            new ConfigDescription("Price of one extra computer in the furniture shop (0 to 100000). In multiplayer the " +
+                                  "host's price is used by everybody.",
+                new ClampedFloat(0f, 100000f)));
         ProtectUnmodded = Config.Bind("Multiplayer", "ProtectUnmoddedPlayers", true,
-            "Host only. While any other player in the room does not have this mod, the computer is hidden in the shop, " +
-            "buying it is refused and computer boxes can't be opened, because a player without the mod gets errors from " +
-            "computer boxes and computers. Turn this off only if everybody has the mod.");
+            "While any other player in the room does not have this mod, the computer is hidden in the shop, buying it is " +
+            "refused and computer boxes can't be opened, because a player without the mod gets errors from computer boxes " +
+            "and computers. The host's setting decides for purchases and for boxes opened by anyone; a guest with the mod " +
+            "also hides the shop item and keeps its own computer boxes closed according to its own setting. " +
+            "Turn this off only if everybody has the mod.");
         Icon = Config.Bind("ExtraComputers", "Icon", IconStyle.Model,
             "Picture of the computer in the furniture shop and on its box. Model: a picture made from the computer's 3D " +
             "model, in the style of the other furniture. GameSymbol: the game's flat computer symbol (icon_device_63). " +

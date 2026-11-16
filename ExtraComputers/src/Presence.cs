@@ -15,10 +15,14 @@
  *   oscar.extracomputers.use    int    PhotonView id of the extra computer this player is using (0 = none)
  * A player who never published the first key, or published false, counts as "without the mod".
  *
- * What the host does while somebody lacks the mod (config Multiplayer/ProtectUnmoddedPlayers, default on):
+ * What every modded client does while somebody else in the room lacks the mod (config
+ * Multiplayer/ProtectUnmoddedPlayers, default on; each client uses its own value, the host's checks are authoritative):
  *   - hides the computer in the furniture shop,
- *   - refuses MarketShoppingCart.Purchase when the cart holds a computer (guest purchases arrive there too),
- *   - refuses to open a computer box (NetworkFurnitureBoxInteraction.OpenFurnitureBox_Broadcast).
+ *   - refuses MarketShoppingCart.Purchase when the cart holds a computer (host only: guest purchases arrive there
+ *     too, guests skip the check because they only send a request),
+ *   - refuses to open a computer box: FurnitureBoxInteraction.NetworkOpenBox (the host, for its own click and for
+ *     a guest's request), NetworkFurnitureBoxInteraction.OpenFurnitureBoxRequest (the requesting guest) and
+ *     FurnitureBoxInteraction.OpenBox (offline; never blocked there, as nobody else is in the room).
  * Not covered (can't be): computers and computer boxes that already exist when the player joins (placed in the
  * save, boxes bought earlier, a computer already in the cart): their Photon instantiation / box data reaches the
  * newcomer regardless. The README tells hosts to remove those first.

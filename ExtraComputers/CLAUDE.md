@@ -4,7 +4,9 @@ Player-facing info is in [README.md](README.md). Shared rules and game internals
 
 ## Status
 
-v1.2.1 (TODO Improvement #7). First in-game test (host alone, 2026-11-15) failed: `Building the computer furniture failed: no usable furniture prefab to copy the network setup from`. The old template needed a "donor" furniture prefab (plain `Furniture` + `NetworkFurniture` + `PhotonView` + placing mode, no type scripts) and none qualified (which check failed wasn't logged). Consequences seen by the user: the shop showed the drawn placeholder icon (the model render needs the template), and opening the delivered box despawned it and spawned nothing (`Can't spawn a computer`), leaving the player in an empty placing mode with drop/throw/sell/place hints that did nothing.
+v1.2.2 (TODO Improvement #7). Review round 5 fixes are below. **Open: the host's `LogOutput.log` of 2026-11-16 13:21 (v1.2.1) shows the template build failing with `the store computer has no PhotonView on its root`.** The hierarchy dump in that log lists no `PhotonView` on "Computer &&" (components: 2× BoxCollider, ComputerOperatingSystem, Computer, Highlightable, NavMeshObstacle, MusicPlayerManager, NetworkComputer, NetworkVendingMachineTab, FurnitureSnapPointSetup), so `NetworkComputer`'s view lives elsewhere (a parent?). Not addressed in v1.2.2.
+
+v1.2.1: first in-game test (host alone, 2026-11-15) failed: `Building the computer furniture failed: no usable furniture prefab to copy the network setup from`. The old template needed a "donor" furniture prefab (plain `Furniture` + `NetworkFurniture` + `PhotonView` + placing mode, no type scripts) and none qualified (which check failed wasn't logged). Consequences seen by the user: the shop showed the drawn placeholder icon (the model render needs the template), and opening the delivered box despawned it and spawned nothing (`Can't spawn a computer`), leaving the player in an empty placing mode with drop/throw/sell/place hints that did nothing.
 
 v1.2.0/1.2.1 fixes:
 - The template is now a stripped copy of the store computer's own root, plus added `Furniture` + `NetworkFurniture` (see Design). No donor.
@@ -12,6 +14,16 @@ v1.2.0/1.2.1 fixes:
 - `OpenBoxGate` also refuses to open a computer box while the template can't be built (or, on an online host, can't be registered in `DefaultPool.ResourceCache`), on all three paths (offline `OpenBox`, host `NetworkOpenBox`, guest request), so the player keeps the box instead of getting stuck. Online, `NetworkOpenBox` calls `FurnitureBox.OpenBoxNetwork` before `SpawnFurniture`, so a spawn that fails after the gate still loses the box.
 - Without a template the shop item is hidden and `PurchaseGatePatch` refuses a cart with a computer: `MarketShoppingCart.Purchase` dereferences `FurnitureSO.FurniturePrefab` for each cart furniture after `DeliveryManager.Delivery` and would throw (ISIL, review round 4).
 - `Presence` publishes "has the mod" as `Active && Template != null`, so a client whose build failed counts as unmodded for the host's guard (covers a guest whose own build failed, and a host whose build failed as seen by a modded guest's request gate).
+
+## Review round 5 (v1.2.2)
+
+- F1 (major, verified in the ISIL): a null from the save-load `SpawnFurniture` makes `LoadFurnitureDatas` throw (see Game reference), so all furniture saved after the computer was lost. `SpawnFromSavePatch` now returns an inactive stand-in (`ComputerSpawner.Placeholder`: a `Furniture` with `m_ID` 917001) when the spawn fails or throws. Inactive, so `Furniture.OnEnable` never subscribes `OnSave` (which only writes the pose back into the data); the data entry stays in `m_FurnituresDatas` and is saved again. Log: `A saved computer at ... couldn't be spawned`. Without the mod (removed, or a store loaded with `Enabled` off) nothing can help; README and the `Enabled` description now say to box up every placed computer first.
+- F2: `ComputerSession.ForceEnd` (mod turned off during a session) calls the local `ComputerInteraction.OnCancel` while the patches are still applied (Back + `EnableController(true, true)` + `InteractionEnd`), falling back to those steps directly when OnCancel would do nothing (placing mode, door camera). Before, only Back ran: the player stayed frozen, and the next Escape ran an unpatched Back (teleport to the store computer's exit point, store computer marked free for everyone).
+- F3: `Price` uses `ClampedFloat` (typed number, no slider).
+- F4: unboxing turns the computer's user side (`ComputerFurniture.UserSideLocal()`: PC camera minus screen position, horizontal; fallback -Z) towards the player. Vanilla's `LookRotation(-playerForward)` turns +Z towards the player, and the computer's camera and exit point are on its -Z side (reviewer, from the scene). Check in-game that a fresh computer faces the player.
+- F5: config text of `ProtectUnmoddedPlayers`, the `Presence.cs` header (real gate methods), README note that extra computers' monitors are always blank for everyone not using them.
+- F6: stripping logs a component as removed only if it is really gone, then lists any non-whitelisted survivors as an error (`Couldn't remove from the computer copy: ...`); a surviving `MonoBehaviour` fails the build (it would run its `Awake` on every computer), which leads to the safe "can't build" handling.
+- F7: `ComputerLateUpdatePatch` wraps both calls in try/catch and logs a repeated error once.
 
 ## Review round 4 (v1.2.1)
 
@@ -55,6 +67,7 @@ Host alone, then with a modded guest, then with an unmodded guest. Log tag `[Ext
 - Spawning: both `FurnitureGenerator.SpawnFurniture` overloads are replaced for our id.
   - Offline: `LeanPool.Spawn(template)`.
   - Host: `PhotonNetwork.InstantiateRoomObject("Furnitures/ExtraComputers/ExtraComputer", ..., {boxViewId})`. Box view id is `-1` when loading a save, as in vanilla.
+  - Save load never returns null (inactive stand-in, review round 5 F1). Unboxing faces the user side towards the player (F4).
   - The template is put in `DefaultPool.ResourceCache` under that id. A `DefaultPool.Instantiate` prefix builds it on demand on guests.
 
 **Using one (`ComputerSession`).**
@@ -128,8 +141,9 @@ Verified in the dumps; not yet confirmed in-game. (Moving and placing furniture,
   - Online (master only): it branches on the prefab's component type to `NetworkObjectGenerator.SpawnNetwork<Type>`, which calls `PhotonNetwork.InstantiateRoomObject("Furnitures/<Type>/" + prefab.name, pos, rot, 0, {boxViewId})`.
   - Photon uses the stock `DefaultPool`: `ResourceCache` first, then `Resources.Load`. Adding a GameObject to `((DefaultPool)PhotonNetwork.PrefabPool).ResourceCache[id]` makes any prefab network-instantiable.
   - `NetworkFurniture.OnPhotonInstantiate` reads `data[0]` (the box interaction's view id), transfers ownership to that player and calls `FurnitureBoxInteraction.OpenBoxOrder` to start placing.
+- **A null spawn while loading a save breaks the load** (ISIL, `FurnitureManager::LoadFurnitureDatas`, called from `LoadSaveProgress` ← `Awake`, host/offline only): it logs "Can't spawn furniture with id: N" and then dereferences the null anyway (NRE; the loop has only a try/finally). Every furniture entry after it in `m_FurnituresDatas` is not spawned. Vanilla does the same for an unknown id (the overload logs "Furniture couldn't find : N" and returns null). Per spawned object it needs only `GetComponent<Furniture>()` (then `set_Data`, which sets the pose, and `SetCollisions(go, true)`). `Furniture.OnEnable` subscribes `OnSave` (writes position and rotation into its `Data`); `m_FurnituresDatas` itself is the saved list (`AddFurniture` on place, `RemoveFurniture` on box-up).
 - Every type in the shop has its own network spawner, so a mod can't count on finding a "plain" furniture prefab to copy (the donor search found none in-game).
-- `Furniture.m_ID` is serialized in the prefab; nothing sets it at runtime. Saves are `FurnitureManager.m_FurnituresDatas`. `LoadFurnitureDatas` logs "Can't spawn furniture with id" for unknown ids and continues.
+- `Furniture.m_ID` is serialized in the prefab; nothing sets it at runtime. Saves are `FurnitureManager.m_FurnituresDatas`; for loading see the null-spawn point above.
 - Assets: the furniture icon atlas `T_IconAtlas_Furnitures` (sharedassets2) has no computer. Flat white UI glyphs are named `icon_<set>_<n>`; `icon_device_63` is a computer.
 
 **Store computer** (`__Project__.Scripts.Computer.Computer`; one per scene, and several managers hold a reference to it, so it can't be cloned).

@@ -257,13 +257,35 @@ internal static class ComputerSession
         Plugin.Debug("Closed extra computer (" + reason + ")");
     }
 
-    /// <summary>Leaves the computer properly (as if the player pressed Back), then restores.</summary>
+    /// <summary>
+    /// Leaves the computer the way Escape does, then restores. Must run while the patches are still applied (the
+    /// Back postfix ends the session, and the skipped occupied broadcast keeps the store computer free for others).
+    /// ComputerInteraction.OnCancel (ISIL) is Back, then PlayerController.EnableController(true, true), then
+    /// PlayerInteraction.InteractionEnd; calling only Back would leave the player frozen in the computer interaction.
+    /// </summary>
     internal static void ForceEnd(string reason)
     {
         if (!Active) return;
         try
         {
-            if (_comp != null && _comp.OpenPC) _comp.Back();
+            var player = NoktaSingleton<PlayerManager>.HasInstance ? NoktaSingleton<PlayerManager>.Instance.LocalPlayer : null;
+            var ci = player != null ? player.ComputerInteraction : null;
+            bool inComputerInteraction = ci != null && ci.enabled && ci.m_Computer != null && _comp != null &&
+                                         ci.m_Computer.Pointer == _comp.Pointer;
+            if (inComputerInteraction && !ci.m_PlacingMode && !ci.isInDoorCamera)
+            {
+                ci.OnCancel();
+            }
+            else
+            {
+                // OnCancel would do nothing in these states; do its steps directly.
+                if (_comp != null && _comp.OpenPC) _comp.Back();
+                if (inComputerInteraction)
+                {
+                    player.PlayerController?.EnableController(true, true, false);
+                    player.PlayerInteraction?.InteractionEnd(ci);
+                }
+            }
         }
         catch (Exception e) { Plugin.Error("Leaving the computer failed: " + e.Message); }
         End(reason);
