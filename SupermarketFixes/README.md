@@ -50,6 +50,14 @@ While she cleans, the mod also checks where her mop really is and uses that for 
 
 With `Diagnostics` on, the log has `[JanitorAlign]` lines that say where she stood and how far her mop was from each stain. Please send those.
 
+### Bug #9: orders the courier already has stay in the pending list
+
+In co-op, when a player handed an online-order bag to the courier, the order's number dropped from that player's new-orders counter but stayed on the other player's, and on every screen the order stayed in the pending-orders notebook until the customer actually had the bag. Now, as soon as the courier has an order (in the trunk or out for delivery), it is removed from your notebook and from the counter. If the order is taken back from the courier, it returns to the notebook. The order itself is untouched: the courier still delivers it and you still get paid.
+
+This only changes what your own screen shows, so every player who wants it needs the mod (see below).
+
+With `Diagnostics` on, the log has `[CourierOrders]` lines when an order is hidden or shown again. Please send those.
+
 ### F9: "my hands are stuck" key
 
 Press **F9** if your hands or controls seem stuck on an item. It fixes either of the two problems above right away, and writes what it found to `BepInEx/LogOutput.log`. Please send those lines.
@@ -84,6 +92,8 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes either of
 | BoxPlace | `Diagnostics` | `true` | Logs `[BoxPlace]` lines explaining why nothing was placed when you hold left click on a shelf for 1.5 s. |
 | JanitorCleanAlign | `AlignToStain` | `true` | The cleaning lady aims her mop at the centre of the stain she cleans and stands where she fits, instead of standing on the stain (or inside a wall or shelf). Only needed on the host (or in single player). |
 | JanitorCleanAlign | `Diagnostics` | `true` | Logs `[JanitorAlign]` lines: where she stands for each stain and how far her mop was from it. |
+| CourierOrders | `HideCourierOrders` | `true` | Orders the courier has already taken (in the trunk or out for delivery) are removed from your pending-orders notebook and the new-orders counter. They come back if the order is taken back from the courier. Only affects your own screen. |
+| CourierOrders | `Diagnostics` | `true` | Logs `[CourierOrders]` lines when an order is hidden from or shown again in the notebook. |
 
 ## Who needs it (multiplayer)
 
@@ -95,3 +105,4 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes either of
 - **Bug #2: the guest.** The suspected cause (a late pickup answer from the host) can only happen on a guest, so the guest who sees the item in their hands needs the mod. Installing it only on the host doesn't fix anything in a guest's hands. The host can run it too: its `RegrantToSameHolder` lets a guest pick up a box again after the mod dropped it from their hands.
 - **Bug #3: whoever gets stuck.** The fix repairs the state of your own player, so it only helps on the machine where the problem shows up. The host should run the mod too: `RegrantToSameHolder` runs there and lets a guest's retry succeed. A guest without the mod is not affected by it. If the host does not run the mod, a guest's fix still frees the guest's controls, but the host may keep counting that box as held by the guest: nobody can pick that box up until the game is reloaded, and other players may see it in the guest's hands.
 - **Bugs #7 and #8: the host** (or the player, in single player). The cleaning lady is controlled by the host, and other players see where she stands and which way she faces through the game's normal sync, so guests don't need the mod for this fix.
+- **Bug #9: every player who wants it, host and guests alike.** The pending-orders notebook and the counter are local to each player's game, and the game has no message that only hides an order, so nothing the host does can change an unmodded guest's screen. A guest without the mod keeps seeing courier orders in the list as before. A host with the mod gets a correct list on its own screen; so does every guest with the mod. Nothing is sent over the network, so mixed setups don't desync.
