@@ -73,9 +73,12 @@ Reverse engineering is the expensive part of every task. When you learn somethin
 
 Keep each entry short and only include facts you've verified in the dumps or in-game. If it hasn't been confirmed in-game yet, say so. If a script would save the next session work, put it in `tools/` and document it in section 4.
 
-## 2b. Independent review after every fix or improvement
+## 2b. Subagents do the work: implement, then review
 
-Once you have finished implementing a fix or an improvement (it builds, and the mod's README, its CLAUDE.md if any, and the Status block in TODO.md are updated), **launch a review subagent** with the Agent tool before you report back to the user. (When working under `REVIEW_ORCHESTRATOR.md`, the orchestrator runs this loop instead.)
+**The main agent (the one talking to the user) never changes mod code itself.** Every code change, whether a bug fix, an improvement, a review-round fix or a small tweak, is done by an **implementer subagent** launched with the Agent tool and `model: "sonnet"`. The main agent only reads, plans, briefs, relays and reports; it may edit docs and `TODO.md` Status blocks directly. This is what makes the model setting below enforceable.
+
+
+Once the implementer has finished a fix or an improvement (it builds, and the mod's README, its CLAUDE.md if any, and the Status block in TODO.md are updated), **launch a review subagent** with the Agent tool before you report back to the user. (When working under `REVIEW_ORCHESTRATOR.md`, the orchestrator runs this loop instead.)
 
 - **Models are fixed:** implementer agents always run on `sonnet`, reviewer agents always on `opus`. Pass `model: "sonnet"` or `model: "opus"` explicitly on every Agent call; never rely on the default.
 - **Brief it with the intent only.** Describe *what the change was meant to achieve*: the bug symptom or the feature, and the expected behaviour (including multiplayer expectations, if relevant). Name the mod or folder it lives in so the reviewer knows where to look, and tell it to read that mod's docs.
@@ -281,6 +284,7 @@ Verified in the dumps unless marked otherwise. Addresses and offsets are specifi
 **Furniture placing.**
 - Moving and placing use `FurniturePlacingMode` (base `IPlacingMode`). Serialized: placing tags, `m_PlacingModeCollider` (overlap box), `m_Renderers` (hologram), `m_OwnerCollider`, `m_PhysicalColliders`, `m_NavMeshObstacles`, `m_Furniture` (the transform that gets moved), `m_ParentPhotonView`. `Awake` recomputes `m_AllColliders` and `m_Objects` (`NavmeshBuildSourceObject`) from `m_Furniture`.
 - There are **no `Furniture` subclasses**: every furniture prefab uses the plain `Furniture` class plus type scripts (`Display`, `Rack`, `Trash`, ...).
+- **Loading saved furniture aborts on the first null spawn.** `FurnitureManager.LoadFurnitureDatas` logs "Can't spawn furniture with id: N", then dereferences the null (NRE), so every entry after it in `m_FurnituresDatas` is never spawned. An unknown id (e.g. a mod's furniture with the mod removed) does this too. A mod that spawns furniture from a save must never return null there; an inactive GameObject with a `Furniture` of that id is enough. Details in `ExtraComputers/CLAUDE.md` (Game reference).
 
 **Holding objects (`PlayerObjectHolder`).**
 - Every holdable (Box, FurnitureBox, PaintBucket, FloorBox, OrderPaperBag, IceCreamBucket) goes through `HoldObject(item, posOffset, rotOffset)`. It makes the colliders of `item`'s active objects triggers, the root Rigidbody kinematic, saves `item.layer` in `m_CurrentObjectsLayer` and sets "Ignore Raycast", takes the item's `IPlacingMode` as `m_CurrentPlacingMode`, stores `m_CurrentObject` (+0x48), and parents the item **directly** to `m_ObjectHolder` (+0x20), tweening it to the offset.

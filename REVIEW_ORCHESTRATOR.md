@@ -166,7 +166,7 @@ If the user asked for `start` or `continue`, finish after one item and wait for 
 
 ## Rules
 
-- **Reviewer never edits source. Implementer never reviews or edits `TODO.md`. You edit only the Status blocks in `TODO.md`.** The orchestrator never writes mod code itself, even for a small fix; it always goes through an implementer.
+- **Reviewer never edits source. Implementer never reviews or edits `TODO.md`. You edit only the Status blocks in `TODO.md`.** The orchestrator never writes mod code itself, even for a small fix; it always goes through an implementer subagent launched with `model: "sonnet"`.
 - **Models are fixed:** every implementer runs on `sonnet` and every reviewer on `opus`. Always pass `model` explicitly on each Agent call, including respawns; never use the default.
 - Work on one item at a time. Two implementers editing the shared `SupermarketFixes/src/Plugin.cs` or the root `README.md` at once would conflict.
 - If the implementer changes code after you've recorded `reviewed`, the stored hash goes stale; the next run catches it.
