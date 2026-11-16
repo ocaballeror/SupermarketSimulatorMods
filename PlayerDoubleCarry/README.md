@@ -10,7 +10,7 @@ Carry two boxes at once.
 4. Everything you normally do with a box in hand works on the **top** box: drop/place it (G), throw it (R), put it on a rack, in a trash bin, or on a placement area.
 5. As soon as the top box leaves your hands, the other box comes up into your hands and is a normal held box again: open it, restock shelves, and so on.
 
-**At the wholesale store:** while you hold a single closed box, look at a product on a shelf, fridge or freezer and **hold left click** for the usual purchase time. The box is bought as normal (same price and money check) and lands on top of the one you hold. There is no progress circle while you hold; just keep the button down and keep looking at the product. Letting go or looking away early cancels it.
+**At the wholesale store:** while you hold a single closed box, look at a product on a shelf, fridge or freezer and **hold left click** for the usual purchase time. The box is bought as normal (same price and money check) and lands on top of the one you hold. There is no progress circle while you hold; just keep the button down and keep looking at the product. Letting go or looking away early cancels it. While you look at a wholesale product, a left click does not open the box in your hands (look away from the product to open it); it also needs the box to be closed.
 
 Only loose, closed boxes can be picked up as the second box, not boxes straight from a rack. A third box can't be added.
 

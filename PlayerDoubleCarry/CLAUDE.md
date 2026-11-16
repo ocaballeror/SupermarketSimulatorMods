@@ -73,3 +73,5 @@ Why the bottom box isn't left under `m_ObjectHolder`: SupermarketFixes' GhostHel
 7. Host with the mod, guest with the mod carrying two boxes quits: on the host, `[PlayerCarry] <name> left while carrying box[...]; put it down` and the box falls to the floor and can be picked up.
 
 Send back the `[PlayerCarry]` lines from `BepInEx/LogOutput.log` (both machines when online), plus any `[GhostHeld]` / `[StuckBox]` lines if SupermarketFixes is installed.
+
+- Review 2026-11-16 (wholesale buy): the hold ends on `OnUse(false)`, looking away, or the box changing, and now also when the Use action is no longer physically pressed (`UseHeld`), because a release swallowed while paused would otherwise buy the box after the player let go. Open, unverified: whether an unmodded host grants the bought box through the `SpawnNetworkBoxClient` request; whether anything in `Purchase` after the skipped interaction calls depends on the interaction having switched.

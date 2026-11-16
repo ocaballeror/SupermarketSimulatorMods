@@ -345,10 +345,10 @@ Shift-clicking should work with paper bags for delivery too.
 
 ## Improvement #10: Allow Players to Carry Two Boxes at Once
 
-**Status:** in-progress  
+**Status:** reviewed  
 **Code:** `PlayerDoubleCarry/`  
-**Review:** 2026-11-15, 1 round, hash `8e81b678aa84` (before the rework)  
-**Waiting on:** Review of the v0.2.0 rework (buying a second box at the wholesale store), then in-game test.
+**Review:** 2026-11-16, 1 round, hash `2f772873f0e7`  
+**Waiting on:** In-game test of v0.2.0 (buying a second box at the wholesale store); send the `[PlayerCarry]` log lines.
 
 Allow players to pick up and carry two boxes at a time.
 

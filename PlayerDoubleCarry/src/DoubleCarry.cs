@@ -242,6 +242,27 @@ internal static class DoubleCarry
         s_buyOver = null;
     }
 
+    private static UnityEngine.InputSystem.InputAction s_useAction;
+    private static IntPtr s_useActionPlayer;
+
+    /// <summary>
+    /// True while the Use button is physically down. A release swallowed by a menu or pause never reaches
+    /// BoxInteraction.OnUse(false), so the hold must not rely on that alone.
+    /// </summary>
+    private static bool UseHeld(PlayerInstance p)
+    {
+        try
+        {
+            if (s_useAction == null || s_useActionPlayer != p.Pointer)
+            {
+                s_useActionPlayer = p.Pointer;
+                s_useAction = p.InputActions?.m_PlayerInput?.actions?.FindAction("Use", false);
+            }
+            return s_useAction == null || s_useAction.IsPressed();   // can't tell: keep the old behaviour
+        }
+        catch (Exception) { return true; }
+    }
+
     private static void TickBuy(float now)
     {
         var pp = s_buyTarget;
@@ -254,6 +275,7 @@ internal static class DoubleCarry
         if (!HeldNormally(p, held) || bi == null || !WouldOpenBox(bi)) { CancelBuy("the box in your hands changed"); return; }
         var looked = LookedAtPurchasable(p);
         if (looked == null || looked.Pointer != pp.Pointer) { CancelBuy("looked away"); return; }
+        if (!UseHeld(p)) { CancelBuy("the button is no longer held"); return; }
         float d = 0f;
         try { d = pp.Duration; } catch { }
         if (now - s_buyStart < d) return;
@@ -277,7 +299,6 @@ internal static class DoubleCarry
             Plugin.Logger.LogWarning("[PlayerCarry] Bought a box but couldn't find it; it stays at the shelf");
             return;
         }
-        // The game's own hints were kept; re-check the held box's "open" hint state.
         RequestSecondBox(p, held, box);
     }
 
