@@ -329,9 +329,10 @@ internal static class ComputerFurniture
         Object.DontDestroyOnLoad(_holder);
 
         // A copy of the store computer. It is created under the inactive holder, so none of its scripts wake up.
-        // Its own setup is already what a movable networked object needs: the root (layer, colliders, PhotonView,
-        // transform view, navmesh obstacle, highlight, snap points) and a FurniturePlacingMode whose references
-        // (m_Furniture, renderers, colliders, parent PhotonView) Instantiate has remapped into this copy.
+        // It already has the physical setup of a movable object: the root (layer, colliders, navmesh obstacle,
+        // highlight, snap points) and a FurniturePlacingMode whose references (m_Furniture, renderers, colliders)
+        // Instantiate has remapped into this copy. It has no network components (no PhotonView, no transform view);
+        // SetUpNetworkViews adds them below and m_ParentPhotonView is pointed at the new view.
         var tpl = Object.Instantiate(compRoot.gameObject, _holder.transform);
         _partial = tpl;
         tpl.name = "ExtraComputer";
@@ -398,7 +399,8 @@ internal static class ComputerFurniture
     ///    so a moved computer reaches the other players only through this view's stream. A new component starts
     ///    with the constructor defaults (sync on, position and rotation, delta 0.01, multiplier 100); the prefabs
     ///    serialize their own values, so those are copied rather than assumed.
-    ///  - Both are listed in the view's ObservedComponents (observableSearch would also find the transform view).
+    ///  - Only the transform view is put in the view's ObservedComponents (the view's Awake refills that list itself
+    ///    when observableSearch isn't Manual, and would find the transform view too).
     /// NetworkComputer and NetworkVendingMachineTab (which would otherwise resolve photonView to this view, and whose
     /// RPCs would then target the clone's view id) are stripped from the copy; a surviving script fails the build.
     /// Returns the PhotonView.
