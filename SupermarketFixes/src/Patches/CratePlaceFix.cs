@@ -39,9 +39,11 @@ internal static class CratePlaceFix
             "deselect and reselect the crate, repair the crate's product selection automatically.");
     }
 
-    internal static void ResetState() { s_loggedError = false; s_lastLogged = -100f; }
+    internal static void ResetState() { s_loggedError = false; s_lastLogged = -100f; s_triedSlot = s_triedCrate = IntPtr.Zero; }
 
     private static bool s_loggedError;
+    private static IntPtr s_triedSlot, s_triedCrate;
+    private static int s_triedCount, s_triedId;
     private static float s_lastLogged = -100f;
 
     internal static void LogError(string where, Exception e)
@@ -76,10 +78,18 @@ internal static class CratePlaceFix
         var crate = ci.m_Crate;
         var slot = ci.m_CurrentDisplaySlot;
         if (crate == null || slot == null || !crate.HasProduct) return;
-        if (slot.HasProduct || slot.ProductID > 0) return; // vanilla uses the slot itself there
+        if (slot.HasProduct) return;
+        int label;
+        try { label = slot.ProductID; } catch (Exception) { return; }
+        if (label > 0) return; // vanilla uses the slot itself there
 
         int id = ci.m_ScrollCurrentGroupID;
         if (CrateHasGroup(crate, id)) return;
+
+        // Don't retry every frame if a repair can't find a group (e.g. HasProduct disagrees with the list).
+        int count = crate.m_Product != null ? crate.m_Product.Count : -1;
+        if (s_triedSlot == slot.Pointer && s_triedCrate == crate.Pointer && s_triedCount == count && s_triedId == id) return;
+        s_triedSlot = slot.Pointer; s_triedCrate = crate.Pointer; s_triedCount = count; s_triedId = id;
 
         for (int attempt = 0; attempt < 2; attempt++)
         {
