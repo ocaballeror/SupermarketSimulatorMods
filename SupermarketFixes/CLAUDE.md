@@ -122,3 +122,11 @@ Crash logs from 2026-11-15 (guest, Windows, in `bug-4/`):
   - The newest folder in `%LOCALAPPDATA%\Temp\Nokta Games\Supermarket Simulator\Crashes\` (`crash.dmp`, `error.log`).
   - Windows Event Viewer → Windows Logs → Application: the "Application Error" entry for `Supermarket Simulator.exe` (it names the faulting module, e.g. `GameAssembly.dll`, `UnityPlayer.dll`, or `nvwgf2umx.dll` for the NVIDIA driver).
 - Remove `BepInExConfigManager` from the guest (or install UniverseLib for it) to rule out the per-frame exception spam.
+- **Guest hardware (from `Player.log`):** NVIDIA GeForce MX450 laptop GPU with only **1906 MB VRAM**, driver 32.0.15.8157, Direct3D 11 (the D3D12 device creation fails, which is normal fallback). The host's scene is large (about 496,000 loaded objects, 20 restockers via MoreEmployees, lots of furniture), so VRAM or RAM exhaustion is a prime suspect. A process killed for memory, or a GPU driver hang, matches "log stops with no Unity crash handler output". Unconfirmed.
+- **Debug plan if it crashes again (cheapest first):**
+  1. Note whether the window closed, froze ("Not responding"), or the screen went black. A freeze plus a later kill points at the GPU driver; a vanishing window points at a native crash or OOM.
+  2. Event Viewer, **System** log as well as Application: look for `nvlddmkm` / `Display` event 4101 (driver reset, TDR) and `Resource-Exhaustion-Detector` event 2004 (low memory) near the crash time.
+  3. During a session, watch Task Manager → Performance → GPU "Dedicated GPU memory" and the game's Memory column. If the dedicated memory sits at about 1.9 GB and the commit size keeps growing, it's resources.
+  4. Enable Windows crash dumps for the game so a native crash leaves a full dump: registry key `HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\Supermarket Simulator.exe` with `DumpFolder` (REG_EXPAND_SZ) and `DumpType` = 2 (DWORD).
+  5. A/B test: lower texture quality / resolution on the guest, and run a session with the guest's BepInEx removed (`winhttp.dll` renamed) to see whether the crash is vanilla.
+  6. Possible code step (not done): a periodic diagnostic line in `DiagnosticsBehaviour` with working set, GC memory and frame time every ~10 s, so the last lines of `Player.log` show a trend before the stop.
