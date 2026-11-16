@@ -1,22 +1,31 @@
 # Restocker Double Carry
 
-Experienced restockers carry **two boxes per trip**. A restocker at level 10 or higher (configurable) works like this:
+Experienced restockers carry **two boxes per trip**, both when they restock shelves and when they take delivered boxes to storage. A restocker at level 10 or higher (configurable) works like this:
 
-1. It picks up a box for a product that needs restocking, from a storage rack or from the outside area where deliveries are dropped.
-2. If a **different** product also needs restocking and a box of it is available, the restocker fetches that box too. The second box rides on top of the first.
-3. **A restocker never unpacks while holding two boxes.** When it reaches the first shelf, it puts the top box on the floor next to it, then opens the other box and restocks that product.
-4. Then it finishes with the box it unpacked:
-   - **If the box is empty**, it takes it to the trash (as it normally would), then comes back for the box it left on the floor and unpacks that one.
-   - **If the box still has products**, it takes it to storage (a rack), then comes back for the box on the floor and unpacks that one.
-5. Whatever is left in the second box goes to storage, or in the trash if it's empty, as usual.
+1. It picks up a box for its next job, as the game decides: a box for a product that needs restocking (from a storage rack, the outside delivery area or a delivery vehicle), or a delivered box that goes to storage.
+2. If there is a second job, it fetches a second box for it before leaving. The second box rides on top of the first. The second job can be:
+   - restocking a **different** product, with a box from a storage rack or from the outside delivery area;
+   - taking another box from the outside delivery area to storage.
 
-The box goes on the floor beside the restocker, away from the shelf (or to its left or right if that spot is taken). If the second product's shelves were filled in the meantime, the restocker takes the box from the floor straight to storage. If there's nowhere to put it yet, or it can't reach it, it does other work and tries again later (it gives up after 3 minutes of trying; the box then stays on the floor like any box a restocker drops).
+   So a trip can be two restocks, two boxes for storage, or one of each.
+3. With both boxes in hand, it deals first with the box whose destination (its shelf, or its storage rack) is the shorter walk from where it picked up the second box.
+4. Putting a box in a storage rack (including topping up a box of the same product already there) works with both boxes in hand: the restocker racks one and keeps carrying the other. **But a restocker never unpacks onto a shelf while holding two boxes.** When it reaches a shelf with two boxes in hand, it puts the other box on the floor next to it, then opens the box for that shelf and restocks.
+5. Then it finishes with the box it unpacked:
+   - **If the box is empty**, it takes it to the trash (as it normally would), then comes back for the box it left on the floor and deals with that one: it unpacks it at its own shelves, or takes it to storage.
+   - **If the box still has products** and the box on the floor goes to storage too, it picks the floor box up again and takes both to storage (the closer rack first).
+   - **If the box still has products** and the box on the floor is for a shelf, it takes the leftovers to storage, then comes back for the floor box and unpacks it.
+6. Whatever is left in the last box goes to storage, or in the trash if it's empty, as usual.
+
+The box goes on the floor beside the restocker, away from the shelf (or to its left or right if that spot is taken). If the floor box's product was filled on the shelves in the meantime, the restocker takes it straight to storage. If there's nowhere to put it yet, or it can't reach it, it does other work and tries again later (it gives up after 3 minutes of trying; the box then stays on the floor like any box a restocker drops).
 
 The restocker always goes back for a box it put down itself, even when its "pick up boxes from the ground" setting is off: that setting is about boxes in the outside delivery area. Other restockers don't pick up a box lying inside the store, so it waits for the one that put it there. A player can still pick it up; the restocker then just carries on.
 
 If there's no second job when it picks up the first box, or the second box is gone by the time it gets there, the restocker just carries on with one box. Lower-level restockers aren't affected.
 
-All the restocker's own settings (use unlabeled racks, pick up boxes from the ground, drop empty boxes, restock shelves) are respected. The second box is chosen the same way the game chooses the first, except that it is always a box from the outside area or from a storage rack: a box in a delivery vehicle can be the first box but never the second.
+All the restocker's own settings (use unlabeled racks, pick up boxes from the ground, drop empty boxes, restock shelves) are respected: for example a restocker that may not pick up boxes from the ground never takes a delivered box to storage as its second job. The second box is chosen the same way the game chooses the first, with these differences:
+- it is always a box from the outside area or from a storage rack: a box in a delivery vehicle can be the first box but never the second;
+- a second restock job is always for a different product than the first box;
+- two boxes of the same product are taken together only if the storage rack the second one would go to has room for both, so the restocker isn't left holding a box with nowhere to put it.
 
 ## Settings
 
@@ -25,15 +34,15 @@ All the restocker's own settings (use unlabeled racks, pick up boxes from the gr
 | Section | Setting | Default | What it does |
 |---|---|---|---|
 | General | `Enabled` | `true` | Master switch. Turning it off takes effect right away; no restart needed. A restocker carrying two boxes at that moment puts the second one down, or takes it in hand if its hands are empty. |
-| Restockers | `MinimumLevel` | `10` | Restockers at this level or higher carry two boxes (1 to 100). |
-| Restockers | `StackSecondBox` | `true` | Shows the second box stacked on top of the first in the restocker's hands (on the way from storage to the shelves). When one of the two boxes leaves the hands, the other one moves down into the hands. |
+| Restockers | `MinimumLevel` | `10` | Restockers at this level or higher carry two boxes, for restocking and for taking deliveries to storage (1 to 100). |
+| Restockers | `StackSecondBox` | `true` | Shows the second box stacked on top of the first in the restocker's hands while it carries two. When one of the two boxes leaves the hands, the other one moves down into the hands. |
 | Diagnostics | `VerboseLogging` | `true` | Writes each step of a two-box trip to `BepInEx/LogOutput.log` (tag `[DoubleCarry]`). |
 
 ## Who needs it (multiplayer)
 
 **The host.** Restockers are run by the host, so the host's settings decide everything.
 
-Guests don't need the mod: every pick-up, product placement and box put-away uses the game's normal network messages, so everyone stays in sync. Without the mod, a guest sees the two boxes in the same spot, one inside the other, so it looks like the restocker carries only one. A guest with the mod installed sees them stacked.
+Guests don't need the mod: every pick-up, product placement, racking and box put-away uses the game's normal network messages, so everyone stays in sync. Without the mod, a guest sees the two boxes in the same spot, one inside the other, so it looks like the restocker carries only one. A guest with the mod installed sees them stacked.
 
 ## Notes
 
