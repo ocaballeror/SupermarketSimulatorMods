@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.supermarketfixes";
     public const string Name = "Supermarket Fixes";
-    public const string Version = "0.9.1";
+    public const string Version = "0.10.0";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

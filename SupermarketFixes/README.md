@@ -42,11 +42,13 @@ In a pile of boxes (for example a big online order), taking the box under anothe
 
 If it still happens, the log has `[FloatBox]` lines describing the box that stayed in the air. Please send those.
 
-### Bug #7: the cleaning lady mops next to the stain instead of on it
+### Bug #7 and Bug #8: the cleaning lady mops next to the stain, or pushes into walls to reach it
 
-The cleaning lady walked right onto the middle of a floor stain and then mopped the floor in front of her, so it looked as if she was cleaning the wrong spot (the stain still disappeared). Now she stops one mop-length away from the stain and turns so that her mop is on it. She picks a spot on open floor next to the stain, preferring one with room for her, and starts on the side she comes from. If there is no free spot around the stain, she cleans it the way the unmodded game does.
+The cleaning lady walked right onto the middle of a floor stain and then mopped the floor in front of her, so it looked as if she was cleaning the wrong spot (the stain still disappeared). Next to a shelf or wall she also pushed herself into it. Now she picks a spot where she fits, away from walls, shelves, racks and boxes (other people don't count), and turns so that her mop points at the centre of the stain. She prefers the spot from which her mop lands exactly on the centre. If there is no room there, she stands a little nearer or further away, so the mop is still on the stain. Only if there's no room anywhere near does she clean from further away (mop aimed at the stain but short of it). The stain is always cleaned; she never skips one.
 
-While she cleans, the mod also checks where her mop really is and uses that for the next stains, so the alignment improves after the first stain. With `Diagnostics` on, the log has `[JanitorAlign]` lines that say how far her mop was from each stain. Please send those.
+While she cleans, the mod also checks where her mop really is and uses that for the next stains, so the alignment can improve after the first stain. The way she walks to her spot is unchanged, so she can still brush past corners on the way.
+
+With `Diagnostics` on, the log has `[JanitorAlign]` lines that say where she stood and how far her mop was from each stain. Please send those.
 
 ### F9: "my hands are stuck" key
 
@@ -80,7 +82,7 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes either of
 | FloatingBox | `WakeUnsupportedBoxes` | `true` | Boxes that float after the box under them was taken are woken up so they fall. |
 | FloatingBox | `Diagnostics` | `true` | Logs `[FloatBox]` lines when a floating box is woken or when a floating box is found that isn't simply asleep. |
 | BoxPlace | `Diagnostics` | `true` | Logs `[BoxPlace]` lines explaining why nothing was placed when you hold left click on a shelf for 1.5 s. |
-| JanitorCleanAlign | `AlignToStain` | `true` | The cleaning lady stands so that her mop, not her feet, is on the stain she cleans, and faces it. Only needed on the host (or in single player). |
+| JanitorCleanAlign | `AlignToStain` | `true` | The cleaning lady aims her mop at the centre of the stain she cleans and stands where she fits, instead of standing on the stain (or inside a wall or shelf). Only needed on the host (or in single player). |
 | JanitorCleanAlign | `Diagnostics` | `true` | Logs `[JanitorAlign]` lines: where she stands for each stain and how far her mop was from it. |
 
 ## Who needs it (multiplayer)
@@ -92,4 +94,4 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes either of
 - **Bug #5: whoever has the problem.** It only repairs your own controls, so it must be installed on the machine where placing fails. Nothing it does is sent over the network, so other players don't need it.
 - **Bug #2: the guest.** The suspected cause (a late pickup answer from the host) can only happen on a guest, so the guest who sees the item in their hands needs the mod. Installing it only on the host doesn't fix anything in a guest's hands. The host can run it too: its `RegrantToSameHolder` lets a guest pick up a box again after the mod dropped it from their hands.
 - **Bug #3: whoever gets stuck.** The fix repairs the state of your own player, so it only helps on the machine where the problem shows up. The host should run the mod too: `RegrantToSameHolder` runs there and lets a guest's retry succeed. A guest without the mod is not affected by it. If the host does not run the mod, a guest's fix still frees the guest's controls, but the host may keep counting that box as held by the guest: nobody can pick that box up until the game is reloaded, and other players may see it in the guest's hands.
-- **Bug #7: the host** (or the player, in single player). The cleaning lady is controlled by the host, and other players see where she stands and which way she faces through the game's normal sync, so guests don't need the mod for this fix.
+- **Bugs #7 and #8: the host** (or the player, in single player). The cleaning lady is controlled by the host, and other players see where she stands and which way she faces through the game's normal sync, so guests don't need the mod for this fix.

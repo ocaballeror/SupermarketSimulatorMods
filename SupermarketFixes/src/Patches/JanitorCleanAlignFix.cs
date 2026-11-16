@@ -11,7 +11,9 @@ namespace SupermarketFixes.Patches;
 
 /// <summary>
 /// Bug #7: the cleaning lady (janitor employee) cleans a floor stain successfully, but she isn't lined up
-/// with it: she seems to mop a different patch of floor next to the stain.
+/// with it: she seems to mop a different patch of floor next to the stain. The user's goal (2026-11-16): the
+/// mop is aimed at the stain's centre, and she stands where her body fits. That includes Bug #8 (she pushes
+/// herself into walls and shelves to clean a stain; overlapping other characters is fine).
 ///
 /// Root cause (dumps + prefab data, not yet confirmed in-game):
 /// - The janitor AI runs only on the master client (Janitor.Update returns on IsConnectedAndSlave). For a
@@ -20,7 +22,7 @@ namespace SupermarketFixes.Patches;
 /// - Arrival is Janitor.RotateAndCheck: when the distance between the agent's transform and agent.destination
 ///   is at most stoppingDistance, it invokes Janitor.Clean -> DirtCleaningState.Enter. The janitor prefab's
 ///   NavMeshAgent has stoppingDistance 0.1, radius 0.05, angularSpeed 0 (resources.assets, "Janitor"). So she
-///   walks until she is standing on the centre of the stain.
+///   walks until she is standing on the centre of the stain, with a path planned for a 0.05 m radius.
 /// - Her facing is never chosen for the stain: updateRotation is turned off and RotateAndCheck only slerps her
 ///   towards NavMeshAgent.desiredVelocity while walking. DirtCleaningState.Enter turns on the mop (m_Mop),
 ///   sets the Rig weight to 1 (hands IK onto the mop grips) and the animator bool "Dirt", but never rotates or
@@ -28,26 +30,38 @@ namespace SupermarketFixes.Patches;
 /// - The mop (SM_Mop) is not held in a hand bone: it is a child of the character root, placed in the prefab
 ///   about 0.15 m to her right and 0.55 m in front of her feet; the hands follow it through the rig.
 /// So the mop head works the floor about 0.57 m from the stain centre, in whatever direction she happened to
-/// arrive from, while she stands on the stain itself. The cleaning progress (Dirt.AddProgress from the
-/// CleaningForJanitorCoroutine) doesn't depend on distance, so the stain still disappears.
+/// arrive from, while she stands on the stain itself. When the stain is next to a wall or shelf, her body
+/// (about 0.13 m collider radius plus arms) and the mop end up inside it (Bug #8). The cleaning progress
+/// (Dirt.AddProgress from the CleaningForJanitorCoroutine) doesn't depend on distance, so the stain still
+/// disappears.
 ///
 /// Fix (host/offline, where the AI runs; guests see it through the janitor's PhotonTransformView, which
 /// syncs position and rotation):
-/// - MoveTargetState.Enter postfix (stain targets only): instead of the stain centre, send her to a stand
-///   point one mop-reach away from the stain, minus half the agent's stoppingDistance (she stops up to about
-///   0.09 m before her destination, usually on her own side of it). Candidates are tried around the stain, starting on her side of
-///   it; a candidate must be on the NavMesh close to the wanted spot, have a clear NavMesh line to the stain,
-///   and preferably room for her body (capsule check against walls, furniture and racks). If none is
-///   walkable, vanilla's destination is kept.
-/// - DirtCleaningState.Enter prefix: remember the stain; the per-frame Tick then turns her (yaw only) so the
-///   mop head, not her feet, lands on the stain. Nothing else rotates her during the dirt-cleaning state.
+/// - MoveTargetState.Enter postfix (stain targets only) picks where she stands and calls SetDestination on it.
+///   Candidates lie on rings around the stain (24 directions, distances = mop reach, then reach +-0.1 ...
+///   +-0.5 m, then further out to 1.6 m). A candidate must be on the NavMesh (within 0.1 m of the wanted
+///   spot) with a clear NavMesh line to the stain, and her body must fit there: a capsule of radius 0.20 m
+///   ("room") or at least 0.13 m, her own collider ("tight"), from 0.25 to 1.6 m high, free of walls,
+///   furniture, racks and boxes (layers in BodyMask; characters are ignored). The cheapest candidate wins:
+///   distance from the mop reach first (the mop head lands on the centre only at exactly that distance),
+///   then a tight fit, a blocked mop path (a thin capsule from her hands to where the mop head lands), and
+///   the walk round the stain. Rings are searched nearest-to-reach first and the search stops once no
+///   further ring can beat the best candidate.
+/// - Fallbacks: if no spot fits within 0.5 m of the reach, the nearest fitting spot further out is used (she
+///   still faces the stain with the mop aimed at its centre, but the mop falls short of it). If her body fits
+///   nowhere within 1.6 m, she stands on the walkable spot closest to the reach and a warning is logged (body
+///   overlap, mop still aimed). If no candidate is walkable at all, the vanilla destination is kept. She is
+///   never sent away without cleaning: the selected stain has already been taken off the janitors' list
+///   (JanitorManager.SelectCleaningObject -> SafeRemove), so skipping it would leave it for the players.
+/// - DirtCleaningState.Enter prefix: remember the stain and the planned stand point; the per-frame Tick then
+///   slides her the last few centimetres onto the planned point (she stops up to 0.1 m short; via
+///   NavMeshAgent.nextPosition, so she stays on the NavMesh) and turns her (yaw only) so that the mop head
+///   points at the stain centre. Nothing else moves or rotates her during the dirt-cleaning state.
 /// - While she cleans, the Tick measures where the mop head really is relative to her (the animation may
 ///   swing it) and, if the average is plausible, uses that offset for the next stains. With Diagnostics on,
 ///   each cleaning logs the mop head's average distance from the stain centre.
-///
-/// Related: Bug #8 (she walks into walls and shelves to clean a stain) shares part of this mechanism: she
-/// always heads for the stain centre itself with a 0.05 m agent radius. This fix's stand-point choice avoids
-/// spots without room for her body when another one exists, but it doesn't change how she walks there.
+/// - Not covered: the path she walks to the stand point is still planned by the game with its 0.05 m agent
+///   radius, so she can brush walls and shelf corners on the way.
 /// </summary>
 internal static class JanitorCleanAlignFix
 {
@@ -57,21 +71,31 @@ internal static class JanitorCleanAlignFix
     /// <summary>Mop head position relative to her feet in the prefab (right, forward), in metres.</summary>
     private static readonly Vector2 PrefabMopOffset = new(0.15f, 0.55f);
     private const float TurnSpeedDeg = 540f;
+    private const float SlideSpeed = 0.6f;
     /// <summary>Wait this long after cleaning starts before measuring the mop (turn and animation blend-in).</summary>
     private const float MeasureDelay = 0.6f;
     private const int MinSamples = 20;
     private const int MaxLogs = 80;
 
+    /// <summary>Body capsule: comfortable radius (body plus arms) and her own collider radius.</summary>
+    private const float RoomRadius = 0.20f, TightRadius = 0.13f;
+    private const float BodyBottom = 0.25f, BodyTop = 1.6f;
+    /// <summary>Distances beyond reach +- this put the mop head off the stain (half its 1 m quad).</summary>
+    private const float OnStainBand = 0.5f;
+    private const float MaxStandDist = 1.6f, MinStandDist = 0.25f;
+    private const int Directions = 24;
+
     /// <summary>Layers that block her body: 0 Default, 6 Interactable, 10 Door, 14 Buildings, 15 Obstacle,
-    /// 18 WallLayer, 20 RackLayer (indices from the game's TagManager).</summary>
+    /// 18 WallLayer, 20 RackLayer (indices from the game's TagManager). Player (3) and Customer (28) are left
+    /// out on purpose: overlapping other characters is acceptable.</summary>
     private static readonly int BodyMask =
         (1 << 0) | (1 << 6) | (1 << 10) | (1 << 14) | (1 << 15) | (1 << 18) | (1 << 20);
 
     internal static void Bind(ConfigFile cfg)
     {
         AlignToStain = cfg.Bind("JanitorCleanAlign", "AlignToStain", true,
-            "The cleaning lady stands so that her mop, not her feet, is on the stain she cleans, and faces it. " +
-            "Only needed on the host (or in single player).");
+            "The cleaning lady aims her mop at the centre of the stain she cleans and stands where she fits, " +
+            "instead of standing on the stain (or inside a wall or shelf). Only needed on the host (or in single player).");
         Diagnostics = cfg.Bind("JanitorCleanAlign", "Diagnostics", true,
             "Log [JanitorAlign] lines: where she stands for each stain and how far her mop was from it.");
     }
@@ -79,10 +103,12 @@ internal static class JanitorCleanAlignFix
     internal static void ResetState()
     {
         s_tracks.Clear();
+        s_plans.Clear();
         s_offset = PrefabMopOffset;
         s_logs = 0;
         s_loggedError = false;
         s_navRaycastBroken = false;
+        s_slideBroken = false;
     }
 
     private sealed class Track
@@ -90,21 +116,32 @@ internal static class JanitorCleanAlignFix
         public JanitorNpc Janitor;
         public Vector3 Stain;
         public float Start;
+        public bool HasStand;
+        public Vector3 Stand;      // NavMesh point she should end up on
         public bool Turning;
         public float TargetYaw;
-        public float StandDist;
+        public float StandDist;    // where she stopped, before the slide
         public Renderer Head;
         public bool HeadSearched;
         public Vector2 OffsetSum;
         public float DistSum;
+        public float FeetSum;
         public int Samples;
     }
 
+    private readonly struct Plan
+    {
+        public readonly Vector3 Stain, Stand;
+        public Plan(Vector3 stain, Vector3 stand) { Stain = stain; Stand = stand; }
+    }
+
     private static readonly Dictionary<IntPtr, Track> s_tracks = new();
+    private static readonly Dictionary<IntPtr, Plan> s_plans = new();
     private static Vector2 s_offset = PrefabMopOffset;
     private static int s_logs;
     private static bool s_loggedError;
     private static bool s_navRaycastBroken;
+    private static bool s_slideBroken;
 
     private static bool RunsAi => !PhotonNetwork.IsConnected || PhotonNetwork.IsMasterClient;
 
@@ -131,6 +168,7 @@ internal static class JanitorCleanAlignFix
         if (!AlignToStain.Value || !RunsAi) return;
         var j = state._janitor;
         if (j == null) return;
+        s_plans.Remove(j.Pointer);
         // Enter falls back to the idle state when the target is gone; only a live stain target is changed.
         if (j.sType != JanitorNpc.StateType.MoveTarget || j.cleaningType != JanitorNpc.CleaningType.Dirt) return;
         var target = j.TargetObject;
@@ -140,70 +178,133 @@ internal static class JanitorCleanAlignFix
 
         Vector3 stain = target.transform.position;
         Vector3 from = j.transform.position;
-        // She stops as soon as she is within stoppingDistance (3D, including the -0.04 base offset) of the
-        // destination, usually on her own side of it, so aim a little inside the mop reach.
-        float inset = Mathf.Clamp(agent.stoppingDistance * 0.5f, 0f, 0.1f);
-        if (FindStandPoint(stain, from, inset, out var stand, out var how))
+        if (FindStandPoint(stain, from, out var stand, out var how, out bool warn))
         {
             agent.SetDestination(stand);
-            Log($"Janitor {j.JanitorID} heads for a stain at {Fmt(stain)}: standing at {Fmt(stand)}, " +
-                $"{Flat(stand - stain).magnitude:F2} m from it ({how}; mop offset right={s_offset.x:F2} forward={s_offset.y:F2}).");
+            s_plans[j.Pointer] = new Plan(stain, stand);
+            string msg = $"Janitor {j.JanitorID} heads for a stain at {Fmt(stain)}: standing at {Fmt(stand)}, " +
+                         $"{Flat(stand - stain).magnitude:F2} m from it, mop reach {s_offset.magnitude:F2} m ({how}).";
+            if (warn && Diagnostics.Value) Plugin.Logger.LogWarning($"[JanitorAlign] {msg}");
+            else Log(msg);
         }
         else
         {
-            Log($"Janitor {j.JanitorID} heads for a stain at {Fmt(stain)}: no walkable spot one mop-reach away " +
-                $"({how}), she goes to the stain itself as in the unmodded game.");
+            Log($"Janitor {j.JanitorID} heads for a stain at {Fmt(stain)}: {how}; she goes to the stain itself " +
+                "as in the unmodded game.");
         }
     }
 
-    private static bool FindStandPoint(Vector3 stain, Vector3 from, float inset, out Vector3 stand, out string how)
+    /// <summary>
+    /// Picks where she stands. Cost (lower is better): 2 per metre that her distance to the stain differs from
+    /// the mop reach (+1 beyond the on-stain band), +0.5 for only a tight fit, +0.6 if the mop path is blocked,
+    /// up to +0.3 for walking round to the far side. Spots where her body doesn't fit are only used when
+    /// nothing fits anywhere.
+    /// </summary>
+    private static bool FindStandPoint(Vector3 stain, Vector3 from, out Vector3 stand, out string how, out bool warn)
     {
         stand = default;
-        float reach = Mathf.Max(0.1f, s_offset.magnitude - inset);
+        warn = false;
+        float reach = Mathf.Max(0.2f, s_offset.magnitude);
         if (!NavMesh.SamplePosition(stain, out var stainHit, 1.0f, NavMesh.AllAreas))
         {
-            how = "stain is not near the NavMesh";
+            how = "the stain is not near the NavMesh";
             return false;
         }
         Vector3 stainNav = stainHit.position;
-
         Vector3 baseDir = Flat(from - stain);
         baseDir = baseDir.sqrMagnitude > 1e-4f ? baseDir.normalized : Vector3.forward;
 
-        bool haveFallback = false;
-        Vector3 fallback = default;
-        int fallbackAngle = 0;
-        int walkable = 0;
-        // Her side of the stain first (shortest walk), then alternately further round both ways.
-        for (int k = 0; k < 12; k++)
+        // Rings, nearest to the reach first: reach, reach -+0.1 ... -+0.5, then further out.
+        var rings = new List<(float dist, float baseCost)>();
+        void AddRing(float delta)
         {
-            int angle = k == 0 ? 0 : (k % 2 == 1 ? 1 : -1) * 30 * ((k + 1) / 2);
-            // k = 11 gives +180; -180 never comes up.
-            Vector3 dir = Quaternion.Euler(0f, angle, 0f) * baseDir;
-            Vector3 want = new(stain.x + dir.x * reach, stainNav.y, stain.z + dir.z * reach);
-            if (!NavMesh.SamplePosition(want, out var hit, 0.3f, NavMesh.AllAreas)) continue;
-            Vector3 cand = hit.position;
-            if (Flat(cand - want).magnitude > 0.15f) continue;   // spot itself not walkable
-            if (Blocked(stainNav, cand, stain)) continue;          // a wall or shelf between her and the stain
-            walkable++;
-            bool room = !Physics.CheckCapsule(cand + Vector3.up * 0.35f, cand + Vector3.up * 1.45f, 0.15f,
-                                              BodyMask, QueryTriggerInteraction.Ignore);
-            if (room)
-            {
-                stand = cand;
-                how = $"angle {angle}";
-                return true;
-            }
-            if (!haveFallback) { haveFallback = true; fallback = cand; fallbackAngle = angle; }
+            float d = reach + delta;
+            if (d < MinStandDist || d > MaxStandDist) return;
+            float c = 2f * Mathf.Abs(delta) + (Mathf.Abs(delta) > OnStainBand + 1e-3f ? 1f : 0f);
+            rings.Add((d, c));
         }
-        if (haveFallback)
+        AddRing(0f);
+        for (int i = 1; i <= 5; i++) { AddRing(-0.1f * i); AddRing(0.1f * i); }
+        for (float delta = 0.7f; reach + delta <= MaxStandDist + 1e-3f; delta += 0.2f) AddRing(delta);
+
+        float bestCost = float.MaxValue;
+        string bestHow = null;
+        bool haveNoFit = false;
+        Vector3 noFit = default;
+        float noFitCost = float.MaxValue;
+        int walkable = 0;
+
+        foreach (var (dist, ringCost) in rings)
         {
-            stand = fallback;
-            how = $"angle {fallbackAngle}, no spot with room for her body";
+            if (ringCost >= bestCost) break;   // rings are in increasing base cost: nothing further can win
+            for (int k = 0; k < Directions; k++)
+            {
+                // Her side of the stain first, then alternately further round both ways.
+                int step = (k + 1) / 2;
+                float angle = (k % 2 == 1 ? 1f : -1f) * step * (360f / Directions);
+                // The last k gives +180; -180 never comes up.
+                float angleCost = Mathf.Abs(angle) / 180f * 0.3f;
+                if (ringCost + angleCost >= bestCost && ringCost + angleCost >= noFitCost) continue;
+
+                Vector3 dir = Quaternion.Euler(0f, angle, 0f) * baseDir;
+                Vector3 want = new(stain.x + dir.x * dist, stainNav.y, stain.z + dir.z * dist);
+                if (!NavMesh.SamplePosition(want, out var hit, 0.3f, NavMesh.AllAreas)) continue;
+                Vector3 cand = hit.position;
+                if (Flat(cand - want).magnitude > 0.1f) continue;    // spot itself not walkable
+                if (Blocked(stainNav, cand, stain)) continue;         // a wall or shelf between her and the stain
+                walkable++;
+
+                bool room = Fits(cand, RoomRadius);
+                bool tight = room || Fits(cand, TightRadius);
+                bool mopClear = MopPathClear(cand, stain, reach);
+                float cost = ringCost + angleCost + (room ? 0f : 0.5f) + (mopClear ? 0f : 0.6f);
+                if (!tight)
+                {
+                    if (cost < noFitCost) { noFitCost = cost; noFit = cand; haveNoFit = true; }
+                    continue;
+                }
+                if (cost < bestCost)
+                {
+                    bestCost = cost;
+                    stand = cand;
+                    float off = Mathf.Abs(dist - reach);
+                    bestHow = (off < 0.05f ? "mop on the stain centre" :
+                               off <= OnStainBand + 1e-3f ? $"mop about {off:F1} m off the centre, on the stain" :
+                               $"no fitting spot nearer, mop about {off:F1} m short of the centre") +
+                              (room ? "" : ", tight fit") + (mopClear ? "" : ", mop path blocked") +
+                              $", angle {angle:F0}";
+                }
+            }
+        }
+        if (bestHow != null)
+        {
+            how = bestHow;
             return true;
         }
-        how = walkable == 0 ? "no candidate on the NavMesh" : "all candidates blocked";
+        if (haveNoFit)
+        {
+            stand = noFit;
+            warn = true;
+            how = "her body fits nowhere within 1.6 m of the stain; using the best walkable spot, she may overlap an obstacle";
+            return true;
+        }
+        how = walkable == 0 ? "no spot around the stain is on the NavMesh" : "every spot around the stain is cut off from it";
         return false;
+    }
+
+    private static bool Fits(Vector3 feet, float radius) =>
+        !Physics.CheckCapsule(feet + Vector3.up * (BodyBottom + radius), feet + Vector3.up * (BodyTop - radius),
+                              radius, BodyMask, QueryTriggerInteraction.Ignore);
+
+    /// <summary>Thin capsule from her hands to where the mop head lands when she faces the stain.</summary>
+    private static bool MopPathClear(Vector3 feet, Vector3 stain, float reach)
+    {
+        Vector3 dir = Flat(stain - feet);
+        if (dir.sqrMagnitude < 1e-4f) return true;
+        dir.Normalize();
+        Vector3 hands = feet + dir * 0.3f + Vector3.up * 0.95f;
+        Vector3 head = feet + dir * reach + Vector3.up * 0.1f;
+        return !Physics.CheckCapsule(hands, head, 0.05f, BodyMask, QueryTriggerInteraction.Ignore);
     }
 
     private static bool Blocked(Vector3 stainNav, Vector3 cand, Vector3 stain)
@@ -227,9 +328,11 @@ internal static class JanitorCleanAlignFix
     internal static void OnDirtCleaningEnter(DirtCleaningState state)
     {
         if (!RunsAi) return;
-        if (!AlignToStain.Value && !Diagnostics.Value) return;
         var j = state._janitor;
         if (j == null) return;
+        bool hadPlan = s_plans.TryGetValue(j.Pointer, out var plan);
+        s_plans.Remove(j.Pointer);
+        if (!AlignToStain.Value && !Diagnostics.Value) return;
         var target = j.TargetObject;
         if (target == null) return;
 
@@ -239,12 +342,22 @@ internal static class JanitorCleanAlignFix
             Stain = target.transform.position,
             Start = Time.unscaledTime,
         };
-        Vector3 v = Flat(t.Stain - j.transform.position);
-        t.StandDist = v.magnitude;
+        Vector3 feet = j.transform.position;
+        t.StandDist = Flat(t.Stain - feet).magnitude;
+        // The plan is only used if it was made for this stain and she actually got there (she stops within
+        // stoppingDistance of it); otherwise she is aimed from where she stands.
+        if (AlignToStain.Value && hadPlan && Flat(plan.Stain - t.Stain).magnitude < 0.05f &&
+            Flat(plan.Stand - feet).magnitude < 0.3f)
+        {
+            t.HasStand = true;
+            t.Stand = plan.Stand;
+        }
+        Vector3 aimFrom = t.HasStand ? t.Stand : feet;
+        Vector3 v = Flat(t.Stain - aimFrom);
         float reach = s_offset.magnitude;
         string turn = "not turned";
-        // Only turn when she stands about one mop-reach away; standing on the stain, no facing helps.
-        if (AlignToStain.Value && t.StandDist >= reach * 0.5f && t.StandDist <= reach * 2f)
+        // Without a plan, only turn when she stands about one mop-reach away; standing on the stain, no facing helps.
+        if (AlignToStain.Value && v.magnitude > 0.05f && (t.HasStand || (v.magnitude >= reach * 0.5f && v.magnitude <= reach * 2f)))
         {
             float yawToStain = Mathf.Atan2(v.x, v.z) * Mathf.Rad2Deg;
             float mopAngle = Mathf.Atan2(s_offset.x, s_offset.y) * Mathf.Rad2Deg;
@@ -253,7 +366,8 @@ internal static class JanitorCleanAlignFix
             turn = $"turning {Mathf.Abs(Mathf.DeltaAngle(j.transform.eulerAngles.y, t.TargetYaw)):F0} deg";
         }
         s_tracks[j.Pointer] = t;
-        Log($"Janitor {j.JanitorID} starts cleaning a stain {t.StandDist:F2} m from her feet ({turn}).");
+        Log($"Janitor {j.JanitorID} starts cleaning a stain {t.StandDist:F2} m from her feet " +
+            $"({turn}{(t.HasStand ? $", sliding {Flat(t.Stand - feet).magnitude:F2} m onto her spot" : ", no planned spot")}).");
     }
 
     internal static void Tick(float now)
@@ -282,7 +396,34 @@ internal static class JanitorCleanAlignFix
             return true;
         }
         var tr = j.transform;
-        if (t.Turning && !AlignToStain.Value) t.Turning = false;   // switched off mid-turn
+        if (!AlignToStain.Value) { t.Turning = false; t.HasStand = false; }   // switched off mid-way
+        bool busy = false;
+        if (t.HasStand && !s_slideBroken)
+        {
+            try
+            {
+                var agent = j.m_Agent;
+                if (agent != null && agent.enabled && agent.isOnNavMesh)
+                {
+                    Vector3 cur = agent.nextPosition;
+                    Vector3 delta = Flat(t.Stand - cur);
+                    if (delta.magnitude > 0.01f)
+                    {
+                        Vector3 move = Vector3.ClampMagnitude(delta, SlideSpeed * Time.deltaTime);
+                        agent.nextPosition = cur + move;
+                        busy = true;
+                    }
+                    else t.HasStand = false;
+                }
+                else t.HasStand = false;
+            }
+            catch (Exception e)
+            {
+                s_slideBroken = true;
+                t.HasStand = false;
+                Plugin.Logger.LogWarning($"[JanitorAlign] Sliding her onto her spot is unavailable: {e.Message}");
+            }
+        }
         if (t.Turning)
         {
             var goal = Quaternion.Euler(0f, t.TargetYaw, 0f);
@@ -290,13 +431,15 @@ internal static class JanitorCleanAlignFix
             var next = Quaternion.RotateTowards(cur, goal, TurnSpeedDeg * Time.deltaTime);
             tr.rotation = next;
             if (Quaternion.Angle(next, goal) < 0.5f) t.Turning = false;
-            return false;
+            busy = true;
         }
+        if (busy) { t.Start = now; return false; }   // measure only once she has settled
         if (now - t.Start < MeasureDelay) return false;
         if (!TryHeadPoint(t, out var head)) return false;
         Vector3 local = tr.InverseTransformDirection(Flat(head - tr.position));
         t.OffsetSum += new Vector2(local.x, local.z);
         t.DistSum += Flat(head - t.Stain).magnitude;
+        t.FeetSum += Flat(tr.position - t.Stain).magnitude;
         t.Samples++;
         return false;
     }
@@ -333,6 +476,8 @@ internal static class JanitorCleanAlignFix
         }
         var avg = t.OffsetSum / t.Samples;
         float dist = t.DistSum / t.Samples;
+        float feet = t.FeetSum / t.Samples;
+        float usedReach = s_offset.magnitude;
         string adopt = "";
         bool plausible = avg.y >= 0.2f && avg.y <= 1.1f && Mathf.Abs(avg.x) <= 0.6f;
         if (plausible && (avg - s_offset).magnitude > 0.03f)
@@ -342,7 +487,7 @@ internal static class JanitorCleanAlignFix
         }
         else if (!plausible) adopt = "; implausible, not used";
         Log($"Janitor {SafeId(t.Janitor)} finished a stain: her mop head was on average {dist:F2} m from the stain centre " +
-            $"(she stood {t.StandDist:F2} m from it, mop reach {s_offset.magnitude:F2} m; mop at right={avg.x:F2} forward={avg.y:F2} of her{adopt}).");
+            $"(her feet {feet:F2} m from it, mop reach {usedReach:F2} m; mop at right={avg.x:F2} forward={avg.y:F2} of her{adopt}).");
     }
 
     private static string SafeId(JanitorNpc j)
