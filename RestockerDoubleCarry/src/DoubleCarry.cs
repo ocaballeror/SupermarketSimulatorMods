@@ -128,8 +128,8 @@ internal static class DoubleCarry
         public Box Floor;
         /// <summary>Time of the first empty-handed search that tried to fetch the floor box (-1: not yet).</summary>
         public float FloorRetryStart = -1f;
-        /// <summary>Rack slot vanilla chose for box 1 when the trip started as a storage job (else null).</summary>
-        public RackSlot FirstRack;
+        /// <summary>The trip started with a storage job for box 1 (vanilla chose a rack, not displays).</summary>
+        public bool FirstToStorage;
         /// <summary>The clerk already went back for the floor box with leftovers in hand once this trip.</summary>
         public bool Regrouped;
     }
@@ -313,34 +313,107 @@ internal static class DoubleCarry
         return vehicle?.Box;
     }
 
+    /// <summary>How many boxes of this box's size a rack slot holds (the game's BoxSO grid layout), 0 if unknown.</summary>
+    private static int Capacity(Box box)
+    {
+        var so = box.BoxSO;
+        if (so == null && NoktaSingleton<IDManager>.HasInstance) so = NoktaSingleton<IDManager>.Instance.BoxSO(box.BoxID);
+        var layout = so?.GridLayout;
+        return layout != null ? layout.boxCount : 0;
+    }
+
+    /// <summary>Capacity of a slot that already holds boxes: the same rule as RackSlot.Full (BoxSO of Data.BoxID).</summary>
+    private static int Capacity(RackSlotData data)
+    {
+        if (!NoktaSingleton<IDManager>.HasInstance) return 0;
+        var layout = NoktaSingleton<IDManager>.Instance.BoxSO(data.BoxID)?.GridLayout;
+        return layout != null ? layout.boxCount : 0;
+    }
+
     /// <summary>
-    /// How many more boxes fit in the rack slot. A slot with no boxes yet counts as roomy (its capacity
-    /// depends on the box size of whatever goes in first).
+    /// Can all these boxes be put in storage, one after the other, under the game's own rules? Replays
+    /// RackManager.GetRackSlotThatHasSpaceFor(productID, useUnlabeledRacks) for each box (as the clerk's
+    /// search does when it racks a box in hand), counting the boxes placed so far:
+    ///   - a slot labelled for the product that isn't full (RackSlot.Full: BoxCount >= the slot's BoxSO
+    ///     grid boxCount; a labelled slot with no boxes counts as not full), else
+    ///   - only if the restocker may use unlabelled racks: an unlabelled slot with no box, which then takes
+    ///     that product and as many boxes as its box size allows (1, 2, 4...).
+    /// A merge into a box already on the rack isn't counted on: each box needs a slot place.
     /// </summary>
-    internal static int RoomFor(RackSlot slot)
+    internal static bool StorageFits(ClerkT clerk, List<Box> boxes)
     {
         try
         {
-            var data = slot?.Data;
-            if (data == null) return int.MaxValue;
-            int count = data.BoxCount;
-            if (count <= 0) return int.MaxValue;
-            if (!NoktaSingleton<IDManager>.HasInstance) return int.MaxValue;
-            var layout = NoktaSingleton<IDManager>.Instance.BoxSO(data.BoxID)?.GridLayout;
-            return layout == null ? int.MaxValue : layout.boxCount - count;
+            var mgmt = clerk.ManagementData;
+            bool unlabeled = mgmt != null && mgmt.UseUnlabeledRacks;
+            if (!NoktaSingleton<RackManager>.HasInstance) return false;
+            var racks = NoktaSingleton<RackManager>.Instance.m_Racks;
+            if (racks == null) return false;
+
+            var added = new Dictionary<IntPtr, int>();                // boxes placed so far, per slot
+            var claimed = new Dictionary<IntPtr, (int Pid, int Cap)>(); // unlabelled slots taken by a box so far
+            foreach (var box in boxes)
+            {
+                int pid = ProductOf(box);
+                int cap = box != null ? Capacity(box) : 0;
+                if (pid < 0 || cap <= 0) return false;
+                RackSlot free = null;
+                bool placed = false;
+                for (int r = 0; r < racks.Count && !placed; r++)
+                {
+                    var slots = racks[r]?.RackSlots;
+                    if (slots == null) continue;
+                    for (int i = 0; i < slots.Count; i++)
+                    {
+                        var slot = slots[i];
+                        var data = slot != null ? slot.Data : null;
+                        if (data == null) continue;
+                        added.TryGetValue(slot.Pointer, out int extra);
+                        if (claimed.TryGetValue(slot.Pointer, out var c))
+                        {
+                            if (c.Pid != pid || extra >= c.Cap) continue;
+                        }
+                        else if (data.ProductID == pid)
+                        {
+                            int count = data.BoxCount;
+                            int slotCap = count > 0 ? Capacity(data) : cap;
+                            if (count + extra >= slotCap) continue;
+                        }
+                        else
+                        {
+                            if (unlabeled && free == null && data.ProductID == -1 && !slot.HasBox) free = slot;
+                            continue;
+                        }
+                        added[slot.Pointer] = extra + 1;
+                        placed = true;
+                        break;
+                    }
+                }
+                if (placed) continue;
+                if (free == null) return false;
+                claimed[free.Pointer] = (pid, cap);
+                added[free.Pointer] = 1;
+            }
+            return true;
         }
-        catch (Exception) { return int.MaxValue; }
+        catch (Exception e)
+        {
+            Plugin.Logger.LogWarning($"[DoubleCarry] checking rack space failed, not pairing: {e.Message}");
+            return false;
+        }
     }
 
     /// <summary>
     /// Finds a second job the way the game's own search does: restock a product other than
     /// <paramref name="firstProduct"/> (street boxes first if allowed, then racks), else take another box
-    /// from the delivery area to storage. Never returns <paramref name="firstBox"/> itself. With
+    /// from the delivery area to storage. Never returns <paramref name="firstBox"/> itself. A storage job is
+    /// only returned if the racks have room for every box of the pair that will need a rack place (see
+    /// <see cref="StorageFits"/>). With
     /// <paramref name="reserve"/> false it is a pure probe: the display reservations the game's search makes
     /// are undone.
     /// </summary>
     internal static bool TryFindSecondJob(SearchHandler h, ClerkT clerk, Box firstBox, int firstProduct,
-        RackSlot firstRack, bool reserve, out Job job)
+        bool firstToStorage, bool reserve, out Job job)
     {
         job = default;
         var mgmt = clerk.ManagementData;
@@ -408,14 +481,20 @@ internal static class DoubleCarry
             if (pid < 0 || pid == excluded) continue;
             if (box.m_IsBoxOccupied || box.IsTargeted || box.IsOccupiedByAnother(self)) continue;
             if (!street.IsWithinRestockableArea(box.transform.position)) continue;
-            bool sameProduct = pid == firstProduct;
-            RackSlot rack = null;
-            // A same-product pair needs a slot with room for both, so don't count on a merge for it.
-            if (sameProduct || !h.IsMergeAvailableWithBox(box, out rack) || rack == null)
+            // The vanilla rule for this box alone.
+            if (!h.IsMergeAvailableWithBox(box, out RackSlot rack) || rack == null)
                 if (!h.HasSpaceInRackSlotForProduct(pid, out rack) || rack == null) continue;
-            // Box 1 is headed for this slot already: it holds one product, and needs room for two.
-            if (firstRack != null && Same(rack, firstRack) && !sameProduct) continue;
-            if (sameProduct && RoomFor(rack) < 2) continue;
+            // Both boxes may need a rack place: box 1 when it goes to storage, or when it is the same product
+            // (its leftovers would go back to the same slots). Box 1 isn't known yet when it is still in a
+            // rack slot; then it is a restock box of this same product, so this box stands in for it.
+            var demand = new List<Box> { box };
+            if (firstToStorage || pid == firstProduct)
+            {
+                var b1 = firstBox ?? (pid == firstProduct ? box : null);
+                if (b1 == null) continue;
+                demand.Insert(0, b1);
+            }
+            if (!StorageFits(clerk, demand)) continue;
             job = new Job { Target = new IBoxTarget(new StreetBoxTarget(box).Pointer), Rack = rack,
                 Product = pid, Source = "the delivery area, for storage" };
             return true;
@@ -556,7 +635,7 @@ internal static class DoubleCarry
                 if (cur != null && stash == null && ProductOf(cur) == plan.FirstProduct)
                 {
                     plan.First = cur;
-                    if (TryFindSecondJob(h, clerk, cur, plan.FirstProduct, plan.FirstRack, true, out var job))
+                    if (TryFindSecondJob(h, clerk, cur, plan.FirstProduct, plan.FirstToStorage, true, out var job))
                     {
                         ApplyJob(h, job);
                         plan.SecondProduct = job.Product;
@@ -838,14 +917,13 @@ internal static class DoubleCarry
 
         int p1 = bt.ProductID;
         if (p1 < 0) return;
-        var firstRack = restock ? null : rack;
         // Only checks that a second job exists right now; the actual job is picked once box 1 is in hand.
-        if (!TryFindSecondJob(h, clerk, BoxOf(bt), p1, firstRack, false, out var job)) return;
+        if (!TryFindSecondJob(h, clerk, BoxOf(bt), p1, !restock, false, out var job)) return;
 
         PruneDeadPlans();
         Plans[clerk.Pointer] = new Plan
         {
-            Clerk = clerk, Phase = Phase.FetchFirst, FetchOnlyNext = true, FirstProduct = p1, FirstRack = firstRack,
+            Clerk = clerk, Phase = Phase.FetchFirst, FetchOnlyNext = true, FirstProduct = p1, FirstToStorage = !restock,
         };
         Info($"{Name(clerk)} (level {level}): two-box trip, box 1 = product {p1} ({(restock ? "to restock" : "for storage")}), " +
              $"then product {job.Product} from {job.Source}");
@@ -871,7 +949,8 @@ internal static class DoubleCarry
 
         if (Destination(h, clerk, floor, out string where) == null || where != "storage") return;
         int pid = ProductOf(floor);
-        if (pid == ProductOf(cur) && RoomFor(rack) < 2) return;
+        // Both go to storage now: the racks must have room for both under the game's rules.
+        if (!StorageFits(clerk, new List<Box> { cur, floor })) return;
 
         plan.Regrouped = true;
         ApplyJob(h, new Job { Target = new IBoxTarget(new StreetBoxTarget(floor).Pointer), Rack = rack, Product = pid });

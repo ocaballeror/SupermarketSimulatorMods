@@ -25,7 +25,7 @@ If there's no second job when it picks up the first box, or the second box is go
 All the restocker's own settings (use unlabeled racks, pick up boxes from the ground, drop empty boxes, restock shelves) are respected: for example a restocker that may not pick up boxes from the ground never takes a delivered box to storage as its second job. The second box is chosen the same way the game chooses the first, with these differences:
 - it is always a box from the outside area or from a storage rack: a box in a delivery vehicle can be the first box but never the second;
 - a second restock job is always for a different product than the first box;
-- two boxes of the same product are taken together only if the storage rack the second one would go to has room for both, so the restocker isn't left holding a box with nowhere to put it.
+- the restocker never chooses a rack itself: each box is put in storage exactly as the game normally does (a rack labelled for that product with room left, or an empty unlabelled rack only if the restocker may use unlabelled racks). Before it takes a box for storage as part of a pair, it checks with those same rules, and the rack sizes the game uses for each box size (a rack fits 1, 2 or 4 boxes depending on the box), that every box in the pair that may need a rack place will have one. Otherwise it takes just one box, so it isn't left holding a box with nowhere to put it.
 
 ## Settings
 
