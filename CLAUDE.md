@@ -149,6 +149,7 @@ tools/callers.sh decompiled/native-all RackSlot.AddBox              # every meth
 tools/modhash.sh SupermarketFixes/src/Patches/X.cs   # short hash of a mod's code (dir: src/**.cs + csproj), for stale-review checks (the `Review` hash in TODO.md)
 tools/readconst.py 0x1838CEBA8 [--type f|d|i|q]                     # value of a literal ISIL shows only as [0x18...] (default float)
 tools/bindings.py escape                                            # default input bindings: map/action -> key (filter optional)
+<venv>/bin/python tools/unity_components.py "<game>/Supermarket Simulator_Data" [--raw] "<GameObject name>" ...   # components (with script names) of scene objects and prefabs, e.g. "does X have a PhotonView?"; needs UnityPy, ~1 min
 ```
 
 **Game assets** (textures, sprites, names) aren't in the dumps. Inspect them with UnityPy in a throwaway venv (`python3 -m venv <scratch>/upy && <scratch>/upy/bin/pip install UnityPy`), loading `<game>/Supermarket Simulator_Data/sharedassets*.assets` / `resources.assets` and saving `obj.read().image` as PNG. `strings -n 5 <file> | grep -i <name>` is a quick first check. The Addressables bundles in `StreamingAssets/aa` hold only localization. Flat white UI glyphs are named `icon_<set>_<n>`. Furniture shop icons are renders in one atlas, `T_IconAtlas_Furnitures` (sharedassets2).
@@ -283,7 +284,7 @@ Verified in the dumps unless marked otherwise. Addresses and offsets are specifi
 
 **Furniture placing.**
 - Moving and placing use `FurniturePlacingMode` (base `IPlacingMode`). Serialized: placing tags, `m_PlacingModeCollider` (overlap box), `m_Renderers` (hologram), `m_OwnerCollider`, `m_PhysicalColliders`, `m_NavMeshObstacles`, `m_Furniture` (the transform that gets moved), `m_ParentPhotonView`. `Awake` recomputes `m_AllColliders` and `m_Objects` (`NavmeshBuildSourceObject`) from `m_Furniture`.
-- There are **no `Furniture` subclasses**: every furniture prefab uses the plain `Furniture` class plus type scripts (`Display`, `Rack`, `Trash`, ...).
+- There are **no `Furniture` subclasses**: furniture prefabs use the plain `Furniture` class plus type scripts (`Display`, `Rack`, `Trash`, ...) in some cases; the Display and Vending prefabs in `resources.assets` have no `Furniture` component (checked 2026-11-16). `FurnitureSO.FurniturePrefab` is the plain scene-asset prefab without network components; the networked prefab (root `PhotonView` + `PhotonTransformViewOptimized` + Network* script) is a separate `Resources/Furnitures/<folder>/<name>` asset. The store computer, a scene object, has no `PhotonView` at all. See `ExtraComputers/CLAUDE.md`.
 - **Loading saved furniture aborts on the first null spawn.** `FurnitureManager.LoadFurnitureDatas` logs "Can't spawn furniture with id: N", then dereferences the null (NRE), so every entry after it in `m_FurnituresDatas` is never spawned. An unknown id (e.g. a mod's furniture with the mod removed) does this too. A mod that spawns furniture from a save must never return null there; an inactive GameObject with a `Furniture` of that id is enough. Details in `ExtraComputers/CLAUDE.md` (Game reference).
 
 **Holding objects (`PlayerObjectHolder`).**

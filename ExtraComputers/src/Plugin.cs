@@ -14,7 +14,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.extracomputers";
     public const string Name = "Extra Computers";
-    public const string Version = "1.2.2";
+    public const string Version = "1.3.0";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

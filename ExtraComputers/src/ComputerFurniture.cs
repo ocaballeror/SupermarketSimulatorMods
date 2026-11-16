@@ -27,17 +27,20 @@
  *    box size and IsMainFurniture = true. It is added to IDManager.m_Furnitures, and
  *    IDManager.FurnitureSO(our id) is answered directly so lookups work even before that.
  *  - A prefab template, kept under an inactive DontDestroyOnLoad holder (so nothing in it ever wakes): a copy
- *    of the store computer's root. That root already has what a movable networked object needs (layer 6
- *    colliders that the interaction raycast hits, PhotonView + PhotonTransformView, NavMeshObstacle,
- *    Highlightable, snap points, and a "Placing Mode" child with its FurniturePlacingMode, whose references
- *    Instantiate remaps into the copy). The PC camera, the screen UI canvases and every computer script
- *    (Computer, ComputerOperatingSystem, MusicPlayerManager, NetworkComputer, ...) are removed; the placing
- *    mode's interaction-zone canvas is kept. Furniture + NetworkFurniture are added (the game has no
- *    Furniture subclasses, every furniture uses the plain class plus type scripts). The PhotonView loses its
- *    scene view id and takes the ownership option of a real furniture prefab.
+ *    of the store computer's root. That root already has the layer 6 colliders that the interaction raycast hits,
+ *    a NavMeshObstacle, Highlightable, snap points, and a "Placing Mode" child with its FurniturePlacingMode,
+ *    whose references Instantiate remaps into the copy. It has NO network components: no PhotonView and no
+ *    transform view (verified in the shipped scene level3, and in the host's log hierarchy dump; the parent
+ *    "---GAME---" only carries EditorObjectTransformer). So the PhotonView and PhotonTransformViewOptimized are
+ *    added to the copy's root with the settings of a real furniture prefab (SetUpNetworkViews). The PC camera,
+ *    the screen UI canvases and every computer script (Computer, ComputerOperatingSystem, MusicPlayerManager,
+ *    NetworkComputer, NetworkVendingMachineTab, ...) are removed; the placing mode's interaction-zone canvas is
+ *    kept. Furniture + NetworkFurniture are added (plain Furniture + a type script is how the game's own
+ *    Trash is set up).
  *    Before v1.2.0 the template was built on a "donor" furniture prefab; no furniture qualified in-game
  *    ("no usable furniture prefab", 2026-11-15), so nothing could be spawned and opening a computer box left
- *    the player in an empty placing mode.
+ *    the player in an empty placing mode. v1.2.0-1.2.2 assumed the store computer's root carried the PhotonView
+ *    and failed with "the store computer has no PhotonView on its root" (2026-11-16).
  *    The template is registered in Photon's DefaultPool.ResourceCache under PrefabId.
  *  - An icon rendered from the model (fallback: a drawn monitor icon). The game ships no computer icon.
  *  - If the template can't be built, computer boxes refuse to open (OpenBoxGate), so the player keeps the box.
@@ -78,6 +81,9 @@ internal static class ComputerFurniture
     private static Material _boxIconMaterial;
     private static GameObject _holder;
     private static int _buildAttempts;
+    /// <summary>What BuildTemplate was doing when it threw (logged by EnsureTemplate).</summary>
+    private static string _buildStep = "";
+    private static GameObject _partial;
     private static Computer _computer;
 
     // Relative layout of the real computer, measured when the template is built.
@@ -251,15 +257,24 @@ internal static class ComputerFurniture
         if (comp == null || ids == null) return false;
 
         _buildAttempts++;
+        _buildStep = "start";
+        _partial = null;
         try
         {
             BuildTemplate(comp, ids);
         }
         catch (Exception e)
         {
-            Plugin.Error("Building the computer furniture failed: " + e);
+            Plugin.Error($"Building the computer furniture failed (attempt {_buildAttempts} of 3) at step '{_buildStep}': {e}");
+            try
+            {
+                // What the copy looked like when it broke, so the next log shows which check failed and why.
+                if (_partial != null) Plugin.Error("The computer copy at that point:" + Dump(_partial.transform));
+            }
+            catch (Exception e2) { Plugin.Warn("Couldn't dump the partial computer copy: " + e2.Message); }
             if (_holder != null) Object.DestroyImmediate(_holder);
             _holder = null;
+            _partial = null;
             Template = null;
         }
         if (Template != null)
@@ -300,6 +315,7 @@ internal static class ComputerFurniture
                          $"\n  PCCam={Path(compRoot, comp.m_PCCam?.transform)} Screen={Path(compRoot, comp.m_ComputerScreen?.transform)} " +
                          $"PlayerPosition={Path(compRoot, comp.m_PlayerPosition)} PlacingMode={Path(compRoot, compPm?.transform)} " +
                          $"ZoneCanvas={Path(compRoot, compPm?.m_InteractionZoneCanvas?.transform)}");
+        _buildStep = "checking the store computer's placing mode";
         if (compPm == null) throw new Exception("the store computer has no FurniturePlacingMode");
 
         string camPath = comp.m_PCCam != null ? Path(compRoot, comp.m_PCCam.transform) : null;
@@ -307,6 +323,7 @@ internal static class ComputerFurniture
         string zonePath = compPm.m_InteractionZoneCanvas != null ? Path(compRoot, compPm.m_InteractionZoneCanvas.transform) : null;
         MeasureFront(comp, compRoot);
 
+        _buildStep = "copying the store computer";
         _holder = new GameObject("ExtraComputers.TemplateHolder");
         _holder.SetActive(false);
         Object.DontDestroyOnLoad(_holder);
@@ -316,6 +333,7 @@ internal static class ComputerFurniture
         // transform view, navmesh obstacle, highlight, snap points) and a FurniturePlacingMode whose references
         // (m_Furniture, renderers, colliders, parent PhotonView) Instantiate has remapped into this copy.
         var tpl = Object.Instantiate(compRoot.gameObject, _holder.transform);
+        _partial = tpl;
         tpl.name = "ExtraComputer";
         tpl.transform.localPosition = Vector3.zero;
         tpl.transform.localRotation = Quaternion.identity;
@@ -326,21 +344,26 @@ internal static class ComputerFurniture
         if (Mathf.Abs(sc.x - 1f) > 0.01f || Mathf.Abs(sc.y - 1f) > 0.01f || Mathf.Abs(sc.z - 1f) > 0.01f)
             Plugin.Warn($"The store computer's scale is {sc}; extra computers will be built at scale 1 and may look a different size.");
 
+        _buildStep = "stripping the computer UI from the copy";
         var zone = zonePath != null ? Find(tpl.transform, zonePath) : null;
         StripComputerCopy(tpl.transform, camPath, screenPath, zone);
 
+        _buildStep = "finding the placing settings in the copy";
         var tplPm = Find(tpl.transform, Path(compRoot, compPm.transform))?.GetComponent<FurniturePlacingMode>();
         if (tplPm == null) throw new Exception("the placing settings weren't found in the computer copy");
         tplPm.m_Furniture = tpl;
 
-        var view = tpl.GetComponent<PhotonView>();
-        if (view == null) throw new Exception("the store computer has no PhotonView on its root");
-        SetUpPhotonView(view, tpl.transform, ids);
+        // The store computer has no PhotonView or transform view of its own (see SetUpNetworkViews), so they are added.
+        _buildStep = "adding the network components";
+        var view = SetUpNetworkViews(tpl, ids);
         tplPm.m_ParentPhotonView = view;
 
         // The furniture scripts, which the store computer doesn't have.
+        _buildStep = "adding Furniture and NetworkFurniture";
         var furniture = tpl.AddComponent<Furniture>();
         var net = tpl.AddComponent<NetworkFurniture>();
+        if (furniture == null || net == null)
+            throw new Exception($"AddComponent returned null (Furniture {(furniture == null ? "null" : "ok")}, NetworkFurniture {(net == null ? "null" : "ok")})");
         furniture.m_ID = FurnitureId;
         furniture.m_PlacingMode = tplPm;
         furniture.m_PhotonView = view;
@@ -348,7 +371,9 @@ internal static class ComputerFurniture
         net.m_PhotonView = view;
         net.m_Furniture = furniture;
 
+        _buildStep = "finishing";
         Template = tpl;
+        _partial = null;
         Plugin.Info("Computer furniture prefab built from a copy of the store computer");
         Plugin.Debug($"Placing settings: tags [{string.Join(",", Strings(tplPm.m_PlacingTag))}], " +
                      $"renderers {tplPm.m_Renderers?.Length ?? 0}, owner colliders {tplPm.m_OwnerCollider?.Count ?? 0}, " +
@@ -357,45 +382,137 @@ internal static class ComputerFurniture
         if (Plugin.Verbose.Value) Plugin.Debug("Computer furniture prefab:\n" + Dump(tpl.transform));
     }
 
-    /// <summary>The copy's PhotonView: only components that are still there are observed, no scene view id (the clone
-    /// would otherwise claim the store computer's id offline), and the ownership settings of a real furniture prefab
-    /// (NetworkFurniture.OnPhotonInstantiate transfers ownership to the player who opened the box).</summary>
-    private static void SetUpPhotonView(PhotonView view, Transform tpl, IDManager ids)
-    {
-        view.sceneViewId = 0;
-        view.RpcMonoBehaviours = null;
-        var observed = new Il2CppSystem.Collections.Generic.List<Component>();
-        var src = view.ObservedComponents;
-        if (src != null)
-            for (int i = 0; i < src.Count; i++)
-                if (src[i] != null && src[i].transform.IsChildOf(tpl)) observed.Add(src[i]);
-        view.ObservedComponents = observed;
+    /// <summary>
+    /// The network setup of the copy. The store computer is a scene object without any PhotonView of its own (checked
+    /// in the shipped scene, level3: the root has Computer, NetworkComputer, NetworkVendingMachineTab, ... but no
+    /// PhotonView, and its only parent "---GAME---" carries a single script, EditorObjectTransformer), so there is
+    /// nothing to keep: a PhotonView and a PhotonTransformViewOptimized are added to the root, with the settings of
+    /// a real furniture prefab (every furniture in resources.assets has exactly this pair on its root, plus its
+    /// Network* script). The holder is inactive, so none of the added scripts runs Awake here; they wake up in the
+    /// clones.
+    ///  - PhotonView: OwnershipTransfer, Synchronization and observableSearch copied from the reference. The copy
+    ///    gets no scene view id (0), so an offline LeanPool.Spawn clone can't claim a view id.
+    ///    NetworkFurniture.OnPhotonInstantiate transfers ownership to the unboxing player, which Fixed would ignore.
+    ///  - PhotonTransformViewOptimized: m_SyncEnabled, m_SynchronizePosition, m_SynchronizeRotation, m_UseLocal,
+    ///    m_SendDelta and multiplier copied from the reference. The place RPCs of plain furniture carry no position,
+    ///    so a moved computer reaches the other players only through this view's stream. A new component starts
+    ///    with the constructor defaults (sync on, position and rotation, delta 0.01, multiplier 100); the prefabs
+    ///    serialize their own values, so those are copied rather than assumed.
+    ///  - Both are listed in the view's ObservedComponents (observableSearch would also find the transform view).
+    /// NetworkComputer and NetworkVendingMachineTab (which would otherwise resolve photonView to this view, and whose
+    /// RPCs would then target the clone's view id) are stripped from the copy; a surviving script fails the build.
+    /// Returns the PhotonView.
+    /// </summary>
+    private static readonly string[] ResourceFolders = { "Trash", "Vendings", "Displays", "Racks", "Checkouts" };
 
-        PhotonView reference = null;
-        string refName = null;
+    private static PhotonView SetUpNetworkViews(GameObject tpl, IDManager ids)
+    {
+        // A reference furniture prefab: root PhotonView + PhotonTransformViewOptimized, preferably also Furniture and
+        // NetworkFurniture (Trash is one), since our computer has those two as well. FurnitureSO.FurniturePrefab points
+        // at the plain scene-asset prefab, which has NO network components (checked in sharedassets2: Trash there is
+        // Trash + Furniture + TrashBin ... without PhotonView); the networked prefabs are separate assets in
+        // Resources ("Furnitures/<folder>/<name>", the paths NetworkObjectGenerator builds, resources.assets). That is
+        // why looking at FurniturePrefab alone (v1.2.0 donor search) found nothing.
+        GameObject reference = null;
+        string referenceFrom = null;
+        int bestScore = -1;
+        var seen = new List<string>();
         var list = ids.m_Furnitures;
-        for (int i = 0; i < list.Count && reference == null; i++)
+        for (int i = 0; list != null && i < list.Count; i++)
         {
             var s = list[i];
-            if (s == null || s.ID == FurnitureId || s.FurniturePrefab == null) continue;
-            if (s.FurniturePrefab.GetComponent<Furniture>() == null) continue;
-            reference = s.FurniturePrefab.GetComponent<PhotonView>();
-            refName = s.FurniturePrefab.name;
+            if (s == null || s.ID == FurnitureId) continue;
+            var plain = s.FurniturePrefab;
+            if (plain == null) { seen.Add($"{s.ID}: <no prefab>"); continue; }
+            var candidates = new List<(GameObject go, string from)> { (plain, "FurniturePrefab") };
+            foreach (var folder in ResourceFolders)
+            {
+                GameObject loaded = null;
+                try { loaded = Resources.Load<GameObject>($"Furnitures/{folder}/{plain.name}"); }
+                catch (Exception e) { Plugin.Debug($"Resources.Load Furnitures/{folder}/{plain.name} threw: {e.Message}"); }
+                if (loaded != null) { candidates.Add((loaded, $"Resources Furnitures/{folder}/{plain.name}")); break; }
+            }
+            foreach (var (go, from) in candidates)
+            {
+                bool hasView = go.GetComponent<PhotonView>() != null;
+                bool hasTv = go.GetComponent<PhotonTransformViewOptimized>() != null;
+                bool hasF = go.GetComponent<Furniture>() != null;
+                bool hasNf = go.GetComponent<NetworkFurniture>() != null;
+                seen.Add($"{s.ID} {from}: PhotonView {hasView}, PhotonTransformViewOptimized {hasTv}, Furniture {hasF}, NetworkFurniture {hasNf}");
+                if (!hasView || !hasTv) continue;
+                int score = 1 + (hasF ? 1 : 0) + (hasNf ? 1 : 0);
+                if (score > bestScore) { bestScore = score; reference = go; referenceFrom = $"{s.ID} {from}"; }
+            }
         }
-        var before = view.OwnershipTransfer;
-        if (reference != null)
+        PhotonView refView = reference != null ? reference.GetComponent<PhotonView>() : null;
+        var refTv = reference != null ? reference.GetComponent<PhotonTransformViewOptimized>() : null;
+        if (reference == null)
+            Plugin.Warn("No furniture prefab with a PhotonView and a PhotonTransformViewOptimized was found to copy the " +
+                        "network settings from; using the defaults. Candidates: " + string.Join("; ", seen));
+        else
+            Plugin.Debug($"Network settings are copied from '{reference.name}' ({referenceFrom}); candidates: " + string.Join("; ", seen));
+
+        var view = tpl.GetComponent<PhotonView>();
+        bool addedView = view == null;
+        if (addedView) view = tpl.AddComponent<PhotonView>();
+        if (view == null) throw new Exception("AddComponent<PhotonView>() returned null");
+        var tv = tpl.GetComponent<PhotonTransformViewOptimized>();
+        bool addedTv = tv == null;
+        if (addedTv) tv = tpl.AddComponent<PhotonTransformViewOptimized>();
+        if (tv == null) throw new Exception("AddComponent<PhotonTransformViewOptimized>() returned null");
+
+        view.sceneViewId = 0;
+        if (refView != null)
         {
-            view.OwnershipTransfer = reference.OwnershipTransfer;
-            view.Synchronization = reference.Synchronization;
+            view.OwnershipTransfer = refView.OwnershipTransfer;
+            view.Synchronization = refView.Synchronization;
+            view.observableSearch = refView.observableSearch;
         }
-        else if (view.OwnershipTransfer == OwnershipOption.Fixed)
+        else
         {
             view.OwnershipTransfer = OwnershipOption.Takeover;
+            view.Synchronization = ViewSynchronization.UnreliableOnChange;
+            view.observableSearch = PhotonView.ObservableSearch.AutoFindAll;
         }
+        if (view.OwnershipTransfer == OwnershipOption.Fixed) view.OwnershipTransfer = OwnershipOption.Takeover;
+
+        if (refTv != null)
+        {
+            tv.m_SyncEnabled = refTv.m_SyncEnabled;
+            tv.m_SynchronizePosition = refTv.m_SynchronizePosition;
+            tv.m_SynchronizeRotation = refTv.m_SynchronizeRotation;
+            tv.m_UseLocal = refTv.m_UseLocal;
+            tv.m_SendDelta = refTv.m_SendDelta;
+            if (refTv.multiplier > 0f) tv.multiplier = refTv.multiplier; // the stream divides by it
+        }
+        // A transform view that doesn't sync would leave a moved computer where it was spawned for everyone else.
+        if (!tv.m_SyncEnabled || (!tv.m_SynchronizePosition && !tv.m_SynchronizeRotation))
+        {
+            Plugin.Warn($"The reference transform view doesn't sync (enabled {tv.m_SyncEnabled}, position {tv.m_SynchronizePosition}, " +
+                        $"rotation {tv.m_SynchronizeRotation}); turning position and rotation sync on for the computer.");
+            tv.m_SyncEnabled = true;
+            tv.m_SynchronizePosition = true;
+            tv.m_SynchronizeRotation = true;
+        }
+
+        var observed = new Il2CppSystem.Collections.Generic.List<Component>();
+        observed.Add(tv);
+        view.ObservedComponents = observed;
+
+        Plugin.Debug($"PhotonView (added {addedView}): ownership {view.OwnershipTransfer}, sync {view.Synchronization}, " +
+                     $"search {view.observableSearch}, observes [{string.Join(",", ObservedNames(view))}]; " +
+                     $"transform view (added {addedTv}): sync {tv.m_SyncEnabled}, position {tv.m_SynchronizePosition}, " +
+                     $"rotation {tv.m_SynchronizeRotation}, local {tv.m_UseLocal}, delta {tv.m_SendDelta}, multiplier {tv.multiplier}");
+        return view;
+    }
+
+    private static List<string> ObservedNames(PhotonView view)
+    {
         var names = new List<string>();
-        for (int i = 0; i < observed.Count; i++) names.Add(observed[i].GetIl2CppType().Name);
-        Plugin.Debug($"PhotonView: ownership {before} -> {view.OwnershipTransfer} (from {refName ?? "no furniture prefab"}), " +
-                     $"sync {view.Synchronization}, observes [{string.Join(",", names)}]");
+        var obs = view.ObservedComponents;
+        for (int i = 0; obs != null && i < obs.Count; i++)
+            names.Add(obs[i] == null ? "<null>" : obs[i].GetIl2CppType().Name);
+        return names;
     }
 
     private static readonly HashSet<string> KeptModelComponents = new()
@@ -404,6 +521,8 @@ internal static class ComputerFurniture
         "BoxCollider", "MeshCollider", "SphereCollider", "CapsuleCollider", "Rigidbody",
         "NavMeshObstacle", "NavmeshBuildSourceObject", "FurniturePlacingMode", "Highlightable",
         "FurnitureSnapPointSetup", "FurnitureSnapPoint",
+        // The store computer has none of these (SetUpNetworkViews adds them after stripping); listed so a future
+        // game version that does give it a view isn't stripped.
         "PhotonView", "PhotonTransformView", "PhotonTransformViewOptimized",
     };
 
