@@ -94,6 +94,8 @@ Verified in the dumps; the behaviour on join was confirmed by in-game logs.
 - Dematerialize (networked racked box → local racked box, host-driven, handled by unmodded clients) and its single-box hazard are described under Bug #1, "E (opt-in, host)". Its only game caller is compiled out.
 - Destroying or disabling a racked box cleans up its instanced snapshot (`Box.OnDisable` → `SubRenderer.Unregister`, `Box.OnDestroy` → `RemoveInstance`). Only a box that stays alive while outside `m_Boxes` leaves a ghost.
 - A player placing a box on a rack (`NetworkBoxInteraction.PlaceBoxToRack_RPC`) transfers the box's PhotonView back to the master client (asynchronously). Clerk rack targets are `RackSlotBoxTarget(slot)` and hold no box reference.
+- **Rack space.** A slot's capacity depends on the box size: `RackSlot.Full` = `Data.BoxCount > 0 && BoxCount >= IDManager.BoxSO(Data.BoxID).GridLayout.boxCount` (1, 2, 4... per size; a box's own size is `Box.BoxSO`). A labelled slot with no boxes is never full. `RackSlotData.ProductID` (+0x18) is the label, -1 = unlabelled.
+- **Where a restocker racks a box:** `SearchHandler.HasSpaceInRackSlotForProduct(pid)` → `RackManager.GetRackSlotThatHasSpaceFor(pid, ManagementData.UseUnlabeledRacks)`: over `m_Racks` → `Rack.RackSlots`, the first slot labelled `pid` that isn't `Full`, else (only with UseUnlabeledRacks) the first slot with label -1 and `!HasBox`. `IsMergeAvailableWithBox` (topping up a rack box of the same product) is tried first for a carried box. No other rack rules (frozen etc.) are checked there. Used by RestockerDoubleCarry (`StorageFits` replays it for two boxes).
 
 ## Game reference: janitor (cleaning lady)
 
