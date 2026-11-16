@@ -4,7 +4,7 @@ Fixes for bugs in Supermarket Simulator, mostly ones that show up in online co-o
 
 ## Fixes
 
-### Bug #1: moving a rack leaves ghost or duplicate boxes behind (v0.7.0, awaiting in-game confirmation)
+### Bug #1: moving a rack leaves ghost or duplicate boxes behind
 
 After moving a rack, some of its boxes could stay floating at the old spot. Some could be picked up; others were ghosts you could walk through. Some boxes also ended up duplicated. It mostly happened to multiplayer guests.
 
@@ -18,17 +18,17 @@ Ghost boxes already saved into a rack before this version are not removed automa
 
 **For guests without the mod (optional, host setting, off by default):** with `DematerializeRackedBoxesOnHost` on, the host turns each box that has been resting on a rack for about 10 seconds into an ordinary racked box, the same kind the game creates when it loads a save, for every player. It uses the game's own network message, so guests without the mod handle it too. The host then has no "live" boxes on racks for a guest to receive as floating copies. This is experimental: the game ships with this mechanism switched off, and it hasn't been tested in-game yet. Boxes that are alone in their rack slot are left as they are, because the game's own message would delete such a box.
 
-### Bug #2: an image of an item stays in your hands after putting it down (v0.6.1, awaiting in-game confirmation)
+### Bug #2: an image of an item stays in your hands after putting it down
 
 After putting a held item down, a copy of it could stay in front of the camera, blocking the view, until the game was reloaded. This is suspected to happen to multiplayer guests when the host's answer to a box pickup arrives late, while the guest is already holding or using something else. Now a stray item left in your hands (a box, or another item such as a furniture box, paint bucket or paper bag) is dropped automatically after 2 seconds. It is never dropped inside a shelf or wall: if the spot in front of you is blocked, it waits until you step into open space.
 
 Where it can, the mod uses the game's own drop, so other players see the item leave your hands too. In one case it can't: when the stray item is one you were holding before the late box arrived. Then only your own view is fixed. Other players may still see it attached to you until the game is reloaded, and if it's a box or a furniture box, the host still counts it as held by you (when you are the host yourself, the mod clears this). For a box, a host running this mod (with `RegrantToSameHolder`) lets you pick it up again; with a host without the mod, nobody can pick that box up until the game is reloaded. For a furniture box that was dropped from a guest's hands, nobody can pick it up again until the game is reloaded, even with a modded host.
 
-### Bug #3: stuck on a box after buying it in a market (v0.4.0, awaiting in-game confirmation)
+### Bug #3: stuck on a box after buying it in a market
 
 After buying a box in a market (often ice cream cones in the general goods store), the box could stay on the shelf while your controls stayed locked onto it: clicking opened and closed it, and you couldn't drop or throw it. Now, after 2 seconds in that state, your controls are freed and the game tries once more to put the box in your hands. This works every time it happens, not just the first few. If you're a guest and the host never answers your pickup request, that is handled after about 8 seconds. Pressing F9 while a pickup is still waiting for the host does nothing until 3 seconds have passed, so it can't cancel a pickup that is about to succeed.
 
-### Bug #5: can't put items from a box onto a shelf until the box is closed and reopened (v0.5.0, awaiting in-game confirmation)
+### Bug #5: can't put items from a box onto a shelf until the box is closed and reopened
 
 Sometimes holding left click with an open box on an empty shelf slot (often one whose old label had just been cleared) placed nothing, until you closed the box and opened it again. The game could end up treating an open box as closed: for example when you pressed close while the box was still in its opening animation, or in multiplayer when a late "place/take item" answer from the host reopened a box you had just closed. Now, as soon as you hold left click with an open box, it's treated as open again and items go onto the shelf. If the game also still thinks you're holding right click after you've let go (that blocks placing too), that's released after half a second.
 

@@ -37,7 +37,7 @@ Player-facing info (what each fix does, settings, who needs the mod) is in [READ
     - Busy boxes (inactive, claimed incl. `IsClaimedByNpc`, tweening, not `Racked`) restart their settle timer. Clerk targets on racks are `RackSlotBoxTarget(slot)`, which hold no box reference (also true for RestockerDoubleCarry).
     - Remaining race: a guest's pickup request (`AskAvailability`) for a box that the host destroys before the request arrives is dropped, and the guest's 3 s timeout handles it. The guest doesn't mark the box occupied before the host answers, so its own `DematerializeNetworkedBox` still runs normally.
     - A guest whose records for the slot differ from the host's (only that one record left) would hit the slot-clear on its side; not expected, since guests get the records from the host.
-  - Box UIDs are not unique (the counter restarts per session and guests keep the host's), so all matching uses UID + ProductID.
+  - All matching uses UID + ProductID, because box UIDs are not unique (see Game reference: racks).
 - **Bug #3** (`StuckBoxFix.cs`):
   - Buying calls `PurchasableProduct.Purchase`, which spawns the box and fakes a "take" click on it. On a guest, the take is a request to the host (`NetworkBox.AskAvailability`, 3-second timeout), and `BoxInteraction` is bound to the box *before* the host answers.
   - Open/close act on `BoxInteraction.m_Box`, but drop and throw only act on what `PlayerObjectHolder` really holds. A box that is bound but never reached the hands gives exactly the stuck state.
@@ -64,3 +64,29 @@ Player-facing info (what each fix does, settings, who needs the mod) is in [READ
   - Suspected entries: `Box.OpenBox`/`CloseBox` are ignored during the 0.7 s `m_InAnimationTransition` (C pressed right after opening); and online, `PlaceProduct_RPC`/`TakeProduct_RPC` call `Box.OpenBox()` on a closed box (a late host answer after the player closed it).
   - The fix is an `Update` prefix (local player's BoxInteraction only). While Use is held, the box is open and not animating, and the game's own open delay isn't pending (an `OnUse` prefix records open clicks), it sets `m_IsBoxOpen = true`. It also clears `m_holdingTake` if the Take action has been released for 0.5 s, because a release dropped while paused leaves it stuck. Purely local state, so there's no multiplayer impact.
 - Shared helpers and the F9 state dump are in `HeldState.cs`.
+
+## Game reference: racks
+
+Verified in the dumps; the behaviour on join was confirmed by in-game logs.
+
+- `RackSlot` keeps `m_Boxes` (+0x38, live Box objects) and `m_Data.RackedBoxDatas` (the records that are saved and sent to guests). Racked boxes are drawn through `InstancedRenderer` snapshots (`Box.ToggleInstanced`), not their own mesh.
+- **Box UIDs are not unique.** `IDManager.GenerateBoxUniqueID` is a per-session counter (`BoxUniqueIdCount`, not saved; returns -2 on guests), and guests keep the host's UIDs. Match boxes on UID + ProductID (+ position), never UID alone.
+- A box placed on a rack during the session stays **networked** (`RackSlot.ENABLE_DEMATERIALIZE_ON_PLACE` is false). Boxes loaded from the save are **local** copies (`SpawnLocalRackedBox` / `BoxGenerator.SpawnBoxInRack`). Taking from a slot (`RackSlot.TakeAndMaterializeBox`, host) either broadcasts `RemoveLocalRackedBox` and `MaterializeRackedBox`s a new networked box, or for a networked box just unracks it. `RemoveLocalRackedBox_RPC` → `RemoveLocalRackedBoxByUID` → `RemoveBox` runs on every client.
+- `RackSlot.RemoveBox(box)` is the full, purely local cleanup (m_Boxes, records, instancing, highlight, `InventoryManager.AddBox`, label, `RePositionBoxes`). Only TakeBoxFromRack, RemoveLocalRackedBoxByUID, DematerializeNetworkedBox and clerk pickups call it. `Box.PickUp` (the player's box path) does **not**. Its record semantics are under Bug #1 above.
+- A guest's copy of a networked box created by `NetworkBox.OnPhotonInstantiate` is unparented and made kinematic; nothing re-racks it.
+- Dematerialize (networked racked box → local racked box, host-driven, handled by unmodded clients) and its single-box hazard are described under Bug #1, "E (opt-in, host)". Its only game caller is compiled out.
+- Destroying or disabling a racked box cleans up its instanced snapshot (`Box.OnDisable` → `SubRenderer.Unregister`, `Box.OnDestroy` → `RemoveInstance`). Only a box that stays alive while outside `m_Boxes` leaves a ghost.
+- A player placing a box on a rack (`NetworkBoxInteraction.PlaceBoxToRack_RPC`) transfers the box's PhotonView back to the master client (asynchronously). Clerk rack targets are `RackSlotBoxTarget(slot)` and hold no box reference.
+
+## Bug #4: guest crashes (open)
+
+No code yet: the cause is unknown. The user's question was how to record useful logs; the root README's "Collecting logs" section answers it.
+
+Crash logs from 2026-11-15 (guest, Windows, in `bug-4/`):
+
+- The crash happened about 55 minutes into the session (t≈3270 s), about 2 s after the guest closed the computer and picked up a box. `Player.log` just stops: no exception, no Unity crash handler output. The host noticed the guest gone about 10 s later (a Photon timeout), so the process died or froze outright.
+- No mod error precedes it. The guest's `LogOutput.log` (88 MB) is almost entirely BepInExConfigManager failing every frame (UniverseLib missing: 290,000 error lines).
+- Next data to collect from the guest after the next crash:
+  - The newest folder in `%LOCALAPPDATA%\Temp\Nokta Games\Supermarket Simulator\Crashes\` (`crash.dmp`, `error.log`).
+  - Windows Event Viewer → Windows Logs → Application: the "Application Error" entry for `Supermarket Simulator.exe` (it names the faulting module, e.g. `GameAssembly.dll`, `UnityPlayer.dll`, or `nvwgf2umx.dll` for the NVIDIA driver).
+- Remove `BepInExConfigManager` from the guest (or install UniverseLib for it) to rule out the per-frame exception spam.

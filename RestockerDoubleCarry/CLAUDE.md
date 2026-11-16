@@ -31,9 +31,23 @@ Setup: a restocker at level 10+ (or lower `MinimumLevel`), two products needing 
 6. Reservations: after a trip (and after an interrupted one), other restockers still refill both products' displays (no display stays "taken" by the first clerk). Log lines `probe reservation of N display slot(s) undone` and `released N reserved display slot(s)` are expected occasionally.
 7. `new IBoxTarget(ptr)` wrapping of `StreetBoxTarget` and `RackSlotBoxTarget` is untested in-game; any exception from the search postfix or prefix (`[DoubleCarry] search ... failed`) means it failed. Send those lines.
 
+## Game reference: restockers
+
+Verified in the dumps.
+
+- Restockers are `SupermarketSimulator.Clerk.Clerk` (`RestockerSO.RestockerPrefab`). The old `Restocker` class is unused.
+- `Clerk.ManualUpdate` ticks a state machine only when `!PhotonNetwork.IsConnectedAndSlave` (host/offline). The states are `ClerkIdleState`, `ClerkRestockingState`, `RackingState` and `ClerkDropEmptyBoxState`.
+- `ClerkIdleState.OnTick` calls `SearchHandler.PerformSearch` every 3 s, plus once on the first tick in Idle. The search fills `BoxTarget` (`IBoxTarget`: `RackSlotBoxTarget`, `StreetBoxTarget`, `VehicleBoxTarget`, or `CarryBoxTarget` for the box in hand), `DisplayTargets` and `RackTarget`.
+  - Transitions: `DisplayTargets.Count > 0` → Restocking, `RackTarget` → Racking, back to Idle when the state's `Sequence` completes.
+  - A clerk already carrying a box only searches for work for that box.
+- States run a `SupermarketSimulator.Sequence.Sequence` of `SequenceTask`s, kept in the list `m_Tasks` and read at every step. Restocking is `[MoveTo, TakeBox, RestockAllDisplays, GoToTrash]`. `TaskStatus`: Running, Fail (ends the sequence), Success (next task).
+- `Clerk.CarryBox(box)` sends `ClerkCarryBox_RPC` to guests, then calls `CarryBox_Internal`. That sets `m_CurrentBox`, parents the box to `m_BoxHolder` and tweens it to local zero. `CarryBox(null)` empties the hands without un-parenting anything.
+- Level: `NoktaSingleton<EmployeeLevelManager>.Instance.TryGet(clerk.LevelKind, clerk.LevelEmployeeId, out progress)`, then `progress.Level`.
+- Interop: `RackSlotBoxTarget` and the other targets don't derive from the `IBoxTarget` interop class. Wrap them with `new IBoxTarget(obj.Pointer)`. Not yet confirmed in-game.
+
 ## How it works
 
-- Restockers are `SupermarketSimulator.Clerk.Clerk` objects running a state machine that only ticks on the host/offline. `ClerkIdleState.OnTick` calls `SearchHandler.PerformSearch` (every 3 s, and on the first tick after entering Idle). The search results (`BoxTarget`, `DisplayTargets`, `RackTarget`) pick the next state.
+- The clerk state machine and its search are described in the game reference above; the search results (`BoxTarget`, `DisplayTargets`, `RackTarget`) pick the next state.
 - The mod never replaces a game method. It steers the vanilla states through the search results, using a per-clerk `Plan` with phases:
   - `None` → `FetchFirst`: in a `PerformSearch` postfix, the vanilla search found a restock job for a non-carried box, the clerk is at least `MinimumLevel` (`EmployeeLevelManager.TryGet(LevelKind, LevelEmployeeId).Level`), and another product has a job (`TryFindSecondJob`, a copy of the vanilla street-then-rack search). The next `ClerkRestockingState` run is "fetch only".
   - "Fetch only" = in a `ClerkRestockingState.Enter` prefix, remove the tasks after `TakeBox` from `m_Sequence.m_Tasks` (normally `[MoveTo, TakeBox, RestockAllDisplays, GoToTrash]`). They're restored in the `Exit` postfix, and the full list is always restored first in `Enter`.
@@ -62,6 +76,5 @@ Setup: a restocker at level 10+ (or lower `MinimumLevel`), two products needing 
 ## Pitfalls / follow-ups
 
 - `SetDependencies` is inlined into `Clerk.OnBeforeTransition`; don't patch it.
-- `RackSlotBoxTarget`/`StreetBoxTarget` interop classes don't derive from `IBoxTarget`. Wrap them: `new IBoxTarget(obj.Pointer)`.
 - `TryFindSecondJob` differs slightly from vanilla: it still tries racks after street boxes were found but rejected, and it skips product ids `< 0` (vanilla: `0`).
 - Vehicle boxes (`VehicleBoxTarget`) can be box 1 (vanilla picks it) but are never chosen as box 2.

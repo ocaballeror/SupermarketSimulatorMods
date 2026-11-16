@@ -53,4 +53,3 @@ With the crate, the transfer stops if you look away from the shelf slot before i
 ## Notes
 
 - Compatible with mods that don't change how products are placed on or taken from shelves.
-- Status: version 0.1.1, written and code-reviewed, not yet tested in-game.

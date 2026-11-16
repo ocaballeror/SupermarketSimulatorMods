@@ -114,3 +114,29 @@ Host alone, then with a modded guest, then with an unmodded guest. Log tag `[Ext
 - While a session is active, this client's store computer shows a blank monitor, because its screen is borrowed. That's cosmetic. A fix would need a second screen, i.e. cloning the UI, which isn't possible (singletons).
 - If another player moves the store computer during a session, its `StartComputerPlacingMode_RPC` path wasn't checked. Restoring falls back to the computer root if the original parent is gone.
 - Template build failures retry at most 3 times per game run (`_buildAttempts`).
+
+## Game reference: furniture shop and the store computer
+
+Verified in the dumps; not yet confirmed in-game. (Moving and placing furniture, `FurniturePlacingMode`, and the fact that there are no `Furniture` subclasses are in the root CLAUDE.md, section 8.)
+
+**Furniture pipeline.**
+- A furniture type is a `FurnitureSO` {`ID`, `BoxSize`, `FurnitureIcon` (shop sprite), `AtlasIndex`/`AtlasPosition` (box label), `FurniturePrefab`, `FurnitureColor`, `IsMainFurniture`, `Cost`} in `IDManager.m_Furnitures`. `IDManager.FurnitureSO(id)` is a FirstOrDefault over it, used by the cart, the delivery, `FurnitureBox`, box-up and the spawner.
+- Shop: `FurnituresViewer.SpawnFurnitures` lists the SOs with `IsMainFurniture`, skipping id 7000. Names come from `LocalizationManager.LocalizedFurnitureName(id)`. Cart totals multiply by `Cost`.
+- Box label: `ProductAtlasManager.SetFurnitureIcon(id, renderer)` sets `sharedMaterial = atlasedMaterials[AtlasIndex]`, then a `_BaseMap` texture offset.
+- Spawning: `FurnitureGenerator.SpawnFurniture`, with two overloads: (id, pos, boxViewId) for unboxing and (id, pos, rot, parent) for loading a save.
+  - Offline: `LeanPool.Spawn(prefab)`.
+  - Online (master only): it branches on the prefab's component type to `NetworkObjectGenerator.SpawnNetwork<Type>`, which calls `PhotonNetwork.InstantiateRoomObject("Furnitures/<Type>/" + prefab.name, pos, rot, 0, {boxViewId})`.
+  - Photon uses the stock `DefaultPool`: `ResourceCache` first, then `Resources.Load`. Adding a GameObject to `((DefaultPool)PhotonNetwork.PrefabPool).ResourceCache[id]` makes any prefab network-instantiable.
+  - `NetworkFurniture.OnPhotonInstantiate` reads `data[0]` (the box interaction's view id), transfers ownership to that player and calls `FurnitureBoxInteraction.OpenBoxOrder` to start placing.
+- Every type in the shop has its own network spawner, so a mod can't count on finding a "plain" furniture prefab to copy (the donor search found none in-game).
+- `Furniture.m_ID` is serialized in the prefab; nothing sets it at runtime. Saves are `FurnitureManager.m_FurnituresDatas`. `LoadFurnitureDatas` logs "Can't spawn furniture with id" for unknown ids and continues.
+- Assets: the furniture icon atlas `T_IconAtlas_Furnitures` (sharedassets2) has no computer. Flat white UI glyphs are named `icon_<set>_<n>`; `icon_device_63` is a computer.
+
+**Store computer** (`__Project__.Scripts.Computer.Computer`; one per scene, and several managers hold a reference to it, so it can't be cloned).
+- It isn't a `Furniture`, but it has its own `m_PlacingMode` and can be moved.
+- `InstantInteract`:
+  - refuses if `IsOccupied` (another player is on it);
+  - otherwise `set_OpenPC(true)` activates `m_PCCam`, a camera that looks at the world-space canvases under `m_ComputerScreen`;
+  - sets `OccupiedPlayer` and, online, `NetworkComputer.InteractComputer_Broadcast(true)` (receivers only set `IsOccupied` / `OccupiedPlayer`);
+  - puts the avatar in front of the cam.
+- `Back()` (called from `ComputerInteraction.OnCancel` / `GamepadBack`) does `set_OpenPC(false)` (which broadcasts false), then puts the player at `m_PlayerPosition`.
