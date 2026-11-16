@@ -28,10 +28,10 @@ internal sealed class ClampedFloat : AcceptableValueBase
         return Math.Clamp(v, _min, _max);
     }
 
-    // Any finite number is accepted so that it reaches Clamp: Mod Settings Tool checks IsValid before it
+    // Any number but NaN is accepted so that it reaches Clamp: Mod Settings Tool checks IsValid before it
     // commits a typed value and silently restores the old one when IsValid is false.
     public override bool IsValid(object value) =>
-        value is float f && !float.IsNaN(f) && !float.IsInfinity(f);
+        value is float f && !float.IsNaN(f);   // infinity is fine: Clamp turns it into the limit
 
     public override string ToDescriptionString() => $"# Acceptable value range: From {_min} to {_max}";
 }

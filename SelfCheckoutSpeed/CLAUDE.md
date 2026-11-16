@@ -28,7 +28,7 @@ v1.0.x host behaviour (coroutine speed-up) was confirmed in-game.
 
 ## Review round 1 (v1.1.1)
 
-- Employee-help catch-up didn't work: the guest's `ScanningOrder` loop checks `SelfCheckout.IsScanning` (+0x80) before every item, and `NetworkCheckout.FinishHelperCheckout_RPC` only clears that flag (`Checkout+0x80` → SelfCheckout, `+0x80 = 0`). A `MoveNext` prefix now sets `IsScanning = belt.m_Products.Count > 0` for rushed `ScanningOrder` coroutines.
+- Employee-help catch-up didn't work: the guest's `ScanningOrder` loop checks `SelfCheckout.IsScanning` (+0x80) before every item, and `NetworkCheckout.FinishHelperCheckout_RPC` only clears that flag (`Checkout+0x80` → SelfCheckout, `+0x80 = 0`). A `MoveNext` prefix now sets `IsScanning = belt.m_Products.Count > 1` (the step scans a product before it tests the flag, so the last one needs no extra lap; review 2026-11-16) for rushed `ScanningOrder` coroutines.
 - Payment slack: online, the host's payment wait keeps at least 0.5 s (vanilla 2 s), since it's the time a lagging guest has before `FinishSelfCheckout_RPC` makes the customer leave.
 - `ClampedFloat.IsValid` accepts any finite float: Mod Settings Tool's `WireInputEndEdit` calls `IsValid` and silently reverts on false, so out-of-range input never reached `Clamp`.
 - Stale catch-up records: a `MoveNext` prefix clears records for a coroutine's first step (`<>1__state == 0`, IL2CPP reuses addresses); the postfix drops the rush when an address now belongs to another checkout; `HostSync.Tick` clears everything when not a guest.
@@ -48,3 +48,5 @@ v1.0.x host behaviour (coroutine speed-up) was confirmed in-game.
 
 - An unmodded guest still scans at 1x behind a sped-up host; nothing host-side can change that.
 - Custom-property floats come back through `Unbox<float>()`; values are clamped to [1, 10] on read.
+
+- Review 2026-11-16 (v1.1.1): no high/medium findings. Accepted: an unmodded guest can't be matched (it runs its own coroutine; README says so); catch-up also applies when the host is unmodded or at 1x; the employee-help path has no payment-style slack at high multipliers. A typed value in a decimal-comma culture (`1.5` read as 15) clamps to 10 silently.

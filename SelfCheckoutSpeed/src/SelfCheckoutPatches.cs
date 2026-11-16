@@ -202,7 +202,8 @@ internal static class SelfCheckoutPatches
                 var sc = coro.This.GetValue(__instance) as SelfCheckout;
                 var belt = sc != null && sc.m_Checkout != null ? sc.m_Checkout.m_Belt : null;
                 var products = belt != null ? belt.m_Products : null;
-                if (sc != null) sc.IsScanning = products != null && products.Count > 0;
+                // The next step scans a product first and tests IsScanning afterwards, so one product left needs no more laps.
+                if (sc != null) sc.IsScanning = products != null && products.Count > 1;
             }
         }
         catch (Exception e)
