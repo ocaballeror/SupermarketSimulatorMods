@@ -78,3 +78,5 @@ Verified in the dumps.
 - `SetDependencies` is inlined into `Clerk.OnBeforeTransition`; don't patch it.
 - `TryFindSecondJob` differs slightly from vanilla: it still tries racks after street boxes were found but rejected, and it skips product ids `< 0` (vanilla: `0`).
 - Vehicle boxes (`VehicleBoxTarget`) can be box 1 (vanilla picks it) but are never chosen as box 2.
+
+- Review 2026-11-16 (v1.1.3): no high findings. Applied: `ArrangeStack` now always runs (with `stack=false` when `StackSecondBox` is off) so a box lifted before the option was switched off is still lowered; config text of `MinimumLevel` describes the set-down flow. Accepted/open: unmodded guests see both boxes at the hands' origin (no stacking); the set-down spot assumes the clerk pivot is at its feet and `MoveAside` skips the host-only placement when the host doesn't own the box (confirm in-game that the floor box lands on the floor next to the clerk); the box order swaps over ~0.3 s during the fetch; fail-open paths can still unpack with two boxes if the drop fails twice.

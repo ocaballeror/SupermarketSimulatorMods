@@ -36,7 +36,8 @@ public class Plugin : BasePlugin
         MinimumLevel = Config.Bind("Restockers", "MinimumLevel", 10,
             new ConfigDescription(
                 "Restockers at this level or higher fetch two boxes per trip: they pick up two boxes of different " +
-                "products, restock the first product, then the second, then put back whatever is left. " +
+                "products. At the shelves they put the top box on the floor, restock from the other, then pick the " +
+                "first one up again for the rest. " +
                 "Lower-level restockers work as normal.",
                 new AcceptableValueRange<int>(1, 100)));
         StackVisuals = Config.Bind("Restockers", "StackSecondBox", true,
