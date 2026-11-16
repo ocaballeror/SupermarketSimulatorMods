@@ -34,7 +34,8 @@ namespace SupermarketFixes.Patches;
 /// Fix (host/offline, where the AI runs; guests see it through the janitor's PhotonTransformView, which
 /// syncs position and rotation):
 /// - MoveTargetState.Enter postfix (stain targets only): instead of the stain centre, send her to a stand
-///   point one mop-reach away from the stain. Candidates are tried around the stain, starting on her side of
+///   point one mop-reach away from the stain, minus half the agent's stoppingDistance (she stops up to about
+///   0.09 m before her destination, usually on her own side of it). Candidates are tried around the stain, starting on her side of
 ///   it; a candidate must be on the NavMesh close to the wanted spot, have a clear NavMesh line to the stain,
 ///   and preferably room for her body (capsule check against walls, furniture and racks). If none is
 ///   walkable, vanilla's destination is kept.
@@ -61,7 +62,8 @@ internal static class JanitorCleanAlignFix
     private const int MinSamples = 20;
     private const int MaxLogs = 80;
 
-    /// <summary>Layers that block her body: Default, Door, Buildings, Obstacle, Interactable, WallLayer, RackLayer.</summary>
+    /// <summary>Layers that block her body: 0 Default, 6 Interactable, 10 Door, 14 Buildings, 15 Obstacle,
+    /// 18 WallLayer, 20 RackLayer (indices from the game's TagManager).</summary>
     private static readonly int BodyMask =
         (1 << 0) | (1 << 6) | (1 << 10) | (1 << 14) | (1 << 15) | (1 << 18) | (1 << 20);
 
@@ -138,7 +140,10 @@ internal static class JanitorCleanAlignFix
 
         Vector3 stain = target.transform.position;
         Vector3 from = j.transform.position;
-        if (FindStandPoint(stain, from, out var stand, out var how))
+        // She stops as soon as she is within stoppingDistance (3D, including the -0.04 base offset) of the
+        // destination, usually on her own side of it, so aim a little inside the mop reach.
+        float inset = Mathf.Clamp(agent.stoppingDistance * 0.5f, 0f, 0.1f);
+        if (FindStandPoint(stain, from, inset, out var stand, out var how))
         {
             agent.SetDestination(stand);
             Log($"Janitor {j.JanitorID} heads for a stain at {Fmt(stain)}: standing at {Fmt(stand)}, " +
@@ -151,10 +156,10 @@ internal static class JanitorCleanAlignFix
         }
     }
 
-    private static bool FindStandPoint(Vector3 stain, Vector3 from, out Vector3 stand, out string how)
+    private static bool FindStandPoint(Vector3 stain, Vector3 from, float inset, out Vector3 stand, out string how)
     {
         stand = default;
-        float reach = s_offset.magnitude;
+        float reach = Mathf.Max(0.1f, s_offset.magnitude - inset);
         if (!NavMesh.SamplePosition(stain, out var stainHit, 1.0f, NavMesh.AllAreas))
         {
             how = "stain is not near the NavMesh";
@@ -173,7 +178,7 @@ internal static class JanitorCleanAlignFix
         for (int k = 0; k < 12; k++)
         {
             int angle = k == 0 ? 0 : (k % 2 == 1 ? 1 : -1) * 30 * ((k + 1) / 2);
-            if (angle == -180) continue;   // same as +180
+            // k = 11 gives +180; -180 never comes up.
             Vector3 dir = Quaternion.Euler(0f, angle, 0f) * baseDir;
             Vector3 want = new(stain.x + dir.x * reach, stainNav.y, stain.z + dir.z * reach);
             if (!NavMesh.SamplePosition(want, out var hit, 0.3f, NavMesh.AllAreas)) continue;
@@ -277,6 +282,7 @@ internal static class JanitorCleanAlignFix
             return true;
         }
         var tr = j.transform;
+        if (t.Turning && !AlignToStain.Value) t.Turning = false;   // switched off mid-turn
         if (t.Turning)
         {
             var goal = Quaternion.Euler(0f, t.TargetYaw, 0f);
@@ -336,7 +342,7 @@ internal static class JanitorCleanAlignFix
         }
         else if (!plausible) adopt = "; implausible, not used";
         Log($"Janitor {SafeId(t.Janitor)} finished a stain: her mop head was on average {dist:F2} m from the stain centre " +
-            $"(she stood {t.StandDist:F2} m from it; mop at right={avg.x:F2} forward={avg.y:F2} of her{adopt}).");
+            $"(she stood {t.StandDist:F2} m from it, mop reach {s_offset.magnitude:F2} m; mop at right={avg.x:F2} forward={avg.y:F2} of her{adopt}).");
     }
 
     private static string SafeId(JanitorNpc j)
