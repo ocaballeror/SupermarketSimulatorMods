@@ -4,7 +4,7 @@
     <TargetFramework>net6.0</TargetFramework>
     <AssemblyName>SupermarketFixes</AssemblyName>
     <RootNamespace>SupermarketFixes</RootNamespace>
-    <Version>0.7.1</Version>
+    <Version>0.7.2</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

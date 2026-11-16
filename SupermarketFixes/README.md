@@ -32,6 +32,8 @@ After buying a box in a market (often ice cream cones in the general goods store
 
 Sometimes holding left click with an open box on an empty shelf slot (often one whose old label had just been cleared) placed nothing, until you closed the box and opened it again. The game could end up treating an open box as closed: for example when you pressed close while the box was still in its opening animation, or in multiplayer when a late "place/take item" answer from the host reopened a box you had just closed. Now, as soon as you hold left click with an open box, it's treated as open again and items go onto the shelf. If the game also still thinks you're holding right click after you've let go (that blocks placing too), that's released after half a second.
 
+The same symptom with a **crate** (left click on an empty shelf slot that has no label places nothing until you deselect and reselect the crate) is also handled: if the crate's remembered product choice points at something that is no longer in the crate, it is repaired when you aim at such a slot.
+
 If it still happens, the log says why (see `Diagnostics` below). Please send those lines.
 
 ### F9: "my hands are stuck" key
@@ -62,6 +64,7 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes either of
 | StuckBox | `Diagnostics` | `true` | Logs extra `[StuckBox]` details: the result of the pickup retry and why a retry was skipped. Recoveries and failures are always logged. |
 | BoxPlace | `ResyncOpenState` | `true` | If the box in your hands is open but the game treats it as closed (clicking a shelf places nothing until you close and reopen the box), fixes it as soon as you hold left click. |
 | BoxPlace | `ReleaseStuckTake` | `true` | If the game still thinks you're holding right click (take) after you let go, which also stops placing, releases it. |
+| BoxPlace | `RepairCrateSelection` | `true` | If a crate refuses to put products on an empty shelf slot without a label until you deselect and reselect the crate, repairs the crate's product selection automatically. |
 | BoxPlace | `Diagnostics` | `true` | Logs `[BoxPlace]` lines explaining why nothing was placed when you hold left click on a shelf for 1.5 s. |
 
 ## Who needs it (multiplayer)
