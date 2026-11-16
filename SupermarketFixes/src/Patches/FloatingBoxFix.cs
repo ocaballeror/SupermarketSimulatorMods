@@ -21,11 +21,11 @@ namespace SupermarketFixes.Patches;
 /// client only and for boxes inside the street area. A pile anywhere else, or a box that leaves in any other
 /// way (clerk, trash, drop, throw), gets no wake-up.
 ///
-/// Fix: every 0.5 s, on the machine that simulates the box (offline, or the Photon owner), find boxes whose
+/// Fix: after every player pickup (boxes within 2.5 m, 0.25 s and 1 s later) and every 5 s for the whole scene, on the machine that simulates the box (offline, or the Photon owner), find boxes whose
 /// Rigidbody is asleep, not kinematic and has solid colliders, and probe a thin slab just under their
 /// collider bounds. Nothing solid there = unsupported: Rigidbody.WakeUp(), and the normal physics lets it
 /// fall. A supported box is left alone (its slab hits the box or floor it rests on), so the cost is one
-/// overlap query per sleeping loose box. Remote clients only see the result through the game's transform sync.
+/// overlap query per sleeping loose box; the scene-wide scan runs only every 5 s. Remote clients only see the result through the game's transform sync.
 ///
 /// Diagnostics: an unsupported box that is NOT asleep or is kinematic is logged once ([FloatBox]) with its
 /// state, so a different cause (for example a box stuck kinematic) can be identified from the log.
@@ -35,7 +35,12 @@ internal static class FloatingBoxFix
     internal static ConfigEntry<bool> WakeUnsupported;
     internal static ConfigEntry<bool> Diagnostics;
 
-    private const float SweepInterval = 0.5f;
+    /// <summary>Safety net for boxes that leave a pile in ways we don't see (clerks, trash, despawn). Slow on purpose:
+    /// FindObjectsOfType walks every box in the scene, racked ones included.</summary>
+    private const float SweepInterval = 5f;
+    /// <summary>After a pickup: check the boxes within this radius once the box has left its spot.</summary>
+    private const float NearRadius = 2.5f;
+    private static readonly float[] NearDelays = { 0.25f, 1.0f };
     private const int MaxWakeLogs = 30;
     private const int MaxOtherLogs = 12;
 
@@ -50,6 +55,7 @@ internal static class FloatingBoxFix
     internal static void ResetState()
     {
         s_next = 0f;
+        s_events.Clear();
         s_woken = 0;
         s_otherLogs = 0;
         s_loggedErrors = false;
@@ -57,14 +63,26 @@ internal static class FloatingBoxFix
     }
 
     private static float s_next;
+    private static readonly List<(Vector3 pos, float due)> s_events = new();
     private static int s_woken;
     private static int s_otherLogs;
     private static bool s_loggedErrors;
     private static readonly HashSet<IntPtr> s_seenOther = new();
 
+    /// <summary>A player picked this box up: its neighbours may have lost their support.</summary>
+    internal static void BoxPickedUp(Box box)
+    {
+        if (!WakeUnsupported.Value || box == null) return;
+        var pos = box.transform.position;
+        float now = Time.unscaledTime;
+        foreach (var d in NearDelays) s_events.Add((pos, now + d));
+        if (s_events.Count > 64) s_events.RemoveRange(0, s_events.Count - 64);
+    }
+
     internal static void Tick(float now)
     {
         if (!WakeUnsupported.Value) return;
+        if (s_events.Count > 0) RunEvents(now);
         if (now < s_next) return;
         s_next = now + SweepInterval;
         if (!NoktaSingleton<PlayerManager>.HasInstance) return;
@@ -72,15 +90,39 @@ internal static class FloatingBoxFix
         foreach (var o in Object.FindObjectsOfType(Il2CppType.Of<Box>()))
         {
             var box = o.TryCast<Box>();
-            if (box == null) continue;
-            try { Check(box); }
-            catch (Exception e)
+            if (box != null) SafeCheck(box);
+        }
+    }
+
+    private static void RunEvents(float now)
+    {
+        for (int i = s_events.Count - 1; i >= 0; i--)
+        {
+            var (pos, due) = s_events[i];
+            if (now < due) continue;
+            s_events.RemoveAt(i);
+            // Only colliders near the pickup are looked at, not every box in the scene.
+            var near = Physics.OverlapSphere(pos, NearRadius, ~0, QueryTriggerInteraction.Ignore);
+            var seen = new HashSet<IntPtr>();
+            for (int k = 0; near != null && k < near.Length; k++)
             {
-                if (!s_loggedErrors)
-                {
-                    s_loggedErrors = true;
-                    Plugin.Logger.LogError($"[FloatBox] checking a box failed (further errors suppressed): {e}");
-                }
+                var c = near[k];
+                if (c == null) continue;
+                var box = c.GetComponentInParent<Box>();
+                if (box != null && seen.Add(box.Pointer)) SafeCheck(box);
+            }
+        }
+    }
+
+    private static void SafeCheck(Box box)
+    {
+        try { Check(box); }
+        catch (Exception e)
+        {
+            if (!s_loggedErrors)
+            {
+                s_loggedErrors = true;
+                Plugin.Logger.LogError($"[FloatBox] checking a box failed (further errors suppressed): {e}");
             }
         }
     }
@@ -97,6 +139,8 @@ internal static class FloatingBoxFix
         if (!box.gameObject.activeInHierarchy || box.Racked) return;
         var rb = box.RigidBody;
         if (rb == null) return;
+        bool sleeping = rb.IsSleeping();
+        if (!sleeping && !rb.isKinematic) return;   // awake and simulated: physics handles it
         if (!Simulated(box)) return;
 
         // Solid colliders only: a held box has its colliders turned into triggers.
@@ -111,9 +155,6 @@ internal static class FloatingBoxFix
             else bounds.Encapsulate(c.bounds);
         }
         if (!any) return;
-
-        bool sleeping = rb.IsSleeping();
-        if (!sleeping && !rb.isKinematic) return;   // awake and simulated: physics handles it
 
         if (Supported(box, bounds)) return;
 
@@ -168,5 +209,23 @@ internal static class FloatingBoxFix
         return $"uid={uid} product={product} pos=({b.center.x:F2},{b.min.y:F2},{b.center.z:F2}) view={view} " +
                $"parent={(parent != null ? parent.name : "none")} kinematic={rb.isKinematic} sleeping={rb.IsSleeping()} " +
                $"gravity={rb.useGravity} layer={LayerMask.LayerToName(box.gameObject.layer)}";
+    }
+}
+
+[HarmonyLib.HarmonyPatch(typeof(Box), nameof(Box.PickUp), new Type[0])]
+internal static class FloatBox_PickUp_Patch
+{
+    private static void Postfix(Box __instance)
+    {
+        try { FloatingBoxFix.BoxPickedUp(__instance); } catch (Exception) { }
+    }
+}
+
+[HarmonyLib.HarmonyPatch(typeof(Box), nameof(Box.PickUp), new[] { typeof(PlayerInstance) })]
+internal static class FloatBox_PickUpPlayer_Patch
+{
+    private static void Postfix(Box __instance)
+    {
+        try { FloatingBoxFix.BoxPickedUp(__instance); } catch (Exception) { }
     }
 }

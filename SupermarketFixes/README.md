@@ -38,7 +38,7 @@ If it still happens, the log says why (see `Diagnostics` below). Please send tho
 
 ### Bug #6: boxes stay floating after the box under them is taken
 
-In a pile of boxes (for example a big online order), taking the box under another one sometimes left the upper box hanging in the air until someone picked it up. The likely reason is that boxes at rest go to sleep and don't notice that their support is gone. Now the mod checks every half second for sleeping boxes with nothing under them and wakes them, so they fall.
+In a pile of boxes (for example a big online order), taking the box under another one sometimes left the upper box hanging in the air until someone picked it up. The likely reason is that boxes at rest go to sleep and don't notice that their support is gone. Now, right after a box is picked up, the mod checks the boxes within a couple of metres, and every 5 seconds it checks the whole store. Sleeping boxes with nothing under them are woken, so they fall. The checks are cheap (a handful of boxes after a pickup).
 
 If it still happens, the log has `[FloatBox]` lines describing the box that stayed in the air. Please send those.
 
