@@ -65,7 +65,12 @@ internal static class BagBulk
         // From here on the player asked for a bulk move: say why one doesn't start (the first in-game test
         // showed no bag burst at all and no clue why).
         string why = Refusal(oi, take);
-        if (why != null) { Bulk.Info($"bag {(take ? "take" : "place")}: not started ({why})"); return false; }
+        if (why != null)
+        {
+            // Shift is also Sprint: stay quiet while no shelf slot is aimed at.
+            if (oi.m_CurrentDisplaySlot != null) Bulk.Info($"bag {(take ? "take" : "place")}: not started ({why})");
+            return false;
+        }
 
         var bag = oi.m_CurrentOrderPaperBag;
         var slot = oi.m_CurrentDisplaySlot;
@@ -84,8 +89,9 @@ internal static class BagBulk
                 orderNote = $", order #{order.ID} ({order.CustomerName}) needs {limit} more of product {pid}";
                 if (limit == 0)
                 {
-                    Bulk.Info($"bag take: not started (order #{order.ID} {(wanted == 0 ? "doesn't contain" : "already has enough of")} product {pid}); plain click");
-                    return false;
+                    // Swallow the click: the vanilla take would add one (or, held, keep adding) beyond the order.
+                    Bulk.Info($"bag take: nothing to do (order #{order.ID} {(wanted == 0 ? "doesn't contain" : "already has enough of")} product {pid})");
+                    return true;
                 }
             }
             else orderNote = $", no active order ({orderWhy}): filling the bag";
@@ -106,6 +112,7 @@ internal static class BagBulk
         if (bag == null) return "no paper bag in hand";
         if (slot == null) return "not looking at a shelf slot";
         if (!bag.m_IsOpen) return "bag is closed";
+        // Not wheel.IsWheelInteraction: its last link is OnlineOrderInteraction.enabled, which is true for as long as a bag is held.
         // Leave every other use of the click to the game.
         if (oi.m_CurrentCourier != null) return "looking at a courier";
         if (oi.m_CurrentCustomer != null) return "looking at a customer";
@@ -115,7 +122,7 @@ internal static class BagBulk
         if (NoktaSingleton<WeaponWheelController>.HasInstance)
         {
             var wheel = NoktaSingleton<WeaponWheelController>.Instance;
-            if (wheel != null && (wheel.IsOpen || wheel.IsWheelInteraction)) return "tool wheel open";
+            if (wheel != null && wheel.IsOpen) return "tool wheel open";
         }
         if (take)
         {
@@ -133,8 +140,8 @@ internal static class BagBulk
     }
 
     /// <summary>
-    /// The order the bag is being packed for, if nobody else is handling it: the bag's attached tag, else the
-    /// order selected in the player's notebook. Null when there is none (reason in <paramref name="why"/>).
+    /// The order the bag is being packed for, if nobody else is handling it: the order selected in the player's notebook (a
+    /// still-attached tag wins, but opening a bag detaches it, so that is rare). Null when there is none (reason in <paramref name="why"/>).
     /// </summary>
     private static OrderListData ActiveOrder(OnlineOrderInteraction oi, OrderPaperBag bag, out string why)
     {
@@ -163,7 +170,7 @@ internal static class BagBulk
                 { why = $"order #{order.ID} is handled by courier {courier}"; return null; }
             }
         }
-        catch (Exception) { }
+        catch (Exception e) { Bulk.Error("courier claim check", e); }
         try
         {
             if (Photon.Pun.PhotonNetwork.IsConnected && NoktaSingletonPunCallbacks<NetworkOrderManager>.HasInstance)
@@ -174,7 +181,7 @@ internal static class BagBulk
                 { why = $"order #{order.ID} is being packed by {by}"; return null; }
             }
         }
-        catch (Exception) { }
+        catch (Exception e) { Bulk.Error("order-in-progress check", e); }
         return order;
     }
 
