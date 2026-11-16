@@ -2,19 +2,54 @@
 
 Read [README.md](README.md) for the project overview. This file covers how to work here.
 
-## 1. Always start with `TODO`
+## 0. Where information lives
 
-[`TODO`](TODO.md) (repo root) is the source of truth for what to work on. The user updates it over time, so **read it fresh at the start of every session**; don't rely on memory or older notes.
+Each fact lives in one file. Look there first, and update it there.
 
-- Each entry is `Bug #N` or `Improvement #N` followed by the request.
-- **Skip entries marked `[DONE]`.**
-- An entry marked `[IN PROGRESS]` has work already started. Its note says where; continue from there instead of starting over.
-- When you start work on an entry, prefix it with `[IN PROGRESS]` and a short pointer to where the work lives. Example: `[IN PROGRESS: SupermarketFixes/src/Patches/RackMoveFix.cs, awaiting in-game test] Bug #1. ...`
-- **Only mark an entry `[DONE]` once the user has confirmed it works in-game.** A successful build or code review isn't confirmation. Prefix it as `[DONE YYYY-MM-DD]` and keep the original text.
-- `[REVIEWED YYYY-MM-DD: <pointer>]` means the code review loop passed (see `REVIEW_ORCHESTRATOR.md`) and the item is pending the user's in-game test. It replaces `[IN PROGRESS]`.
-- **Use one status prefix per entry; never stack them.** [`STATUS.md`](STATUS.md) holds the full per-item state (open / in-progress / reviewed / needs-rework / done), the code location, and the review date, rounds and code hash. Update its row and the TODO prefix in the same change. If the code of a `reviewed` item changes, set it back to in-progress.
-- Don't rewrite or reorder the user's entries. Only change the status prefix.
+| File | What it holds | Written by |
+|---|---|---|
+| [`TODO.md`](TODO.md) | The user's requests, each with a **Status** block (state, code location, review record, what it waits on). The only place that tracks status. | The user writes the requests; agents maintain only the Status blocks |
+| [`README.md`](README.md) | Project overview, mods table, install and build, log collection | agents |
+| `CLAUDE.md` (this file) | How to work here: workflow, environment, tools, interop pitfalls, and the game systems that several mods share | agents |
+| `<Mod>/README.md` | What the mod does, for players and publishing: settings, who needs it in multiplayer, compatibility. **Required for every mod.** | agents |
+| `<Mod>/CLAUDE.md` | What agents would otherwise have to re-derive about that mod: mechanism, patches, multiplayer reasoning, pitfalls, test steps, and game knowledge only that mod uses. **Optional.** | agents |
+| Doc comment at the top of each patch file | The full root-cause analysis | agents |
+| [`REVIEW_ORCHESTRATOR.md`](REVIEW_ORCHESTRATOR.md) | An agent definition for the implement-and-review loop. Load it into a fresh session; it isn't general guidance. | the user |
+
+**When you work on a mod, read its `README.md` and, if it exists, its `CLAUDE.md` first.** Bug fixes all live in `SupermarketFixes/`, so read that mod's docs for any bug. This saves you re-deriving the mechanism from the dumps, and it tells you what is already known to work, fail or be untested.
+
+Per-mod information never goes in a root file.
+
+## 1. Always start with `TODO.md`
+
+[`TODO.md`](TODO.md) is the source of truth for what to work on. The user updates it over time, so **read it fresh at the start of every session**; don't rely on memory or older notes.
+
+Each entry is a heading (`## Bug #N: ...` or `## Improvement #N: ...`), a **Status** block, and the user's request. The block looks like this:
+
+```
+**Status:** reviewed
+**Code:** `SupermarketFixes/src/Patches/GhostHeldItemFix.cs`
+**Review:** 2026-11-15, 1 round, hash `d48d7436015a`
+**Waiting on:** In-game test + logs.
+```
+
+- `Status` is always present. `Code` is the patch file (bugs) or the mod folder (improvements), once there is code. `Review` appears once a review passed. `Waiting on` is one short line; anything longer goes in the mod's `CLAUDE.md`.
+- **Don't rewrite or reorder the user's request text, and don't add analysis to TODO.md.** Change only the Status block. Investigations and notes go in the mod's `CLAUDE.md` (for bugs, `SupermarketFixes/CLAUDE.md`).
 - If an entry is a question rather than a code task (Bug #4 asks how to collect logs), answer the user directly. The README's log section covers the common case.
+
+States, one per entry, in this lifecycle:
+
+| State | Meaning | Set by |
+|---|---|---|
+| `open` | No code yet | (initial) |
+| `in-progress` | Code exists or is being changed; not code-reviewed, or changed since the last review. Continue from `Code`; don't start over. | the implementing agent; the orchestrator when a review goes stale |
+| `reviewed` | **Code review only**: reviewer and implementer agreed. Pending the user's in-game test. | the review orchestrator |
+| `needs-rework` | The in-game test failed, or the user asked for changes | whoever records the user's feedback |
+| `done YYYY-MM-DD` | **Tested in-game and accepted by the user** | only after the user confirms |
+
+- **Skip `done` entries.** `reviewed` is never `done`: a build or a code review isn't an in-game test.
+- **Stale reviews:** the `Review` line stores a hash of the reviewed code (`tools/modhash.sh <path in "Code">`). If the current hash differs, the code changed after the review: set the state back to `in-progress`. A bug's hash covers only its patch file; shared files such as `Plugin.cs` aren't hashed.
+- Update the Status block in the same change as the work it describes.
 
 ## 2. Where each change goes
 
@@ -24,25 +59,25 @@ Read [README.md](README.md) for the project overview. This file covers how to wo
   - Add it to the mods table in the root README.
   - Don't make improvement mods depend on SupermarketFixes or on each other.
 - **Plugin GUIDs:** `oscar.<modname-lowercase>` (for example `oscar.supermarketfixes`). Use semantic versioning, kept in sync between `Plugin.Version` and the csproj `<Version>`.
-- **Every mod has two docs in its folder**, including `SupermarketFixes/`. Keep both current in the same change whenever you alter behaviour, settings, patches or multiplayer requirements:
-  - **`README.md` is about the mod, for players and publishing:** what it does, a settings table, whether the host, guest or both need it, and compatibility notes. For SupermarketFixes, one subsection per bug. No implementation details.
-  - **`CLAUDE.md` is for agents working on the mod:** current status and open questions, the game mechanism involved, which methods are patched and why, the multiplayer reasoning, and any pitfalls or follow-ups. The full root-cause analysis stays in the doc comment at the top of the patch file; the mod's CLAUDE.md summarises it and points there. Create it when you create the mod.
-  - **When you work on a mod, read both first**, so you don't have to re-derive it from the dumps.
-  - Per-mod information never goes in this root file.
+- **Mod docs.** Keep them current in the same change whenever you alter behaviour, settings, patches or multiplayer requirements.
+  - **`README.md` (every mod, including SupermarketFixes):** a readable, high-level description for players and for publishing. What the mod does, a settings table, whether the host, guest or both need it, compatibility notes. For SupermarketFixes, one subsection per bug. No implementation details, and no development status such as "awaiting in-game test" (that lives in TODO.md).
+  - **`CLAUDE.md` (optional):** create it only when there is something agents would otherwise have to dig out again: the game mechanism involved, which methods are patched and why, multiplayer reasoning, pitfalls and open questions, in-game test steps with the log lines to send back, and game knowledge that only this mod uses. A trivial mod doesn't need one. Its "Status" section is implementation history (what changed in each version and why), not the item's tracking state. The full root-cause analysis stays in the patch file's doc comment; the CLAUDE.md summarises it and points there.
 
 ## 2a. Keep the shared knowledge up to date
 
-Reverse engineering is the expensive part of every task. When you learn something about the game, the tools or the environment that **most future sessions would otherwise have to look up again**, add it to this file before you finish: section 8 for game internals, section 5 for interop pitfalls, section 4 for tools, section 3 for the environment.
+Reverse engineering is the expensive part of every task. When you learn something that **most future sessions would otherwise have to look up again**, record it before you finish:
 
-Typical candidates are core systems (player, input, singletons, networking patterns), how to read the dumps, and interop techniques. Keep each entry short and only include facts you've verified in the dumps or in-game. If it hasn't been confirmed in-game yet, say so.
+- **This file** if it applies across mods: section 8 for game systems several mods touch (player, input, boxes, interactions, networking patterns), section 5 for interop pitfalls, section 4 for tools, section 3 for the environment.
+- **The mod's `CLAUDE.md`** if it's about one mod or one code path, including game systems only that mod uses (racks, restockers, pricing, furniture shop and computer, player models). Section 8 has an index of where those live.
+- **The mod's `README.md`** only for player-facing facts, and the patch doc comment for the root cause.
 
-Knowledge about one mod or one code path doesn't belong here; it goes in that mod's `CLAUDE.md` (implementation) or `README.md` (player-facing), and in the patch doc comment. If a script would save the next session work, put it in `tools/` and document it in section 4.
+Keep each entry short and only include facts you've verified in the dumps or in-game. If it hasn't been confirmed in-game yet, say so. If a script would save the next session work, put it in `tools/` and document it in section 4.
 
 ## 2b. Independent review after every fix or improvement
 
-Once you have finished implementing a fix or an improvement (it builds, and the mod's README, its CLAUDE.md and the TODO.md are updated), **launch a review subagent** with the Agent tool before you report back to the user.
+Once you have finished implementing a fix or an improvement (it builds, and the mod's README, its CLAUDE.md if any, and the Status block in TODO.md are updated), **launch a review subagent** with the Agent tool before you report back to the user. (When working under `REVIEW_ORCHESTRATOR.md`, the orchestrator runs this loop instead.)
 
-- **Brief it with the intent only.** Describe *what the change was meant to achieve*: the bug symptom or the feature, and the expected behaviour (including multiplayer expectations, if relevant). Name the mod or folder it lives in so the reviewer knows where to look.
+- **Brief it with the intent only.** Describe *what the change was meant to achieve*: the bug symptom or the feature, and the expected behaviour (including multiplayer expectations, if relevant). Name the mod or folder it lives in so the reviewer knows where to look, and tell it to read that mod's docs.
 - **Don't include implementation details or your reasoning.** No root-cause theory, no explanation of why you chose this approach, no list of the methods you patched, no "I think this is fine because...". The reviewer must form its own opinion from the code, not inherit your assumptions.
 - **Don't steer the verdict.** Don't say what to focus on or what to ignore, and don't hint that the change is safe or risky. Just ask for a review of whether the change correctly and safely achieves that intent, and for concrete findings ranked by severity.
 - **Act on the result.** Read the review critically, then apply the changes that are justified. If you disagree with a finding, say so in your final report to the user with your reason; don't silently drop it. Rebuild after applying changes.
@@ -52,7 +87,7 @@ Once you have finished implementing a fix or an improvement (it builds, and the 
 
 The repo is a git repo; commit as you go so every step is recoverable and the history shows what changed and why.
 
-- **Commit at each stable point:** a fix or improvement that builds, a review round applied, a docs or `TODO.md`/`STATUS.md` update, a new tool. Don't batch unrelated work into one commit.
+- **Commit at each stable point:** a fix or improvement that builds, a review round applied, a docs or `TODO.md` update, a new tool. Don't batch unrelated work into one commit.
 - **One logical change per commit.** Keep a mod's code and its README/CLAUDE.md update in the same commit; keep changes to different mods in separate commits.
 - **Commit messages are a brief title only:** one short imperative line (for example `Fix rack move desync when guest joins`). No body, no trailers or attribution lines, and no type tags or prefixes such as `feat:`, `fix:` or `chore:`.
 - **Stage explicitly** (`git add <paths>`), never `git add -A` blindly. Don't commit `bin/`, `obj/`, `decompiled/` (all gitignored) or log files such as `bug-1/`.
@@ -107,12 +142,12 @@ dotnet tools/Il2CppDump/bin/Release/net6.0/Il2CppDump.dll <outDir> <TypeFullName
 
 tools/isil.sh decompiled/native-all/Rack.txt "Rack::Place"         # one method's ISIL, prologue/noise stripped
 tools/callers.sh decompiled/native-all RackSlot.AddBox              # every method that calls it (constructors: Type..ctor)
-tools/modhash.sh SupermarketFixes/src/Patches/X.cs   # short hash of a mod's code (dir: src/**.cs + csproj), for STATUS.md stale-review checks
+tools/modhash.sh SupermarketFixes/src/Patches/X.cs   # short hash of a mod's code (dir: src/**.cs + csproj), for stale-review checks (the `Review` hash in TODO.md)
 tools/readconst.py 0x1838CEBA8 [--type f|d|i|q]                     # value of a literal ISIL shows only as [0x18...] (default float)
 tools/bindings.py escape                                            # default input bindings: map/action -> key (filter optional)
 ```
 
-**Game assets** (textures, sprites, names) aren't in the dumps. Inspect them with UnityPy in a throwaway venv (`python3 -m venv <scratch>/upy && <scratch>/upy/bin/pip install UnityPy`), loading `<game>/Supermarket Simulator_Data/sharedassets*.assets` / `resources.assets` and saving `obj.read().image` as PNG. `strings -n 5 <file> | grep -i <name>` is a quick first check. The Addressables bundles in `StreamingAssets/aa` hold only localization. Furniture shop icons are renders in one atlas, `T_IconAtlas_Furnitures` (sharedassets2); it has no computer. Flat white UI glyphs are named `icon_<set>_<n>` (e.g. `icon_device_63` is a computer).
+**Game assets** (textures, sprites, names) aren't in the dumps. Inspect them with UnityPy in a throwaway venv (`python3 -m venv <scratch>/upy && <scratch>/upy/bin/pip install UnityPy`), loading `<game>/Supermarket Simulator_Data/sharedassets*.assets` / `resources.assets` and saving `obj.read().image` as PNG. `strings -n 5 <file> | grep -i <name>` is a quick first check. The Addressables bundles in `StreamingAssets/aa` hold only localization. Flat white UI glyphs are named `icon_<set>_<n>`. Furniture shop icons are renders in one atlas, `T_IconAtlas_Furnitures` (sharedassets2).
 
 `Il2CppDump` uses the Cpp2IL that ships in `<game>/BepInEx/core`, which already supports this metadata version. Don't download other Cpp2IL or Il2CppDumper builds unless that one stops working.
 
@@ -161,9 +196,25 @@ Typical loop for a task:
 - Diagnostics/logging can default to on while a fix is unconfirmed. **Default it to off once the user confirms the fix works.** Prefix log lines with a tag such as `[RackMove]`.
 - Don't break vanilla behaviour when a feature is turned off: every patch checks its config entry and falls through to the original.
 
-## 7. Status of existing work
+## 7. Game knowledge that lives in a mod's docs
 
-Status lives with each mod (its `CLAUDE.md`, section 2) and in the `TODO`; it is not tracked here. Reviews: whoever implements a change launches a fresh review subagent themselves, per section 2b.
+Game systems that only one mod touches are documented next to that mod, not in section 8. Read the mod's `CLAUDE.md` when you work on or near these:
+
+| Game system | Where |
+|---|---|
+| Racks, racked boxes, box UIDs, dematerialize, rack pickup and placing | `SupermarketFixes/CLAUDE.md` (Game reference: racks) |
+| Restockers: clerk AI, search, states, carrying a box | `RestockerDoubleCarry/CLAUDE.md` |
+| Pricing: `PriceManager`, daily cost changes, bulk markup, product licenses | `PriceMarkupKeeper/CLAUDE.md` |
+| Furniture shop, furniture prefabs and spawning, the store computer | `ExtraComputers/CLAUDE.md` |
+| Player skins, animators and rigs | `PlayerCrouch/CLAUDE.md` |
+| Self-checkout coroutines | `SelfCheckoutSpeed/CLAUDE.md` |
+| Paint cans | `PaintCanCapacity/CLAUDE.md` |
+| Grid mode | `GridModeDefault/CLAUDE.md` |
+| Moving furniture and putting it back | `FurnitureMoveCancel/CLAUDE.md` |
+| Shelf slots, crates and paper bags, product fly animations | `BulkShelfTransfer/CLAUDE.md` |
+| Carrying two boxes (player) | `PlayerDoubleCarry/CLAUDE.md` |
+
+Boxes, holding objects, interactions, input and networking are used by several mods, so they stay in section 8.
 
 ## 8. Game internals reference
 
@@ -203,7 +254,6 @@ Verified in the dumps unless marked otherwise. Addresses and offsets are specifi
   - The FPS camera target is `CinemachineCameraTarget`. `Start` saves its localPosition into `defaultCameraPosition`. The only native code that writes its position is `PushCameraEffect` (DOTween `DOLocalMove`); `CameraRotation` only sets its rotation.
   - No game code reads or writes `CharacterController.height/center` for players.
 - Placement state: `FurniturePlacer.m_PlacingMode` (furniture) and `PlayerObjectHolder.m_PlacingMode` (objects). `PlayerInteraction.InSkateboard` is set while riding a skateboard.
-- **Player models:** the player prefab has `Network Objects/Skins/<skin>` children, one per selectable character (`Man_01_Rig_Test Variant`, `Man_01`, `Man_02`, `Woman_01`, `Woman_02`; verified in the `level2` asset with UnityPy). **Each skin has its own** humanoid `Animator` (e.g. `man_rig_test`, `man (1)`), `PlayerAnimation`, rigs and `PlayerIKHandler`; only the chosen skin's GameObject is active (`PlayerSkinController.SetSkinIndex`). The shown one is `PlayerInstance.SkinController.ActiveSkin` (`PlayerSkin.m_Animator`, `m_Renderers`). `GetComponentInChildren<PlayerAnimation>(true)` returns the inactive rig-test variant: don't use it. `PlayerAnimation` holds Animation Rigging rigs (`m_LookAtRig`; hand and leg IK in `PlayerIKHandler`). The locomotion blend tree is fed from `CharacterController.velocity`. There is no crouch state. Animators are humanoid (`human=True`, confirmed in-game).
 
 **Input.**
 - The game uses the new Input System with one asset, `CustomInputActions`. Gameplay actions are in the `Player` map: `Use`, `Take`, `Drop`, `Cancel`, `Back`, `Throw`, `Close`, `Scroll`, `Sprint`, `Jump`, `SnapPlace`, and others. List them with `tools/bindings.py`.
@@ -218,25 +268,6 @@ Verified in the dumps unless marked otherwise. Addresses and offsets are specifi
   - `localizationKey` is an entry in the hint string table, such as `_place`, `_rotate`, `_boxUp`, `_cancel`, `_back`, `_take`, `_drop` or `_throw`. List them all with `grep -h -B6 "Call InteractionHintsManager.AddHint" decompiled/native-all/*.txt | grep -o '"_[^"]*"' | sort -u`.
 - Hints live in `Hints` (Dictionary keyed by `(int)InputActionID`), so there's **one hint per id**. `RemoveHint(id, player)` removes one; `Clear(player)` empties the dictionary, which interactions do when they start and end.
 
-**Pricing** (`PriceManager`, a `NoktaSingletonPunCallbacks`; per-product data is `Pricing {ProductID, Price, LastChangeDate, DiscountRate, _saleIndex}`).
-- Lists: `m_CurrentCosts` (cost per unit), `m_PricesSetByPlayer` (selling prices; `GetPriceSetByPlayer(id)` / `GetOrCreatePriceSetByPlayer(id)`, which creates one at market price), `m_AveragePrices`, `m_DailyPriceChanges`, `m_PreviousPrices`, `pricingDatas`. They're saved in `SaveManager.PriceContainer`, along with the bulk tab's `BulkMarkupRatio` / `BulkDiscountRatio`.
-- `Pricing.MarketPrice = round(CurrentCost * (1 + ProductSO.OptimumProfitRate/100), 2)`. `DiscountRate` is a percentage of `Price`.
-- With no player price set, the selling price falls back to `CurrentCost`.
-- Daily cost changes run on the host or offline only (`PriceManager.Start` subscribes the handler only when `!IsConnectedAndSlave`): `DayCycleManager.OnStartedNewDay` → `TryChangingBasePrices` → `ChangeCurrentCost(id)`, then `BasePricesChanged_Broadcast` sends all lists to guests. Bulk tab: `ApplyBulkMarkup` / `ApplyBulkDiscount` → `FinishBulkPricingApply` (UI refresh, `onPriceSet`, `BulkPricingApplied_RPC`). A single typed price: `PriceSet(pricing)` → RPC `SetPricingList`.
-- Active (licensed) product ids: `ProductLicenseManager.m_ActiveProducts`.
-
-**Restockers (employee AI).**
-- Restockers are `SupermarketSimulator.Clerk.Clerk` (`RestockerSO.RestockerPrefab`). The old `Restocker` class is unused.
-- `Clerk.ManualUpdate` ticks a state machine only when `!PhotonNetwork.IsConnectedAndSlave` (host/offline). The states are `ClerkIdleState`, `ClerkRestockingState`, `RackingState` and `ClerkDropEmptyBoxState`.
-- `ClerkIdleState.OnTick` calls `SearchHandler.PerformSearch` every 3 s, plus once on the first tick in Idle. The search fills `BoxTarget` (`IBoxTarget`: `RackSlotBoxTarget`, `StreetBoxTarget`, `VehicleBoxTarget`, or `CarryBoxTarget` for the box in hand), `DisplayTargets` and `RackTarget`.
-  - Transitions: `DisplayTargets.Count > 0` → Restocking, `RackTarget` → Racking, back to Idle when the state's `Sequence` completes.
-  - A clerk already carrying a box only searches for work for that box.
-- States run a `SupermarketSimulator.Sequence.Sequence` of `SequenceTask`s, kept in the list `m_Tasks` and read at every step. Restocking is `[MoveTo, TakeBox, RestockAllDisplays, GoToTrash]`. `TaskStatus`: Running, Fail (ends the sequence), Success (next task).
-- `Clerk.CarryBox(box)` sends `ClerkCarryBox_RPC` to guests, then calls `CarryBox_Internal`. That sets `m_CurrentBox`, parents the box to `m_BoxHolder` and tweens it to local zero. `CarryBox(null)` empties the hands without un-parenting anything.
-- Level: `NoktaSingleton<EmployeeLevelManager>.Instance.TryGet(clerk.LevelKind, clerk.LevelEmployeeId, out progress)`, then `progress.Level`.
-- Interop: `RackSlotBoxTarget` and the other targets don't derive from the `IBoxTarget` interop class. Wrap them with `new IBoxTarget(obj.Pointer)`.
-- Not yet confirmed in-game (RestockerDoubleCarry is untested).
-
 **Interaction dispatch** (`PlayerInteraction`).
 - `Raycast()` hits colliders in `m_InteractableLayer`. It takes the `IInteractable` from the **hit collider's own GameObject** (`TryGetComponent`, no parent search) and stores it in `m_CurrentInteractable`.
 - `Interact(hold, custom)` calls `InstantInteract()` or `HoldingInteract()` on it.
@@ -245,29 +276,9 @@ Verified in the dumps unless marked otherwise. Addresses and offsets are specifi
 - Hints come from the interactable's `InteractionType` (INSTANT/HOLD/BOTH...) and `InstantInteractionHint` / `HoldingInteractionHint` keys.
 - Plain `Furniture` is HOLD only (BOTH with a `SecurityCamera`). Its `HoldingInteract` starts moving it.
 
-**Furniture pipeline** (verified in dumps; used by ExtraComputers, not yet confirmed in-game).
-- A furniture type is a `FurnitureSO` {`ID`, `BoxSize`, `FurnitureIcon` (shop sprite), `AtlasIndex`/`AtlasPosition` (box label), `FurniturePrefab`, `FurnitureColor`, `IsMainFurniture`, `Cost`} in `IDManager.m_Furnitures`. `IDManager.FurnitureSO(id)` is a FirstOrDefault over it, used by the cart, the delivery, `FurnitureBox`, box-up and the spawner.
-- Shop: `FurnituresViewer.SpawnFurnitures` lists the SOs with `IsMainFurniture`, skipping id 7000. Names come from `LocalizationManager.LocalizedFurnitureName(id)`. Cart totals multiply by `Cost`.
-- Box label: `ProductAtlasManager.SetFurnitureIcon(id, renderer)` sets `sharedMaterial = atlasedMaterials[AtlasIndex]`, then a `_BaseMap` texture offset.
-- Spawning: `FurnitureGenerator.SpawnFurniture`, with two overloads: (id, pos, boxViewId) for unboxing and (id, pos, rot, parent) for loading a save.
-  - Offline: `LeanPool.Spawn(prefab)`.
-  - Online (master only): it branches on the prefab's component type to `NetworkObjectGenerator.SpawnNetwork<Type>`, which calls `PhotonNetwork.InstantiateRoomObject("Furnitures/<Type>/" + prefab.name, pos, rot, 0, {boxViewId})`.
-  - Photon uses the stock `DefaultPool`: `ResourceCache` first, then `Resources.Load`. Adding a GameObject to `((DefaultPool)PhotonNetwork.PrefabPool).ResourceCache[id]` makes any prefab network-instantiable.
-  - `NetworkFurniture.OnPhotonInstantiate` reads `data[0]` (the box interaction's view id), transfers ownership to that player and calls `FurnitureBoxInteraction.OpenBoxOrder` to start placing.
-- There are **no `Furniture` subclasses**: every furniture prefab uses the plain `Furniture` class plus type scripts (`Display`, `Rack`, `Trash`, ...), and every type in the shop has its own network spawner. A mod can't count on finding a "plain" furniture prefab to copy (ExtraComputers' donor search found none in-game).
-- `Furniture.m_ID` is serialized in the prefab; nothing sets it at runtime. Saves are `FurnitureManager.m_FurnituresDatas`. `LoadFurnitureDatas` logs "Can't spawn furniture with id" for unknown ids and continues.
-- Moving/placing uses `FurniturePlacingMode` (base `IPlacingMode`).
-  - Serialized: placing tags, `m_PlacingModeCollider` (overlap box), `m_Renderers` (hologram), `m_OwnerCollider`, `m_PhysicalColliders`, `m_NavMeshObstacles`, `m_Furniture` (the transform that gets moved), `m_ParentPhotonView`.
-  - `Awake` recomputes `m_AllColliders` and `m_Objects` (`NavmeshBuildSourceObject`) from `m_Furniture`.
-
-**Store computer** (`__Project__.Scripts.Computer.Computer`; one per scene, and several managers hold a reference to it, so it can't be cloned).
-- It isn't a `Furniture`, but it has its own `m_PlacingMode` and can be moved.
-- `InstantInteract`:
-  - refuses if `IsOccupied` (another player is on it);
-  - otherwise `set_OpenPC(true)` activates `m_PCCam`, a camera that looks at the world-space canvases under `m_ComputerScreen`;
-  - sets `OccupiedPlayer` and, online, `NetworkComputer.InteractComputer_Broadcast(true)` (receivers only set `IsOccupied` / `OccupiedPlayer`);
-  - puts the avatar in front of the cam.
-- `Back()` (called from `ComputerInteraction.OnCancel` / `GamepadBack`) does `set_OpenPC(false)` (which broadcasts false), then puts the player at `m_PlayerPosition`.
+**Furniture placing.**
+- Moving and placing use `FurniturePlacingMode` (base `IPlacingMode`). Serialized: placing tags, `m_PlacingModeCollider` (overlap box), `m_Renderers` (hologram), `m_OwnerCollider`, `m_PhysicalColliders`, `m_NavMeshObstacles`, `m_Furniture` (the transform that gets moved), `m_ParentPhotonView`. `Awake` recomputes `m_AllColliders` and `m_Objects` (`NavmeshBuildSourceObject`) from `m_Furniture`.
+- There are **no `Furniture` subclasses**: every furniture prefab uses the plain `Furniture` class plus type scripts (`Display`, `Rack`, `Trash`, ...).
 
 **Holding objects (`PlayerObjectHolder`).**
 - Every holdable (Box, FurnitureBox, PaintBucket, FloorBox, OrderPaperBag, IceCreamBucket) goes through `HoldObject(item, posOffset, rotOffset)`. It makes the colliders of `item`'s active objects triggers, the root Rigidbody kinematic, saves `item.layer` in `m_CurrentObjectsLayer` and sets "Ignore Raycast", takes the item's `IPlacingMode` as `m_CurrentPlacingMode`, stores `m_CurrentObject` (+0x48), and parents the item **directly** to `m_ObjectHolder` (+0x20), tweening it to the offset.
@@ -293,17 +304,6 @@ Verified in the dumps unless marked otherwise. Addresses and offsets are specifi
 - `BoxInteraction.OnTake` only sets `m_holdingTake`. Pickup wait: the 3 s timeout sets `m_AvailabilityTimedOut`, clears `IsWaitingAvailability` and ends the interaction; the next `EndAvailabilityWait` clears that flag and returns, so a late refusal ends nothing and a late `PickUP_RPC` still calls `Box.PickUp` (a ghost-item source). Vanilla ignores drop, throw and use while `IsWaitingAvailability` is set.
 - `BoxInteraction.UpdateOpeningBoxHint` re-adds the USE `_open` hint for a closed box; `RackHints` calls it and then adds its own USE `_place`.
 - Other containers: online-order paper bags (`OnlineOrderInteraction`) apply moves on the acting client and broadcast them; taking goes through `OnlineOrderService.TryTakeProductIntoBag` (returns `TakeProductStatus`). `CrateInteraction` has the names swapped: `OnTake` (right click) sets `m_IsOnUse` and runs `<OnUseLoop>` (shelf → crate); `OnUse` (left click) sets `m_IsOnTake` and runs `<OnTakeLoop>` (crate → shelf). Both yield `WaitForSeconds(TotalProductInteractionInterval)`.
-
-**Racks and racked boxes** (verified in dumps; behaviour on join confirmed by in-game logs).
-- `RackSlot`: `m_Boxes` (+0x38, live Box objects) and `m_Data.RackedBoxDatas` (the records that are saved and sent to guests). Racked boxes are drawn through `InstancedRenderer` snapshots (`Box.ToggleInstanced`), not their own mesh.
-- **Box UIDs are not unique.** `IDManager.GenerateBoxUniqueID` is a per-session counter (`BoxUniqueIdCount`, not saved; returns -2 on guests), and guests keep the host's UIDs. Match boxes on UID + ProductID (+ position), never UID alone.
-- A box placed on a rack during the session stays **networked** (`RackSlot.ENABLE_DEMATERIALIZE_ON_PLACE` is false). Boxes loaded from the save are **local** copies (`SpawnLocalRackedBox` / `BoxGenerator.SpawnBoxInRack`). Taking from a slot (`RackSlot.TakeAndMaterializeBox`, host) either broadcasts `RemoveLocalRackedBox` and `MaterializeRackedBox`s a new networked box, or for a networked box just unracks it. `RemoveLocalRackedBox_RPC` → `RemoveLocalRackedBoxByUID` → `RemoveBox` runs on every client.
-- `RackSlot.RemoveBox(box)` is the full, purely local cleanup (m_Boxes, records, instancing, highlight, `InventoryManager.AddBox`, label, `RePositionBoxes`). Only TakeBoxFromRack, RemoveLocalRackedBoxByUID, DematerializeNetworkedBox and clerk pickups call it. `Box.PickUp` (the player's box path) does **not**.
-- A guest's copy of a networked box created by `NetworkBox.OnPhotonInstantiate` is unparented and made kinematic; nothing re-racks it.
-- `RemoveBox` drops **every** record with the box's UID (`RemoveAll`, compares `BoxData.m_UID`). When no record is left it clears the slot: `RackSlotData.Clear` (records, `BoxID = -1`; `ProductID` kept) and `RackManager.RemoveRackSlot(productId, slot)`. Records are the boxes' own `BoxData` instances; `UpdateRackedBoxDatas` rebuilds them from `m_Boxes`.
-- **Dematerialize** (networked racked box → local racked box, host-driven, handled by unmodded clients): `NetworkRack.DematerializeBox_Broadcast(slotIdx, uid)` (RpcTarget.All) → `RackSlot.DematerializeNetworkedBox(uid)`: first `m_Boxes` entry with that UID; only if it is networked and not `m_IsBoxOccupied`: `RemoveBox`, `InventoryManager.RemoveBox`, `DetachDataBeforeDespawn`, master `PhotonNetwork.Destroy`, `SpawnLocalRackedBox(data)`. Its only game caller (`AddBox`, `ENABLE_DEMATERIALIZE_ON_PLACE`) is compiled out. **Hazard:** on a slot's only box, `RemoveBox` sets `BoxID = -1`, so `SpawnLocalRackedBox` gets `IDManager.BoxSO(-1)` = null and returns null: the box is lost on every client. Not yet confirmed in-game (SupermarketFixes uses it, opt-in).
-- Destroying or disabling a racked box cleans up its instanced snapshot (`Box.OnDisable` → `SubRenderer.Unregister`, `Box.OnDestroy` → `RemoveInstance`). Only a box that stays alive while outside `m_Boxes` leaves a ghost.
-- A player placing a box on a rack (`NetworkBoxInteraction.PlaceBoxToRack_RPC`) transfers the box's PhotonView back to the master client (asynchronously). Clerk rack targets are `RackSlotBoxTarget(slot)` and hold no box reference.
 
 **Multiplayer patterns.**
 - Host-only branches show in ISIL as calls to `PhotonNetwork.get_IsMasterClient` or `get_IsConnectedAndMaster`. Guest-only branches call `get_IsConnectedAndSlave`. Grep a method's ISIL for these to find where its logic runs.

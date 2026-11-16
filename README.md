@@ -5,23 +5,25 @@ BepInEx mods for **Supermarket Simulator** (Nokta Games, Steam app 2670630). The
 1. **Fix game bugs.** They mostly show up in online co-op. All bug fixes ship together in one mod, **SupermarketFixes**.
 2. **Add improvements.** Each improvement is its own small, standalone mod, so it can be published separately for other players.
 
-The work list lives in [`TODO.md`](TODO.md): the bugs and improvements requested, and what's done.
+What each mod does, and where it stands (open, in progress, reviewed, done), is tracked per request in [`TODO.md`](TODO.md).
 
 ## Mods
 
-| Mod | Folder | Kind | Status |
-|---|---|---|---|
-| Supermarket Fixes | [`SupermarketFixes/`](SupermarketFixes) | All bug fixes from `TODO` | In progress (Bugs #1–#3 and #5 written, awaiting in-game confirmation) |
-| Paint Can Capacity | [`PaintCanCapacity/`](PaintCanCapacity) | Improvement #2: paint cans last 2x (configurable) | Done (confirmed in-game) |
-| Self Checkout Speed | [`SelfCheckoutSpeed/`](SelfCheckoutSpeed) | Improvement #4: faster self checkout customers and employee help (configurable, follows the host) | Rework written (v1.1.0), awaiting in-game test |
-| Furniture Move Cancel | [`FurnitureMoveCancel/`](FurnitureMoveCancel) | Improvement #6: Escape puts moved furniture back | Done (confirmed in-game) |
-| Restocker Double Carry | [`RestockerDoubleCarry/`](RestockerDoubleCarry) | Improvement #5: level 10+ restockers fetch two boxes per trip | Written, awaiting in-game test |
-| Price Markup Keeper | [`PriceMarkupKeeper/`](PriceMarkupKeeper) | Improvement #1: prices keep the bulk markup when market prices change; new products start at it | Rework written (v1.1.0), awaiting in-game test |
-| Player Crouch | [`PlayerCrouch/`](PlayerCrouch) | Improvement #3: hold Ctrl to crouch, character model crouches (synced to modded players) | Fix written (v1.0.3: visible pose), awaiting in-game test |
-| Extra Computers | [`ExtraComputers/`](ExtraComputers) | Improvement #7: buyable extra computers, each with its own screen | Written, awaiting in-game test |
-| Grid Mode Default | [`GridModeDefault/`](GridModeDefault) | Improvement #8: grid mode is on by default when placing furniture | Done (confirmed in-game) |
-| Bulk Shelf Transfer | [`BulkShelfTransfer/`](BulkShelfTransfer) | Improvement #9: Shift+click moves a whole shelf slot into or out of a box, paper bag or crate | Written, awaiting in-game test |
-| Player Double Carry | [`PlayerDoubleCarry/`](PlayerDoubleCarry) | Improvement #10: carry two boxes; neither can be opened until one is put down | Written, awaiting in-game test |
+Each mod folder has its own `README.md` (what it does, its settings, who needs it in multiplayer). Mods that need development notes also have a `CLAUDE.md` for coding agents.
+
+| Mod | Request | What it does |
+|---|---|---|
+| [Supermarket Fixes](SupermarketFixes) | Bugs | All bug fixes: rack-move ghost boxes, ghost items in hands, stuck boxes, shelf placing |
+| [Paint Can Capacity](PaintCanCapacity) | Improvement #2 | Paint cans last longer (2x by default, configurable) |
+| [Price Markup Keeper](PriceMarkupKeeper) | Improvement #1 | Prices keep your global markup when market prices change; new products start at it |
+| [Player Crouch](PlayerCrouch) | Improvement #3 | Hold Ctrl to crouch; the character model crouches too (visible to modded players) |
+| [Self Checkout Speed](SelfCheckoutSpeed) | Improvement #4 | Faster self-checkout customers and employee help (configurable, follows the host) |
+| [Restocker Double Carry](RestockerDoubleCarry) | Improvement #5 | High-level restockers fetch two boxes per trip |
+| [Furniture Move Cancel](FurnitureMoveCancel) | Improvement #6 | Escape puts moved furniture back where it was |
+| [Extra Computers](ExtraComputers) | Improvement #7 | Buyable extra computers, each with its own screen |
+| [Grid Mode Default](GridModeDefault) | Improvement #8 | Grid mode is on by default when placing furniture |
+| [Bulk Shelf Transfer](BulkShelfTransfer) | Improvement #9 | Shift+click moves a whole shelf slot into or out of a box, paper bag or crate |
+| [Player Double Carry](PlayerDoubleCarry) | Improvement #10 | Carry two boxes; neither can be opened until one is put down |
 
 ## Game and platform
 
@@ -39,7 +41,7 @@ The work list lives in [`TODO.md`](TODO.md): the bugs and improvements requested
 3. Copy the mod's `.dll` (for example `SupermarketFixes.dll`) straight into `BepInEx/plugins/`, not into a subfolder.
 4. Settings are created on first launch in `BepInEx/config/<mod guid>.cfg`. They can also be edited in-game with BepInExConfigManager.
 
-**Multiplayer note:** some fixes only work if the machine where the bug happens runs the mod. For example, Bug #1 happens on the guest. Each mod's description says whether the host, the guest, or both need it.
+**Multiplayer note:** some mods only work if the machine where the problem happens runs the mod; for example, a bug seen on the guest is fixed on the guest. Each mod's README says whether the host, the guest, or both need it.
 
 ## Building
 
@@ -56,35 +58,29 @@ Projects compile against the game's own `BepInEx/core` and `BepInEx/interop` DLL
 
 ## Repository layout
 
-Each mod folder has its own `README.md`: what the mod does, its settings, who needs it in multiplayer, and how it works.
-
 ```
-README.md            this file
-CLAUDE.md            detailed instructions for coding agents
-TODO.md              bugs and improvements to work on (source of truth for tasks)
-SupermarketFixes/    bug-fix mod (one BepInEx plugin, one patch file per bug)
-PaintCanCapacity/    improvement mods, one folder each (see the Mods table)
-SelfCheckoutSpeed/
-FurnitureMoveCancel/
-PriceMarkupKeeper/
-RestockerDoubleCarry/
-ExtraComputers/
-PlayerCrouch/
-GridModeDefault/
+README.md                this file: project overview
+CLAUDE.md                instructions for coding agents: workflow, environment, tools, shared game knowledge
+TODO.md                  the requests (bugs and improvements) and the status of each
+REVIEW_ORCHESTRATOR.md   agent definition for the implement-and-review loop
+SupermarketFixes/        the bug-fix mod (one BepInEx plugin, one patch file per bug)
+<ModName>/               one folder per improvement mod (see the Mods table); each has
+                         README.md (required) and CLAUDE.md (optional), src/, and a csproj
 tools/
-  Il2CppDump/        dumps native code (disassembly + Cpp2IL ISIL) for chosen game types
-  isil.sh            prints one method's ISIL from a dump, condensed
-  callers.sh         lists every method that calls a given method
-  readconst.py       reads a float/int literal from GameAssembly.dll by address
-  bindings.py        lists the game's default input bindings
-decompiled/          generated reference dumps (git-ignored, regenerate after game updates)
-  Assembly-CSharp/   interop stubs decompiled with ilspycmd: class/field/method signatures
-  native-all/        ISIL dumps of every Assembly-CSharp type: what the methods actually do
+  Il2CppDump/            dumps native code (disassembly + Cpp2IL ISIL) for chosen game types
+  isil.sh                prints one method's ISIL from a dump, condensed
+  callers.sh             lists every method that calls a given method
+  modhash.sh             short hash of a mod's code, to detect changes after a review
+  readconst.py           reads a float/int literal from GameAssembly.dll by address
+  bindings.py            lists the game's default input bindings
+decompiled/              generated reference dumps (git-ignored, regenerate after game updates)
+  Assembly-CSharp/       interop stubs decompiled with ilspycmd: class/field/method signatures
+  native-all/            ISIL dumps of every Assembly-CSharp type: what the methods actually do
 ```
 
 ## Collecting logs (crash and bug reports)
 
-Logs are needed to debug crashes, especially guest crashes (TODO Bug #4). After a crash, **before relaunching**, copy these files. Relaunching overwrites `Player.log`, although the previous run is kept as `Player-prev.log`.
+Logs are needed to debug crashes, especially guest crashes. After a crash, **before relaunching**, copy these files. Relaunching overwrites `Player.log`, although the previous run is kept as `Player-prev.log`.
 
 | Machine | Unity player log | Crash dumps |
 |---|---|---|

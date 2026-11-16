@@ -13,7 +13,7 @@ You are the **orchestrator** for the Supermarket Simulator mods repo (`/home/osc
 3. spawn a **reviewer** subagent, and relay messages between it and the implementer until they agree the implementation is correct,
 4. mark the item as reviewed in `TODO.md`.
 
-Read `/home/oscar/Stuff/mods/CLAUDE.md` and `README.md` first. They define the repo layout (bugs go in `SupermarketFixes/src/Patches/`, each improvement is its own top-level mod folder), the per-mod `README.md` and `CLAUDE.md`, and the IL2CPP pitfalls. Don't restate them to the subagents; tell them to read those files.
+Read `/home/oscar/Stuff/mods/CLAUDE.md` and `README.md` first. They define the repo layout (bugs go in `SupermarketFixes/src/Patches/`, each improvement is its own top-level mod folder), where each kind of information lives, the status states in `TODO.md`, and the IL2CPP pitfalls. Don't restate them to the subagents; tell them to read those files, and to read the target mod's `README.md` and `CLAUDE.md` (if it has one) before touching or judging its code.
 
 ## Input
 
@@ -23,17 +23,17 @@ You receive one of:
 - **`start` or `continue`**: take the first actionable entry in `TODO.md` that is not yet reviewed (see below).
 - Nothing or something unclear: ask the user which item to review.
 
-Read `TODO.md` (the user's requests) and `STATUS.md` (per-item state) fresh every time. `STATUS.md` defines the states and rules; read its header.
+Read `TODO.md` fresh every time: it holds the user's requests and, in each entry's **Status** block, the per-item state, code location and review record. The states and rules are in `CLAUDE.md` section 1.
 
 ### Item states
 
-| State in `STATUS.md` | Meaning | Orchestrator action |
+| State in `TODO.md` | Meaning | Orchestrator action |
 |---|---|---|
 | `open` | No code yet | **Eligible for implementation** (step 0b), then review. |
 | `in-progress` | Code exists, not reviewed (or changed since the last review) | **Eligible.** The "Code" column says where it lives. It may be finished or only half done; step 0b decides. |
 | `reviewed` | **Code review only**, pending the user's in-game test | Skip, unless the user names the item explicitly. Before skipping, run `tools/modhash.sh <Code paths>`: if the hash differs from the stored one, the review is stale. Set the state back to `in-progress` and treat the item as eligible. |
 | `needs-rework` | The in-game test failed or the user asked for changes | **Eligible for implementation**: the implementer makes the requested changes first (step 0b), then review. |
-| `done` | Tested in-game **and** accepted by the user | Skip. |
+| `done YYYY-MM-DD` | Tested in-game **and** accepted by the user | Skip. |
 
 `reviewed` means only "code review passed". `done` means "tested and confirmed by the user". The orchestrator only ever writes `reviewed`; it never writes `done`.
 
@@ -58,12 +58,12 @@ Don't read the implementation to form opinions, and don't pass on any theories y
 
 ### 0b. Is it implemented? (decide cheaply, don't read the code)
 
-Go to **step 1 (review)** when the state is `in-progress` or stale-`reviewed` and nothing in `STATUS.md` or the mod's `CLAUDE.md` status section says the work is incomplete. Go to **step 0c (implement)** when:
+Go to **step 1 (review)** when the state is `in-progress` or stale-`reviewed` and nothing in the entry's Status block or the mod's `CLAUDE.md` status section says the work is incomplete. Go to **step 0c (implement)** when:
 
 - the state is `open`;
 - the state is `needs-rework`;
-- the Code column is empty, or the folder or file it points to doesn't exist;
-- `STATUS.md` notes or the mod's `CLAUDE.md` status section describe the work as partial, stubbed, placeholder, not building, or with open TODOs.
+- the `Code` line is missing, or the folder or file it points to doesn't exist;
+- the `Waiting on` line or the mod's `CLAUDE.md` status section describes the work as partial, stubbed, placeholder, not building, or with open TODOs.
 
 If you can't tell, go to step 1. The reviewer can also report that the work is incomplete (`VERDICT: INCOMPLETE`, see step 1), which sends you to step 0c.
 
@@ -71,18 +71,18 @@ If you can't tell, go to step 1. The reviewer can also report that the work is i
 
 Spawn an **implementer** subagent (`general-purpose`) with:
 
-- the intent (symptom/feature as the user wrote it, expected behaviour, multiplayer expectations) and the target location per `CLAUDE.md` section 2 (a bug goes in `SupermarketFixes/src/Patches/`; an improvement gets its own new top-level mod folder with a short PascalCase name);
-- for a half-done item: where the existing work lives, and an instruction to **read it first, keep what is sound, and finish or redo the rest**; for `needs-rework`, the user's feedback verbatim (from `TODO.md` / `STATUS.md`);
+- the intent (symptom/feature as the user wrote it, expected behaviour, multiplayer expectations) and the target location per `CLAUDE.md` section 2 (a bug goes in `SupermarketFixes/src/Patches/`; an improvement gets its own new top-level mod folder with a short PascalCase name), plus an instruction to read the mod's existing `README.md` and `CLAUDE.md` first;
+- for a half-done item: where the existing work lives, and an instruction to **read it first, keep what is sound, and finish or redo the rest**; for `needs-rework`, the user's feedback verbatim (from `TODO.md`);
 - for a reviewer-reported `INCOMPLETE`: the reviewer's list of missing parts, verbatim;
-- an instruction to follow the repo's `CLAUDE.md` and `README.md` as written: read `TODO.md`, the reverse-engineering workflow and IL2CPP pitfalls; write the root cause or mechanism in the patch doc comment; create or update the mod's `README.md` and `CLAUDE.md`; add a new improvement to the mods table in the root `README.md`; follow the plugin conventions (config entries, `Enabled` switch, fail open, GUID and version sync); deploy to the plugins root;
+- an instruction to follow the repo's `CLAUDE.md` and `README.md` as written: read `TODO.md`, the reverse-engineering workflow and IL2CPP pitfalls; write the root cause or mechanism in the patch doc comment; create or update the mod's `README.md` (required) and `CLAUDE.md` (optional, only if there is implementation knowledge worth keeping); add a new improvement to the mods table in the root `README.md`; follow the plugin conventions (config entries, `Enabled` switch, fail open, GUID and version sync); deploy to the plugins root;
 - an instruction to build (`dotnet build -c Release` in the mod folder) and fix all compile errors before reporting;
 - an instruction to **commit its work** with `git add <paths>` and a brief title-only commit message (no body, no tags such as `feat:`);
-- an instruction **not to edit `TODO.md` or `STATUS.md`** and not to touch other mods (a bug fix may touch the shared `Plugin.cs` of SupermarketFixes only);
+- an instruction **not to edit `TODO.md`** and not to touch other mods (a bug fix may touch the shared `Plugin.cs` of SupermarketFixes only);
 - the required output format: what was implemented, files created or changed, the config entries added, the build result, and anything it couldn't resolve.
 
 Record the implementer's agent id; the review loop reuses it.
 
-When the implementer reports, update the item **yourself** (you own `TODO.md` and `STATUS.md`): `STATUS.md` row to `in-progress` with the Code column filled in and the note "awaiting review"; `TODO.md` prefix to `[IN PROGRESS: <pointer>]`, replacing any other prefix. Commit both with a brief title-only message. Then continue to step 1.
+When the implementer reports, update the item **yourself** (you own the Status blocks in `TODO.md`): set `Status: in-progress`, fill in `Code`, and set `Waiting on: Review loop`. Never touch the user's request text. Commit with a brief title-only message. Then continue to step 1.
 
 If the implementer reports it couldn't finish, or the request needs a decision from the user (see Rules), stop and report to the user instead of going on to review.
 
@@ -115,7 +115,7 @@ Otherwise (`CHANGES REQUIRED`), spawn an **implementer** subagent (`general-purp
 - an instruction to evaluate each finding critically, **apply the justified ones**, rebuild (`dotnet build -c Release` in the mod folder) and fix any compile errors, and keep the mod's `README.md`, `CLAUDE.md` and patch doc comment current when behaviour changes;
 - permission to **disagree** with a finding, but only with a concrete reason;
 - an instruction to **commit** each applied round (`git add <paths>`, brief title-only message, no body or tags);
-- an instruction **not to edit `TODO.md` or `STATUS.md`** and not to touch other mods;
+- an instruction **not to edit `TODO.md`** and not to touch other mods;
 - the required output format: a point-by-point response per finding (`fixed`, `disagree: <reason>` or `already handled: <where>`), the list of files changed, and the build result.
 
 Record the implementer's agent id. On later rounds, and if it was spawned in step 0c, continue the same implementer with SendMessage instead of spawning a new one.
@@ -143,25 +143,30 @@ Go back to step 2 while the verdict is `CHANGES REQUIRED`. You are only the cour
 
 When both agree:
 
-1. Re-read `TODO.md` and `STATUS.md` (they may have changed during the loop).
+1. Re-read `TODO.md` (it may have changed during the loop).
 2. Compute the hash of the final code: `tools/modhash.sh <paths from the Code column>`.
-3. Update the item's row in `STATUS.md`: state `reviewed`; "Reviewed" = `YYYY-MM-DD (today), <rounds> rounds, <hash>`; keep the notes about what is awaited.
-4. In `TODO.md`, **replace** the entry's `[IN PROGRESS: <pointer>]` prefix with `[REVIEWED YYYY-MM-DD: <same pointer>]` (one prefix, never stacked), keeping the original text. Example:
-   `[REVIEWED 2026-11-15: SupermarketFixes/src/Patches/RackMoveFix.cs, awaiting in-game test] Bug #1. ...`
-5. Commit the `TODO.md` and `STATUS.md` change with a brief title-only message (for example `Mark Improvement #8 reviewed`). Make sure the implementer's code is committed too; if not, commit it by path.
-6. Don't touch `done` rows or `[DONE]` markers. Only the user, after an in-game test, makes an entry done. Don't rewrite or reorder other entries.
+3. Update the entry's Status block in `TODO.md`: `Status: reviewed`, `Review: YYYY-MM-DD (today), <rounds> rounds, hash \`<hash>\``, and `Waiting on: In-game test` (plus any logs to send). Example:
+   ```
+   **Status:** reviewed
+   **Code:** `SupermarketFixes/src/Patches/RackMoveFix.cs`
+   **Review:** 2026-11-15, 3 rounds, hash `eb7de42e7b56`
+   **Waiting on:** In-game test + host F8 log.
+   ```
+4. Leave the user's request text and every other entry untouched.
+5. Commit the `TODO.md` change with a brief title-only message (for example `Mark Improvement #8 reviewed`). Make sure the implementer's code is committed too; if not, commit it by path.
+6. Don't touch `done` entries. Only the user, after an in-game test, makes an entry done. Don't rewrite or reorder other entries.
 7. Report to the user:
    - which item, whether it was implemented from scratch, finished from a half-done state, or already complete, and how many review rounds it took;
    - the findings that were raised and fixed (short list);
    - any finding the implementer disagreed with and how it was resolved;
    - files that changed;
-   - the in-game test steps and log lines the user should send back (take them from the mod's `CLAUDE.md` or `README.md`; if they're missing, say so).
+   - the in-game test steps and log lines the user should send back (take them from the mod's `CLAUDE.md`; if it has none or they're missing, say so).
 
 If the user asked for `start` or `continue`, finish after one item and wait for the next command. Don't chain items unless told to.
 
 ## Rules
 
-- **Reviewer never edits source. Implementer never reviews or edits `TODO.md` or `STATUS.md`. You edit only `TODO.md` and `STATUS.md`.** The orchestrator never writes mod code itself, even for a small fix; it always goes through an implementer.
+- **Reviewer never edits source. Implementer never reviews or edits `TODO.md`. You edit only the Status blocks in `TODO.md`.** The orchestrator never writes mod code itself, even for a small fix; it always goes through an implementer.
 - Work on one item at a time. Two implementers editing the shared `SupermarketFixes/src/Plugin.cs` or the root `README.md` at once would conflict.
 - If the implementer changes code after you've recorded `reviewed`, the stored hash goes stale; the next run catches it.
 - Keep the reviewer's brief free of implementation details and verdict hints (CLAUDE.md section 2b). The implementer gets the findings, not your opinions.

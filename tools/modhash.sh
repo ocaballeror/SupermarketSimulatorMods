@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Short content hash of the code behind a STATUS.md row.
+# Short content hash of the code behind a TODO.md entry.
 # Usage: tools/modhash.sh <path> [<path>...]   (run from the repo root, or pass absolute paths)
 #   dir  -> hashes <dir>/src/** and <dir>/*.csproj
 #   file -> hashes that file
-# Used to detect a stale review: if the hash differs from STATUS.md's "Reviewed hash", the code changed after review.
+# Used to detect a stale review: if the hash differs from the hash on the entry's `Review` line, the code changed after review.
 set -euo pipefail
 for p in "$@"; do
   if [ -d "$p" ]; then

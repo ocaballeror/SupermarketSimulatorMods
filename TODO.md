@@ -1,8 +1,13 @@
+# TODO
+
+The requests below are written by the user. Agents only maintain each entry's **Status** block (states and rules: `CLAUDE.md`, section 1).
+
 # Bug Reports
 
 ## Bug #1: Floating and Duplicated Boxes When Rearranging Racks
 
-**Status:** DONE
+**Status:** done  
+**Code:** `SupermarketFixes/src/Patches/RackMoveFix.cs`
 
 When rearranging racks (not shelves), some of the boxes already in the rack remain floating at their original location instead of disappearing and reappearing with the rack at its new location.
 
@@ -14,9 +19,10 @@ This issue mostly affects the other computer (the guest, not the host) during on
 
 ## Bug #2: Ghost Item Remaining in Player's Hands
 
-**Status:** REVIEWED — Awaiting in-game test and logs  
-**Last reviewed:** 2026-11-15  
-**File:** `SupermarketFixes/src/Patches/GhostHeldItemFix.cs`
+**Status:** reviewed  
+**Code:** `SupermarketFixes/src/Patches/GhostHeldItemFix.cs`  
+**Review:** 2026-11-15, 1 round, hash `d48d7436015a`  
+**Waiting on:** In-game test + logs, including the host's `[BoxDiag] DropBox_RPC` lines.
 
 Sometimes, a player holds an item and then puts it down on the floor, but a ghost image of the item remains in their hands.
 
@@ -26,9 +32,10 @@ This does not interfere with gameplay, but it blocks the player's view and looks
 
 ## Bug #3: Player Gets Stuck When Buying Boxes from Wholesale Stores
 
-**Status:** REVIEWED — Awaiting in-game test and logs  
-**Last reviewed:** 2026-11-15  
-**File:** `SupermarketFixes/src/Patches/StuckBoxFix.cs`
+**Status:** reviewed  
+**Code:** `SupermarketFixes/src/Patches/StuckBoxFix.cs`  
+**Review:** 2026-11-15, 1 round, hash `2858032d1b39`  
+**Waiting on:** In-game test + logs.
 
 When buying boxes from wholesale stores, sometimes the box remains stationary at the location where it was purchased.
 
@@ -46,7 +53,8 @@ This seems to happen especially often with ice cream cones purchased from the ge
 
 ## Bug #4: Random Multiplayer Crashes for the Guest Player
 
-**Status:** OPEN — Guest crash logs analysed 2026-11-15 (no cause in them); need the Windows crash report folder
+**Status:** open  
+**Waiting on:** The guest's Windows crash folder and Event Viewer entry after the next crash (details in `SupermarketFixes/CLAUDE.md`, section Bug #4).
 
 The game randomly crashes for the other player (the guest, not the host) during multiplayer sessions.
 
@@ -54,18 +62,12 @@ There is currently no additional information available, as no specific cause or 
 
 **Question:** What can I do to record logs or other diagnostic information that would help debug this issue?
 
-### Crash logs from 2026-11-15 (guest, Windows, in `bug-4/`)
-
-- The crash happened about 55 minutes into the session (t≈3270 s), about 2 s after the guest closed the computer and picked up a box. `Player.log` just stops: no exception, no Unity crash handler output. The host noticed the guest gone about 10 s later (a Photon timeout), so the process died or froze outright.
-- No mod error precedes it. The guest's `LogOutput.log` (88 MB) is almost entirely BepInExConfigManager failing every frame (UniverseLib missing: 290,000 error lines).
-- Next data to collect from the guest after the next crash:
-  - The newest folder in `%LOCALAPPDATA%\Temp\Nokta Games\Supermarket Simulator\Crashes\` (`crash.dmp`, `error.log`).
-  - Windows Event Viewer → Windows Logs → Application: the "Application Error" entry for `Supermarket Simulator.exe` (it names the faulting module, e.g. `GameAssembly.dll`, `UnityPlayer.dll`, or `nvwgf2umx.dll` for the NVIDIA driver).
-- Remove `BepInExConfigManager` from the guest (or install UniverseLib for it) to rule out the per-frame exception spam.
-
 ## Bug #5: Unable to Put Products on Shelves Without an Existing Label
 
-**Status:** NEEDS REWORK — Still happening after the fix (in-game test 2026-11-15)
+**Status:** needs-rework  
+**Code:** `SupermarketFixes/src/Patches/BoxPlaceFix.cs`  
+**Review:** 2026-11-15, 1 round, hash `5066b4084b02` (before the rework)  
+**Waiting on:** Still happening after the fix (in-game test 2026-11-15).
 
 Sometimes, players cannot put items from a crate onto a new shelf that does not yet have a label for that product.
 
@@ -80,7 +82,8 @@ The current workaround is:
 
 ## Bug #6: Boxes Sometimes Remain Floating When Removing Boxes from a Stack
 
-**Status:** OPEN — Still happening (in-game test 2026-11-15)
+**Status:** open  
+**Waiting on:** Still happening (in-game test 2026-11-15).
 
 When there is a pile of boxes, such as after placing a large online order, sometimes removing the box directly underneath another box does not cause the upper box to fall.
 
@@ -92,7 +95,7 @@ This does not seem to be related to Bug #1.
 
 ## Bug #7: Cleaning Lady Is Visually Misaligned When Cleaning Stains
 
-**Status:** OPEN
+**Status:** open
 
 The cleaning lady successfully cleans stains on the floor, but she is not visually aligned with the stain.
 
@@ -100,7 +103,7 @@ It looks as though she is cleaning the wrong section of the floor, even though t
 
 ## Bug #8: Cleaning Lady Ignores Collisions with Shelves and Walls
 
-**Status:** OPEN
+**Status:** open
 
 Possibly related to Bug #7.
 
@@ -112,7 +115,7 @@ Overlapping with other characters is acceptable, since the game mostly ignores c
 
 ## Bug #9: Delivered Orders Remain in the Other Player's Pending Orders
 
-**Status:** OPEN
+**Status:** open
 
 In multiplayer, when a player gives an online order bag to the courier, the order disappears from the active order count on that player's screen, but not on the other player's screen.
 
@@ -128,8 +131,9 @@ Currently, orders are only removed when they have been delivered to the customer
 
 ## Improvement #1: Make Global Pricing Settings Persist Across Days
 
-**Status:** IN PROGRESS — Rework v1.1.1 in `PriceMarkupKeeper/`, needs the review loop  
-**First completed:** 2026-11-15
+**Status:** in-progress  
+**Code:** `PriceMarkupKeeper/`  
+**Waiting on:** Review loop (rework v1.1.1), then in-game test.
 
 Make prices respect the global settings configured through the pricing tab on the computer.
 
@@ -143,15 +147,16 @@ Auto pricing should also work for newly unlocked products. It should be applied 
 
 ## Improvement #2: Make Paint Cans Last Twice as Long
 
-**Status:** DONE  
-**Completed:** 2026-11-14
+**Status:** done 2026-11-14  
+**Code:** `PaintCanCapacity/`
 
 Make paint cans last twice as long as they currently do.
 
 ## Improvement #3: Add Player Crouching
 
-**Status:** IN PROGRESS — Fix v1.0.3 in `PlayerCrouch/src/CrouchPose.cs`, needs the review loop  
-**First completed:** 2026-11-15
+**Status:** in-progress  
+**Code:** `PlayerCrouch/`  
+**Waiting on:** Review loop (v1.0.3, visible crouch pose), then in-game test.
 
 Allow players to crouch by pressing `Ctrl`.
 
@@ -163,8 +168,9 @@ The mod works, but there is no animation for the player crouching, so it does no
 
 ## Improvement #4: Make Self-Checkout Machines Faster
 
-**Status:** IN PROGRESS — Rework v1.1.1 in `SelfCheckoutSpeed/`, needs the review loop  
-**First completed:** 2026-11-14
+**Status:** in-progress  
+**Code:** `SelfCheckoutSpeed/`  
+**Waiting on:** Review loop (rework v1.1.1), then in-game test.
 
 Make customers using self-checkout machines 2x faster.
 
@@ -180,9 +186,9 @@ Allow values up to `10x`.
 
 ## Improvement #5: Allow Level 10 Restockers to Carry Two Boxes
 
-**Status:** IN PROGRESS — Fix v1.1.3 in `RestockerDoubleCarry/src/DoubleCarry.cs`, needs the review loop  
-**Last reviewed:** 2026-11-15  
-**Project:** `RestockerDoubleCarry/`
+**Status:** in-progress  
+**Code:** `RestockerDoubleCarry/`  
+**Waiting on:** Review loop (v1.1.3), then in-game test.
 
 Make level 10 restockers capable of carrying two product boxes at a time.
 
@@ -228,8 +234,8 @@ When restockers are carrying two boxes and they drop the bottom one, the top one
 
 ## Improvement #6: Allow Furniture to Be Returned to Its Original Position
 
-**Status:** DONE  
-**Completed:** 2026-11-15
+**Status:** done 2026-11-15  
+**Code:** `FurnitureMoveCancel/`
 
 When rearranging furniture (shelves, fridges, freezers, racks, etc.), allow players to press `Esc` to return the furniture to its original position before it was picked up.
 
@@ -241,9 +247,9 @@ Also, add this functionality to the list of help keys displayed on the side of t
 
 ## Improvement #7: Add Additional Computers as Placeable Furniture
 
-**Status:** IN PROGRESS  
-**Project:** `ExtraComputers/`  
-**Current task:** Fix prefab build failure and icon following in-game testing.
+**Status:** in-progress  
+**Code:** `ExtraComputers/`  
+**Waiting on:** Review loop (v1.2.1), then in-game test (steps in the mod's `CLAUDE.md`).
 
 Create a new furniture type: the computer.
 
@@ -276,16 +282,16 @@ However, if implementing synchronization is straightforward, or even simpler tha
 
 ## Improvement #8: Make Grid Mode the Default for Furniture Placement
 
-**Status:** DONE  
-**Completed:** 2026-11-15
+**Status:** done 2026-11-15  
+**Code:** `GridModeDefault/`
 
 Make grid mode the default placement mode when placing furniture of any kind.
 
 ## Improvement #9: Add Bulk Item Transfer Between Shelves and Containers
 
-**Status:** IN PROGRESS — Rework v0.2.0 in `BulkShelfTransfer/src/BagBulk.cs`, needs the review loop  
-**Last reviewed:** 2026-11-15  
-**Project:** `BulkShelfTransfer/`
+**Status:** in-progress  
+**Code:** `BulkShelfTransfer/`  
+**Waiting on:** Review loop (rework v0.2.0), then in-game test.
 
 Allow players to transfer multiple products at once using `Shift + Right Click`.
 
@@ -338,9 +344,10 @@ Shift-clicking should work with paper bags for delivery too.
 
 ## Improvement #10: Allow Players to Carry Two Boxes at Once
 
-**Status:** NEEDS REWORK — See the rework request below (2026-11-15)  
-**Last reviewed:** 2026-11-15  
-**Project:** `PlayerDoubleCarry/`
+**Status:** needs-rework  
+**Code:** `PlayerDoubleCarry/`  
+**Review:** 2026-11-15, 1 round, hash `8e81b678aa84` (before the rework)  
+**Waiting on:** Rework requested 2026-11-15 (buying a second box at the wholesale store).
 
 Allow players to pick up and carry two boxes at a time.
 
@@ -358,7 +365,7 @@ It should also work at the wholesale store. When the player is holding a box and
 
 ## Improvement #11: More clear tags
 
-**Status:** NEW
+**Status:** open
 
 Features:
 - Make the tags on boxes that show a small icon of what's inside 2x bigger. This number is configurable in the settings.
@@ -367,13 +374,13 @@ Features:
 
 ## Improvement #12: Auto courier load
 
-**Status:** NEW
+**Status:** open
 
 When the courier comes back from a delivery, he scans a small area around and including his regular parking space, and if there are any delivery bags that are closed and tagged with the customer's name whose delivery is active at the moment, he immediately takes it and loads it in his trunk. This works for up to 3 bags at a time (or whatever his trunk limit happens to be). if the bags he collected cover all the active online orders at the moment, or if one of those deliveries has less than one minute left, he leaves for delivery, as if the player went to him and pressed E to send him.
 
 ## Improvement #13: Highlight same products
 
-**Status:** NEW
+**Status:** open
 
 Currently, hen holding a box of products, the game highlights boxes of the same type that are in the storage racks, with a green outline. Do the same for shelves/fridges/freezers that are labeled with this type of product, even if they're empty at the moment. Unlike the storage, where the boxes are highlighted, mark the whole shelf/fridge/freezer in this case, since the shelves could all be empty but we still want to find where those products would go, based on their labels.
 
@@ -384,6 +391,8 @@ stock of each shelf can change after the player picked up the box/bag. The highl
 needs to be updated to match
 
 ## Improvement #14: Pack up products
+
+**Status:** open
 
 Right clicking on a product that is in a shelf/fridge/freezer currently does nothing, as
 it requires the user to use the crate tool or a paper bag to pack products in a specific
@@ -397,7 +406,7 @@ the wrong box type, so make sure to spawn the right one.
 
 ## Improvement #15: Employee clothes
 
-**Status:** NEW
+**Status:** open
 
 Create a new entry in the customization menu from the game's computer that allows the
 player to pick the color scheme of the clothes of the employees. It costs $500 to access
