@@ -259,9 +259,10 @@ Also, add this functionality to the list of help keys displayed on the side of t
 
 ## Improvement #7: Add Additional Computers as Placeable Furniture
 
-**Status:** in-progress  
+**Status:** reviewed  
 **Code:** `ExtraComputers/`  
-**Waiting on:** Review loop (v1.3.0), then in-game test (steps in the mod's `CLAUDE.md`).
+**Review:** 2026-11-16, 2 rounds, hash `0aaf4c52c65f`  
+**Waiting on:** In-game test of v1.3.0 (steps in the mod's `CLAUDE.md`); send the `[ExtraComputers]` lines.
 
 Create a new furniture type: the computer.
 
