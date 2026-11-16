@@ -213,6 +213,7 @@ Game systems that only one mod touches are documented next to that mod, not in s
 | Moving furniture and putting it back | `FurnitureMoveCancel/CLAUDE.md` |
 | Shelf slots, crates and paper bags, product fly animations | `BulkShelfTransfer/CLAUDE.md` |
 | Carrying two boxes (player) | `PlayerDoubleCarry/CLAUDE.md` |
+| Janitor (cleaning lady): state machine, stains, mop, movement | `SupermarketFixes/CLAUDE.md` (Game reference: janitor) |
 
 Boxes, holding objects, interactions, input and networking are used by several mods, so they stay in section 8.
 

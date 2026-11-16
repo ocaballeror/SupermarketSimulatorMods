@@ -23,6 +23,8 @@ public class DiagnosticsBehaviour : MonoBehaviour
 
         try { Patches.FloatingBoxFix.Tick(now); }
         catch (Exception e) { Plugin.Logger.LogError($"[FloatBox] Tick failed: {e}"); }
+        try { Patches.JanitorCleanAlignFix.Tick(now); }
+        catch (Exception e) { Plugin.Logger.LogError($"[JanitorAlign] Tick failed: {e}"); }
 
         var kb = Keyboard.current;
         if (kb == null) return;
