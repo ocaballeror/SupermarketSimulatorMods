@@ -5,6 +5,7 @@ Improvement #9 (`TODO`). Modifier (LeftShift) + Take/Use moves every product bet
 
 ## Status
 
+- v0.2.0 (rework after the 2026-11-15 session, not yet tested in-game): the user reported that Shift-click didn't work with online-order paper bags (no `[Bulk] bag` line in either log, so `BagBulk.TryStart` never started a burst; the failing condition is unknown). Now every refusal while the modifier is held is logged (`bag take: not started (<reason>)`). New: a take burst for a bag packed for an active order is capped at what the order still needs (`BagBulk.ActiveOrder`: bag tag, else `OrderNotebookContainer.CurrentOrder`; excluded when `CourierManager.TryGetClaimStatus` or online `NetworkOrderManager.IsBeingWorkedOn(id, ownUserId)` says someone else handles it, the same checks as the notebook's "worked on by" label). Order without that product / already enough → plain click. No active order → fill the bag as before.
 - v0.1.1 written and builds; review round 1 applied (see below). **Not tested in-game.** Nothing about the runtime behaviour is confirmed yet.
 - Open questions to settle from the first test logs (see "In-game test"):
   1. Does the tween speed-up catch anything? (`N animation(s) sped up` in the `[Bulk] ... stopped` lines.
@@ -36,6 +37,7 @@ Improvement #9 (`TODO`). Modifier (LeftShift) + Take/Use moves every product bet
   the game's own `CheckTakeProductFromSlot` + `TryTakeProductFromSlot` / `CheckPlaceProductToSlot` +
   `TryPlaceProductToDisplay(Vector3)`, one per `SecondsBetweenItems`. Capped up front at
   min(available, room) from local state.
+- **Bag order cap:** `Burst.Limit` = order quantity of the slot's product (`OrderListData.GetOrderDataOfId(pid).ProductCount`) minus that product's count in `bag.m_SortedProducts`; -1 without an active order.
 - **Bag steps** (`OnlineOrderInteraction.Update` prefix): `OnlineOrderService.TryTakeProductIntoBag(slot, bag,
   m_MaxBagItemCount, pos, m_TakeProductBroadcast)` until status != Success / `PlaceProductToDisplay()` until the
   bag count stops changing.
@@ -95,6 +97,7 @@ Applied:
    Shift+left click on an empty or same-product slot -> slot fills until full/box empty. Try a wrong product
    (warning, nothing moves) and a full box (game's warning).
 2. Same with a paper bag (online order) and with the crate.
+2b. Paper bag with an order selected in the notebook (or a tagged bag) that needs, say, 3 of a product: Shift + right click on a slot with 10 takes exactly 3 (`... order #N ... needs 3 more`, `stopped (order has what it needs)`). Again on the same slot: plain single take (`not started (order #N already has enough ...)`). A product not in the order: plain take. An order being packed by the other player or claimed by a courier: fills the bag (`no active order (order #N is being packed by ...)`). If nothing happens at all, send the `bag ...: not started (...)` lines.
 3. Multiplayer, guest with the mod, host without: box take/place, check counts on both screens (no overfilled box).
    Right after a guest burst, try to drop/throw the box and to click again: should be ignored briefly
    (`waiting for the host ... ignored` lines), then work.

@@ -13,7 +13,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.bulkshelftransfer";
     public const string Name = "Bulk Shelf Transfer";
-    public const string Version = "0.1.1";
+    public const string Version = "0.2.0";
 
     internal static ManualLogSource Logger;
 

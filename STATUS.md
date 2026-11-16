@@ -39,7 +39,7 @@ Rules:
 | Improvement #6 | done 2026-11-15 | `FurnitureMoveCancel/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
 | Improvement #7 | in-progress | `ExtraComputers/` | — | v1.2.1 (review round 4 applied). v1.2.0 after the first in-game test (2026-11-15): the furniture prefab failed to build (no donor furniture), so the box opened into nothing and the icon was the drawn placeholder. Rebuilt from a copy of the store computer; boxes refuse to open if the build still fails. Needs review, then in-game test per the mod's CLAUDE.md |
 | Improvement #8 | done 2026-11-15 | `GridModeDefault/` | — | Confirmed in-game; v1.0.2 defaults `VerboseLogging` to off |
-| Improvement #9 | needs-rework | `BulkShelfTransfer/` | 2026-11-15, 1 round, 45be1793f004 | Rework 2026-11-15: Shift-click with online-order paper bags |
+| Improvement #9 | in-progress | `BulkShelfTransfer/` | — | Rework v0.2.0: paper-bag take capped at what the active order needs, refusal diagnostics; needs the review loop |
 | Improvement #10 | needs-rework | `PlayerDoubleCarry/` | 2026-11-15, 1 round, 8e81b678aa84 | Rework 2026-11-15: buy a second box at the wholesale store while holding one |
 | Improvement #11 | open | — | — | |
 | Improvement #12 | open | — | — | |

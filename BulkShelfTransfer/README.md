@@ -13,6 +13,8 @@ It works with:
 | Online-order paper bag | yes | yes (only the products that match the slot) |
 | Multi-product crate | yes | yes (only the products that match the slot) |
 
+**Paper bags for online orders:** when you are packing a bag for an order (the bag's tag, or the order selected in your notebook) that no other player and no courier is already handling, Shift + right click only takes as many of that product as the order still needs. If the order doesn't contain that product, or already has enough of it in the bag, the click works as a normal single take. Without such an order, it fills the bag as far as it can.
+
 The game's own rules apply unchanged: a box only takes one kind of product and only if it is the right box size, a shelf slot only takes one kind of product of the right display type (an empty slot is relabelled as usual), and the box, bag, crate and slot capacities are respected. If the game refuses (wrong product, wrong box size, full), you get the game's usual warning and nothing moves.
 
 The products still fly between the shelf and the container with the game's normal animation, only much faster (configurable), so it takes a fraction of a second.

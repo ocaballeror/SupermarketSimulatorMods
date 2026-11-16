@@ -283,7 +283,7 @@ Make grid mode the default placement mode when placing furniture of any kind.
 
 ## Improvement #9: Add Bulk Item Transfer Between Shelves and Containers
 
-**Status:** NEEDS REWORK — See the rework request below (2026-11-15)  
+**Status:** IN PROGRESS — Rework v0.2.0 in `BulkShelfTransfer/src/BagBulk.cs`, needs the review loop  
 **Last reviewed:** 2026-11-15  
 **Project:** `BulkShelfTransfer/`
 

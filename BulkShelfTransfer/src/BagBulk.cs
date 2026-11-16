@@ -20,6 +20,17 @@
  * of latching the hold flag; the OnlineOrderInteraction.Update prefix then calls the same game methods
  * once per step until they stop moving products (bag full, slot empty, slot full, no matching product).
  * Each step runs inside TweenBoost, so the game's fly animation is just played faster.
+ *
+ * Order cap (rework 2026-11-15): when the bag is being packed for an active delivery, a take burst only
+ * takes what the order still needs of that product (order quantity minus what the bag already holds);
+ * otherwise as much as the bag can carry. "Active delivery" (the user's definition): there is an order,
+ * and nobody else is handling it. The order is the bag's own tag (OrderPaperBag.m_OrderData, once a tag is
+ * attached) or else the order selected in the player's notebook (OrderNotebookContainer.CurrentOrder).
+ * "Handled by someone else" uses the same checks as the notebook's "worked on by" label
+ * (OrderNotebook.UpdateWorkedStatus): CourierManager.TryGetClaimStatus (a courier claimed it / is out
+ * delivering it) and, online, NetworkOrderManager.IsBeingWorkedOn(id, ownUserId, out by) (another
+ * player). An active order that doesn't contain the slot's product, or already has enough of it in the
+ * bag, gets no burst: the click goes to the game.
  */
 using System;
 using HarmonyLib;
@@ -39,6 +50,7 @@ internal static class BagBulk
         public int Moved;
         public float NextStep;
         public float Started;
+        public int Limit = -1;   // max products to take; -1 = as many as the bag holds
     }
 
     private static Burst _active;
@@ -50,34 +62,132 @@ internal static class BagBulk
     {
         if (!Plugin.PaperBags.Value || !(take ? Plugin.BulkTake.Value : Plugin.BulkPlace.Value)) return false;
         if (!Bulk.ModifierHeld()) return false;
-        if (!Bulk.IsLocal(oi.PlayerInstance)) return false;
+        // From here on the player asked for a bulk move: say why one doesn't start (the first in-game test
+        // showed no bag burst at all and no clue why).
+        string why = Refusal(oi, take);
+        if (why != null) { Bulk.Info($"bag {(take ? "take" : "place")}: not started ({why})"); return false; }
 
         var bag = oi.m_CurrentOrderPaperBag;
         var slot = oi.m_CurrentDisplaySlot;
-        if (bag == null || slot == null || !bag.m_IsOpen) return false;
-        // Leave every other use of the click to the game.
-        if (oi.m_CurrentCourier != null || oi.m_CurrentCustomer != null || oi.m_CurrentTrashBin != null) return false;
-        if (oi.m_TargetPlacementArea != null || oi.m_CurrentPlacementArea != null || oi.m_PlacingMode) return false;
-        if (NoktaSingleton<WeaponWheelController>.HasInstance)
-        {
-            var wheel = NoktaSingleton<WeaponWheelController>.Instance;
-            if (wheel != null && (wheel.IsOpen || wheel.IsWheelInteraction)) return false;
-        }
-
+        int limit = -1;
+        string orderNote = "";
         if (take)
         {
-            if (oi.m_holdingUse || oi.m_CurrentProduct != null || !slot.HasProduct) return false;
-            if (bag.ProductCount >= oi.m_MaxBagItemCount) return false; // the game shows its "bag full" warning
-        }
-        else
-        {
-            if (oi.m_holdingTake || !bag.HasProduct) return false;
+            int pid = slot.ProductID;
+            var order = ActiveOrder(oi, bag, out string orderWhy);
+            if (order != null)
+            {
+                int wanted = 0;
+                var od = order.GetOrderDataOfId(pid);
+                if (od != null) wanted = od.ProductCount;
+                limit = Math.Max(0, wanted - CountInBag(bag, pid));
+                orderNote = $", order #{order.ID} ({order.CustomerName}) needs {limit} more of product {pid}";
+                if (limit == 0)
+                {
+                    Bulk.Info($"bag take: not started (order #{order.ID} {(wanted == 0 ? "doesn't contain" : "already has enough of")} product {pid}); plain click");
+                    return false;
+                }
+            }
+            else orderNote = $", no active order ({orderWhy}): filling the bag";
         }
 
         TweenBoost.Boosted = 0;
-        _active = new Burst { Oi = oi, Bag = bag, Slot = slot, Take = take, Started = Time.time };
-        Bulk.Info($"bag {(take ? "take" : "place")}: start, bag {bag.ProductCount}/{oi.m_MaxBagItemCount}, slot {slot.ProductCount}");
+        _active = new Burst { Oi = oi, Bag = bag, Slot = slot, Take = take, Started = Time.time, Limit = limit };
+        Bulk.Info($"bag {(take ? "take" : "place")}: start, bag {bag.ProductCount}/{oi.m_MaxBagItemCount}, slot {slot.ProductCount}{orderNote}");
         return true;
+    }
+
+    /// <summary>Why a burst can't start (null = it can).</summary>
+    private static string Refusal(OnlineOrderInteraction oi, bool take)
+    {
+        if (!Bulk.IsLocal(oi.PlayerInstance)) return "not the local player";
+        var bag = oi.m_CurrentOrderPaperBag;
+        var slot = oi.m_CurrentDisplaySlot;
+        if (bag == null) return "no paper bag in hand";
+        if (slot == null) return "not looking at a shelf slot";
+        if (!bag.m_IsOpen) return "bag is closed";
+        // Leave every other use of the click to the game.
+        if (oi.m_CurrentCourier != null) return "looking at a courier";
+        if (oi.m_CurrentCustomer != null) return "looking at a customer";
+        if (oi.m_CurrentTrashBin != null) return "looking at a trash bin";
+        if (oi.m_TargetPlacementArea != null || oi.m_CurrentPlacementArea != null) return "looking at a placement area";
+        if (oi.m_PlacingMode) return "placing mode";
+        if (NoktaSingleton<WeaponWheelController>.HasInstance)
+        {
+            var wheel = NoktaSingleton<WeaponWheelController>.Instance;
+            if (wheel != null && (wheel.IsOpen || wheel.IsWheelInteraction)) return "tool wheel open";
+        }
+        if (take)
+        {
+            if (oi.m_holdingUse) return "other button held";
+            if (oi.m_CurrentProduct != null) return "looking at a loose product";
+            if (!slot.HasProduct) return "slot is empty";
+            if (bag.ProductCount >= oi.m_MaxBagItemCount) return "bag is full"; // the game shows its warning
+        }
+        else
+        {
+            if (oi.m_holdingTake) return "other button held";
+            if (!bag.HasProduct) return "bag is empty";
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The order the bag is being packed for, if nobody else is handling it: the bag's attached tag, else the
+    /// order selected in the player's notebook. Null when there is none (reason in <paramref name="why"/>).
+    /// </summary>
+    private static OrderListData ActiveOrder(OnlineOrderInteraction oi, OrderPaperBag bag, out string why)
+    {
+        why = null;
+        OrderListData order = null;
+        try { if (bag.IsTagAttached) order = bag.m_OrderData; } catch (Exception) { }
+        if (!IsRealOrder(order))
+        {
+            order = null;
+            try
+            {
+                var nb = oi.m_OrderNotebookContainer;
+                if (nb != null && !nb.IsEmpty) order = nb.CurrentOrder;
+            }
+            catch (Exception) { order = null; }
+        }
+        if (!IsRealOrder(order)) { why = "no order selected"; return null; }
+        if (order.IsExpired) { why = $"order #{order.ID} expired"; return null; }
+
+        try
+        {
+            if (NoktaSingleton<SupermarketSimulator.Courier.CourierManager>.HasInstance)
+            {
+                var cm = NoktaSingleton<SupermarketSimulator.Courier.CourierManager>.Instance;
+                if (cm != null && cm.TryGetClaimStatus(order.ID, out string courier, out bool _))
+                { why = $"order #{order.ID} is handled by courier {courier}"; return null; }
+            }
+        }
+        catch (Exception) { }
+        try
+        {
+            if (Photon.Pun.PhotonNetwork.IsConnected && NoktaSingletonPunCallbacks<NetworkOrderManager>.HasInstance)
+            {
+                var nom = NoktaSingletonPunCallbacks<NetworkOrderManager>.Instance;
+                string me = oi.PlayerInstance != null ? oi.PlayerInstance.UserId : null;
+                if (nom != null && nom.IsBeingWorkedOn(order.ID, me, out string by))
+                { why = $"order #{order.ID} is being packed by {by}"; return null; }
+            }
+        }
+        catch (Exception) { }
+        return order;
+    }
+
+    private static bool IsRealOrder(OrderListData o) =>
+        o != null && o.ID > 0 && o.OrderItems != null && o.OrderItems.Count > 0;
+
+    private static int CountInBag(OrderPaperBag bag, int pid)
+    {
+        int n = 0;
+        var list = bag.m_SortedProducts;
+        for (int i = 0; list != null && i < list.Count; i++)
+            if (list[i] != null && list[i].ProductID == pid) n++;
+        return n;
     }
 
     internal static void Tick(OnlineOrderInteraction oi)
@@ -94,6 +204,7 @@ internal static class BagBulk
         else if (!Bulk.Same(slot, b.Slot)) stop = "looked away from the slot";
         else if (!bag.m_IsOpen) stop = "bag closed";
         else if (b.Moved >= MaxSteps || now - b.Started > 30f) stop = "limit";
+        else if (b.Limit >= 0 && b.Moved >= b.Limit) stop = "order has what it needs";
         else if (b.Take ? oi.m_holdingUse : oi.m_holdingTake) stop = "other button held";
         // Quiet end checks; the first step goes to the game unchecked so a refusal shows its warning.
         else if (b.Moved > 0 && (b.Take ? !slot.HasProduct || bag.ProductCount >= oi.m_MaxBagItemCount
