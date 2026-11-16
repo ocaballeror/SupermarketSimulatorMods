@@ -107,7 +107,9 @@ It looks as though she is cleaning the wrong section of the floor, even though t
 
 ## Bug #8: Cleaning Lady Ignores Collisions with Shelves and Walls
 
-**Status:** open
+**Status:** in-progress  
+**Code:** `SupermarketFixes/src/Patches/JanitorCleanAlignFix.cs` (shared with Bug #7)  
+**Waiting on:** Review loop of Bug #7 (v0.10.0 covers both).
 
 Possibly related to Bug #7.
 
