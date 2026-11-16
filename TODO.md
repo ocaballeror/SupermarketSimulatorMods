@@ -54,6 +54,15 @@ There is currently no additional information available, as no specific cause or 
 
 **Question:** What can I do to record logs or other diagnostic information that would help debug this issue?
 
+### Crash logs from 2026-11-15 (guest, Windows, in `bug-4/`)
+
+- The crash happened about 55 minutes into the session (t≈3270 s), about 2 s after the guest closed the computer and picked up a box. `Player.log` just stops: no exception, no Unity crash handler output. The host noticed the guest gone about 10 s later (a Photon timeout), so the process died or froze outright.
+- No mod error precedes it. The guest's `LogOutput.log` (88 MB) is almost entirely BepInExConfigManager failing every frame (UniverseLib missing: 290,000 error lines).
+- Next data to collect from the guest after the next crash:
+  - The newest folder in `%LOCALAPPDATA%\Temp\Nokta Games\Supermarket Simulator\Crashes\` (`crash.dmp`, `error.log`).
+  - Windows Event Viewer → Windows Logs → Application: the "Application Error" entry for `Supermarket Simulator.exe` (it names the faulting module, e.g. `GameAssembly.dll`, `UnityPlayer.dll`, or `nvwgf2umx.dll` for the NVIDIA driver).
+- Remove `BepInExConfigManager` from the guest (or install UniverseLib for it) to rule out the per-frame exception spam.
+
 ## Bug #5: Unable to Put Products on Shelves Without an Existing Label
 
 **Status:** NEEDS REWORK — Still happening after the fix (in-game test 2026-11-15)
@@ -119,7 +128,7 @@ Currently, orders are only removed when they have been delivered to the customer
 
 ## Improvement #1: Make Global Pricing Settings Persist Across Days
 
-**Status:** REVIEWED 2026-11-15 — Rework v1.1.1 in `PriceMarkupKeeper/`, awaiting in-game test  
+**Status:** IN PROGRESS — Rework v1.1.1 in `PriceMarkupKeeper/`, needs the review loop  
 **First completed:** 2026-11-15
 
 Make prices respect the global settings configured through the pricing tab on the computer.
@@ -141,7 +150,7 @@ Make paint cans last twice as long as they currently do.
 
 ## Improvement #3: Add Player Crouching
 
-**Status:** IN PROGRESS — Fix v1.0.3 in `PlayerCrouch/src/CrouchPose.cs` (`FindAnimator`), under review  
+**Status:** IN PROGRESS — Fix v1.0.3 in `PlayerCrouch/src/CrouchPose.cs`, needs the review loop  
 **First completed:** 2026-11-15
 
 Allow players to crouch by pressing `Ctrl`.
@@ -154,7 +163,7 @@ The mod works, but there is no animation for the player crouching, so it does no
 
 ## Improvement #4: Make Self-Checkout Machines Faster
 
-**Status:** REVIEWED 2026-11-15 — Rework v1.1.1 in `SelfCheckoutSpeed/`, awaiting in-game test  
+**Status:** IN PROGRESS — Rework v1.1.1 in `SelfCheckoutSpeed/`, needs the review loop  
 **First completed:** 2026-11-14
 
 Make customers using self-checkout machines 2x faster.
@@ -171,7 +180,7 @@ Allow values up to `10x`.
 
 ## Improvement #5: Allow Level 10 Restockers to Carry Two Boxes
 
-**Status:** REVIEWED 2026-11-15 — Fix v1.1.3 in `RestockerDoubleCarry/`, awaiting in-game test  
+**Status:** IN PROGRESS — Fix v1.1.3 in `RestockerDoubleCarry/src/DoubleCarry.cs`, needs the review loop  
 **Last reviewed:** 2026-11-15  
 **Project:** `RestockerDoubleCarry/`
 
@@ -402,4 +411,3 @@ to the clothes of the employees, which still retain the same character models an
 that are built in, just with the new colors. A checkbox is offered called "Apply to all"
 that will apply it all of the employee types, although the user can still switch to
 another type and override the color for that one specifically.
-
