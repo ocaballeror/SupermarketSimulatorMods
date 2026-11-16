@@ -11,7 +11,7 @@ v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switc
 - Leg IK (v1.0.1): `Model for player ...` lines now include `legIK(L=<constraint weight>/<rig weight> R=...)`. Expect `0.00` outside vehicles. A `Leg IK is active ... not posing it` line while on foot means the guard fires wrongly; check that line. Test sitting in a vehicle as a remote player too.
 - Does the FPS vcam actually follow `FirstPersonController.CinemachineCameraTarget`? (Logged `VCam follows:`.) If not, the camera won't drop and the camera offset must move whatever the vcam follows.
 - Is the player Animator humanoid (`human=True`)? The pose needs `Animator.GetBoneTransform`.
-- Is the local player's own body visible to them? The pose is applied to it anyway (shadow / body when looking down).
+- The local player's own body renderers are disabled (`PlayerSkin.Toggle(!m_IsLocal)`), so the local pose is invisible (no shadow either); it is applied anyway, harmlessly.
 - Do held boxes look wrong for other players while someone crouches? The hand IK (Animation Rigging) is solved before our LateUpdate, so hands move with the lowered torso.
 
 ## How it works
@@ -43,6 +43,6 @@ v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switc
 
 ## Game reference: player models
 
-- The player prefab has `Network Objects/Skins/<skin>` children, one per selectable character (`Man_01_Rig_Test Variant`, `Man_01`, `Man_02`, `Woman_01`, `Woman_02`; verified in the `level2` asset with UnityPy). **Each skin has its own** humanoid `Animator` (e.g. `man_rig_test`, `man (1)`), `PlayerAnimation`, rigs and `PlayerIKHandler`; only the chosen skin's GameObject is active (`PlayerSkinController.SetSkinIndex`). The shown one is `PlayerInstance.SkinController.ActiveSkin` (`PlayerSkin.m_Animator`, `m_Renderers`).
+- The player prefab has `Network Objects/Skins/<skin>` children, one per selectable character (`Man_01_Rig_Test Variant`, `Man_01`, `Man_02`, `Woman_01`, `Woman_02`; verified in the `level2` asset with UnityPy). **Each skin has its own** humanoid `Animator` (e.g. `man_rig_test`, `man (1)`), `PlayerAnimation`, rigs and `PlayerIKHandler`; the chosen one is `ActiveSkin`; `SetSkinIndex` activates it and only hides the others' renderers (`PlayerSkin.Toggle(!m_IsLocal)`), so don't assume the others are inactive. The shown one is `PlayerInstance.SkinController.ActiveSkin` (`PlayerSkin.m_Animator`, `m_Renderers`).
 - `GetComponentInChildren<PlayerAnimation>(true)` returns the inactive rig-test variant: don't use it.
 - `PlayerAnimation` holds Animation Rigging rigs (`m_LookAtRig`; hand and leg IK in `PlayerIKHandler`). The locomotion blend tree is fed from `CharacterController.velocity`. There is no crouch state. Animators are humanoid (`human=True`, confirmed in-game).

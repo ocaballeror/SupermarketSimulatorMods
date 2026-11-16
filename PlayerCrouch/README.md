@@ -4,7 +4,7 @@ Adds crouching to Supermarket Simulator. **Hold Left Ctrl** to crouch:
 
 - Your view drops down and you walk at half speed. You can't sprint or jump while crouched.
 - Your collision shape gets shorter, so you fit under low things. When you let go, you only stand up once there is room above you.
-- Your character model crouches: knees bent, hips lowered, leaning forward a little. You can still walk while crouched. Other players see this if they also have the mod.
+- Your character model crouches: knees bent, hips lowered, leaning forward a little. You can still walk while crouched. Other players see this if they also have the mod. (The game hides your own body in first person, so you only see your own crouch as the view dropping.)
 
 Optional toggle mode: press once to crouch and again to stand. In this mode, jump also stands you up.
 

@@ -49,6 +49,7 @@ internal static class CrouchPose
         public Vector3 LastHipsLocal;
         public Quaternion LastThighLocal;
         public bool Seen;
+        public float NextFind;
     }
 
     private static readonly Dictionary<IntPtr, State> States = new();
@@ -123,8 +124,9 @@ internal static class CrouchPose
 
         if (s.T <= 0.001f) { s.Applied = false; return; }
 
-        if (s.Animator == null || refresh || !s.Animator.isActiveAndEnabled)
+        if (refresh || ((s.Animator == null || !s.Animator.isActiveAndEnabled) && Time.unscaledTime >= s.NextFind))
         {
+            s.NextFind = Time.unscaledTime + 0.5f;
             var a = FindAnimator(inst, out var ikHandler, out string from);
             if (a != null && (s.Animator == null || a.Pointer != s.Animator.Pointer))
             {
@@ -172,7 +174,8 @@ internal static class CrouchPose
     /// <summary>
     /// The Animator of the character the player is actually shown as. Every skin under the player's "Skins"
     /// object (Man_01, Man_02, Woman_01, Woman_02 and the "Man_01_Rig_Test Variant") has its own Animator,
-    /// PlayerAnimation, rigs and IK handler; only the chosen one is active (PlayerSkinController.SetSkinIndex).
+    /// PlayerAnimation, rigs and IK handler; the chosen one is shown (PlayerSkinController.SetSkinIndex activates it
+    /// and hides the others' renderers; it may not deactivate them, so use ActiveSkin, not "the active one").
     /// The first PlayerAnimation in the hierarchy belongs to the rig-test variant, which is normally
     /// inactive, so posing it did nothing (in-game 2026-11-15).
     /// </summary>
@@ -190,7 +193,7 @@ internal static class CrouchPose
                 if (a == null) a = skin.GetComponentInChildren<Animator>(false);
                 if (a != null && a.isActiveAndEnabled)
                 {
-                    ik = skin.GetComponentInChildren<PlayerIKHandler>(true);
+                    ik = skin.GetComponentInChildren<PlayerIKHandler>(true) ?? skin.GetComponentInParent<PlayerIKHandler>(true);
                     from = $"active skin '{skin.name}'";
                     return a;
                 }
