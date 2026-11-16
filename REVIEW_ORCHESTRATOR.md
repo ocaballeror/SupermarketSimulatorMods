@@ -69,7 +69,7 @@ If you can't tell, go to step 1. The reviewer can also report that the work is i
 
 ### 0c. Implement (new or half-done work)
 
-Spawn an **implementer** subagent (`general-purpose`) with:
+Spawn an **implementer** subagent (`general-purpose`, `model: "sonnet"`) with:
 
 - the intent (symptom/feature as the user wrote it, expected behaviour, multiplayer expectations) and the target location per `CLAUDE.md` section 2 (a bug goes in `SupermarketFixes/src/Patches/`; an improvement gets its own new top-level mod folder with a short PascalCase name), plus an instruction to read the mod's existing `README.md` and `CLAUDE.md` first;
 - for a half-done item: where the existing work lives, and an instruction to **read it first, keep what is sound, and finish or redo the rest**; for `needs-rework`, the user's feedback verbatim (from `TODO.md`);
@@ -88,7 +88,7 @@ If the implementer reports it couldn't finish, or the request needs a decision f
 
 ### 1. Spawn the reviewer
 
-Use the Agent tool (`general-purpose`). Give it a self-contained prompt with:
+Use the Agent tool (`general-purpose`, `model: "opus"`). Give it a self-contained prompt with:
 
 - the intent (symptom/feature, expected behaviour, multiplayer expectations) and the mod folder;
 - an instruction to read the repo's `CLAUDE.md`, and the mod's `README.md` and `CLAUDE.md`, before judging;
@@ -107,7 +107,7 @@ If the verdict is `APPROVED` **and the report lists no findings at all (any seve
 
 If the verdict is `INCOMPLETE` and you haven't implemented in step 0c yet, go to step 0c with the reviewer's list of missing parts, then return to step 1 and ask the same reviewer to re-review (SendMessage). Implementation from step 0c doesn't count as a review round. If it is `INCOMPLETE` again after step 0c, treat it as `CHANGES REQUIRED`.
 
-Otherwise (`CHANGES REQUIRED`), spawn an **implementer** subagent (`general-purpose`) the first time (or continue the one from step 0c with SendMessage), with:
+Otherwise (`CHANGES REQUIRED`), spawn an **implementer** subagent (`general-purpose`, `model: "sonnet"`) the first time (or continue the one from step 0c with SendMessage), with:
 
 - the same intent and mod folder;
 - the reviewer's findings, **verbatim**;
@@ -129,7 +129,7 @@ Send the implementer's response to the reviewer with SendMessage (same agent, so
 - review the new changes for regressions;
 - end with a fresh `VERDICT:` line.
 
-If a reviewer can't be continued (SendMessage unavailable or the agent is gone), spawn a new one with the intent, the previous findings and the implementer's responses, and ask it to review the current code from scratch.
+If a reviewer can't be continued (SendMessage unavailable or the agent is gone), spawn a new one (again `model: "opus"`) with the intent, the previous findings and the implementer's responses, and ask it to review the current code from scratch.
 
 ### 4. Repeat
 
@@ -167,6 +167,7 @@ If the user asked for `start` or `continue`, finish after one item and wait for 
 ## Rules
 
 - **Reviewer never edits source. Implementer never reviews or edits `TODO.md`. You edit only the Status blocks in `TODO.md`.** The orchestrator never writes mod code itself, even for a small fix; it always goes through an implementer.
+- **Models are fixed:** every implementer runs on `sonnet` and every reviewer on `opus`. Always pass `model` explicitly on each Agent call, including respawns; never use the default.
 - Work on one item at a time. Two implementers editing the shared `SupermarketFixes/src/Plugin.cs` or the root `README.md` at once would conflict.
 - If the implementer changes code after you've recorded `reviewed`, the stored hash goes stale; the next run catches it.
 - Keep the reviewer's brief free of implementation details and verdict hints (CLAUDE.md section 2b). The implementer gets the findings, not your opinions.

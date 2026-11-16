@@ -77,6 +77,7 @@ Keep each entry short and only include facts you've verified in the dumps or in-
 
 Once you have finished implementing a fix or an improvement (it builds, and the mod's README, its CLAUDE.md if any, and the Status block in TODO.md are updated), **launch a review subagent** with the Agent tool before you report back to the user. (When working under `REVIEW_ORCHESTRATOR.md`, the orchestrator runs this loop instead.)
 
+- **Models are fixed:** implementer agents always run on `sonnet`, reviewer agents always on `opus`. Pass `model: "sonnet"` or `model: "opus"` explicitly on every Agent call; never rely on the default.
 - **Brief it with the intent only.** Describe *what the change was meant to achieve*: the bug symptom or the feature, and the expected behaviour (including multiplayer expectations, if relevant). Name the mod or folder it lives in so the reviewer knows where to look, and tell it to read that mod's docs.
 - **Don't include implementation details or your reasoning.** No root-cause theory, no explanation of why you chose this approach, no list of the methods you patched, no "I think this is fine because...". The reviewer must form its own opinion from the code, not inherit your assumptions.
 - **Don't steer the verdict.** Don't say what to focus on or what to ignore, and don't hint that the change is safe or risky. Just ask for a review of whether the change correctly and safely achieves that intent, and for concrete findings ranked by severity.
