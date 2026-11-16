@@ -197,9 +197,10 @@ Allow values up to `10x`.
 
 ## Improvement #5: Allow Level 10 Restockers to Carry Two Boxes
 
-**Status:** in-progress  
+**Status:** reviewed  
 **Code:** `RestockerDoubleCarry/`  
-**Waiting on:** Review of v1.2.0 (two-box storage and mixed trips, user request 2026-11-16).
+**Review:** 2026-11-16, 2 rounds, hash `b0f7219e16b7`  
+**Waiting on:** In-game test of v1.2.0 (storage-only and mixed two-box trips); send the `[DoubleCarry]` lines.
 
 Make level 10 restockers capable of carrying two product boxes at a time.
 
