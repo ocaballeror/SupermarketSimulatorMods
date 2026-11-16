@@ -12,11 +12,12 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.playerdoublecarry";
     public const string Name = "Player Double Carry";
-    public const string Version = "0.1.1";
+    public const string Version = "0.2.0";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<bool> RemoteStackVisuals;
+    internal static ConfigEntry<bool> BuyAtWholesale;
     internal static ConfigEntry<bool> Verbose;
 
     /// <summary>True while the mod's patches are applied.</summary>
@@ -38,6 +39,9 @@ public class Plugin : BasePlugin
             "Turning it off takes effect immediately (no restart); if you are carrying two boxes at that moment, " +
             "the second box still comes back to your hands when you put the first one down. Players leaving while carrying two " +
             "boxes are also handled only while it is on.");
+        BuyAtWholesale = Config.Bind("Carry", "BuySecondBoxAtWholesale", true,
+            "At the wholesale store, while holding a closed box, hold left click (Use) on a product for the usual purchase " +
+            "time to buy a box of it and carry it on top of the one you hold (at most two boxes).");
         RemoteStackVisuals = Config.Bind("Carry", "ShowOtherPlayersStack", true,
             "Show the two boxes another player is carrying stacked (one under the other) instead of inside each other. " +
             "Cosmetic, only affects what you see.");

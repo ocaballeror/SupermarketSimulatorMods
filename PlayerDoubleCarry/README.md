@@ -10,6 +10,8 @@ Carry two boxes at once.
 4. Everything you normally do with a box in hand works on the **top** box: drop/place it (G), throw it (R), put it on a rack, in a trash bin, or on a placement area.
 5. As soon as the top box leaves your hands, the other box comes up into your hands and is a normal held box again: open it, restock shelves, and so on.
 
+**At the wholesale store:** while you hold a single closed box, look at a product on a shelf, fridge or freezer and **hold left click** for the usual purchase time. The box is bought as normal (same price and money check) and lands on top of the one you hold. There is no progress circle while you hold; just keep the button down and keep looking at the product. Letting go or looking away early cancels it.
+
 Only loose, closed boxes can be picked up as the second box, not boxes straight from a rack. A third box can't be added.
 
 While you hold a single closed box, left-clicking **while looking at another box** now picks that box up instead of opening the one in your hands. To open your box, look away from other boxes (for example at the shelf you are about to fill).
@@ -18,11 +20,12 @@ As a guest, the host has to approve the second box like any pickup. If the host 
 
 ## Settings
 
-`BepInEx/config/oscar.playerdoublecarry.cfg`, also editable in-game with BepInExConfigManager.
+`BepInEx/config/oscar.playerdoublecarry.cfg`, also editable in-game in the mod settings.
 
 | Section | Setting | Default | Description |
 |---|---|---|---|
 | General | `Enabled` | `true` | Master switch, applies immediately. If you carry two boxes (or are waiting for the host to approve one) when you turn it off, that is finished first: the second box still comes back to your hands when you put the first one down. |
+| Carry | `BuySecondBoxAtWholesale` | `true` | At the wholesale store, hold left click on a product while holding a closed box to buy a second box and carry both. |
 | Carry | `ShowOtherPlayersStack` | `true` | Show the two boxes another player carries stacked instead of inside each other. Cosmetic, only affects what you see. |
 | Diagnostics | `VerboseLogging` | `true` | Log each step (tag `[PlayerCarry]` in `BepInEx/LogOutput.log`). |
 

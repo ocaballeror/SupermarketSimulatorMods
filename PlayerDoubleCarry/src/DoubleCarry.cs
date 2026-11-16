@@ -60,6 +60,17 @@ namespace PlayerDoubleCarry;
 ///    PlayerInteraction.Interact is blocked in that short window so nothing else is picked up meanwhile.
 ///  - On other players' machines (modded): the HoldObject postfix only lowers the displaced box under the new
 ///    one (cosmetic). Unmodded machines keep both boxes at the same spot in that player's hands.
+///  - Wholesale store (rework 2026-11-15): holding one closed box and holding Use on a wholesale product
+///    (PurchasableProduct, the hold-to-buy interactable) for its Duration buys a box and stacks it. The
+///    game's purchase is PurchasableProduct.HoldingInteract -> CanBePurchased (money, license) -> Purchase:
+///    spend, BoxGenerator.SpawnBoxLocalMarket at the product (online: SpawnNetworkBoxClient, a networked
+///    box spawned by the buyer, returned synchronously), NetworkBox.Setup_Broadcast, then a simulated click
+///    on the new box: PlayerInteraction.SetCurrentInteraction(PRODUCT), SetCurrentInteractable(box),
+///    InteractionHintsManager.Clear, PlayerInteraction.Interact. While the mod runs HoldingInteract itself
+///    (s_inPurchase), those four calls are skipped for the local player (the held box keeps its
+///    interaction), the spawned box is caught in a SpawnBoxLocalMarket postfix, and it is then requested as
+///    the second box exactly like a loose box (RequestSecondBox -> InstantInteract), so the host-grant,
+///    refusal and stacking paths are the same.
 ///  - OnPlayerLeftRoom prefix (every modded client): before the leaving player's avatar is destroyed, release
 ///    every box under their hold point that isn't their BoxInteraction.m_Box (unparent, solid, not occupied,
 ///    transform sync on; physics on the host), so the box isn't destroyed with the avatar.
@@ -89,6 +100,13 @@ internal static class DoubleCarry
     private static bool s_waitLogged;
     private static float s_blockedLoggedAt = -10f;
 
+    // Wholesale purchase while holding one box.
+    private static PurchasableProduct s_buyTarget;   // product the Use button is held on
+    private static Box s_buyOver;                    // the box in the hands when the hold started
+    private static float s_buyStart;
+    private static bool s_inPurchase;                // inside our HoldingInteract call
+    private static Box s_purchasedBox;               // box spawned by that call
+
     /// <summary>True while the local player carries a second box (or is about to get it back).</summary>
     internal static bool Busy => !ReferenceEquals(s_bottom, null);
 
@@ -110,7 +128,14 @@ internal static class DoubleCarry
         s_bottom = null;
         s_topReleasedAt = -1f;
         s_waitLogged = false;
+        s_buyTarget = null;
+        s_buyOver = null;
+        s_inPurchase = false;
+        s_purchasedBox = null;
     }
+
+    /// <summary>True while the game's purchase runs on the mod's behalf (skip its simulated click).</summary>
+    internal static bool InPurchase => s_inPurchase;
 
     // ------------------------------------------------------------------ helpers
 
@@ -181,6 +206,85 @@ internal static class DoubleCarry
         if (!box.gameObject.activeInHierarchy || box.m_Racked) return null;
         if (Online && box.NetworkBox == null) return null;
         return box;
+    }
+
+    /// <summary>The wholesale product the player is looking at, if any (same ray as PlayerInteraction.Raycast).</summary>
+    private static PurchasableProduct LookedAtPurchasable(PlayerInstance p)
+    {
+        var pi = p.PlayerInteraction;
+        if (pi == null) return null;
+        var cam = pi.m_MainCamera;
+        if (cam == null) return null;
+        var t = cam.transform;
+        if (!Physics.Raycast(t.position, t.forward, out var hit, pi.m_InteractionDistance, pi.m_InteractableLayer.value))
+            return null;
+        var col = hit.collider;
+        if (col == null) return null;
+        var pp = col.gameObject.GetComponent<PurchasableProduct>();
+        return pp != null && pp.isActiveAndEnabled ? pp : null;
+    }
+
+    private static void StartBuy(PlayerInstance p, Box held, PurchasableProduct pp)
+    {
+        s_buyTarget = pp;
+        s_buyOver = held;
+        s_buyStart = Time.unscaledTime;
+        float d = 0f;
+        try { d = pp.Duration; } catch { }
+        Info($"Buying a second box ({pp.name}): keep holding the button for {d:0.##} s");
+    }
+
+    private static void CancelBuy(string why)
+    {
+        if (ReferenceEquals(s_buyTarget, null)) return;
+        Info($"Purchase cancelled ({why})");
+        s_buyTarget = null;
+        s_buyOver = null;
+    }
+
+    private static void TickBuy(float now)
+    {
+        var pp = s_buyTarget;
+        var p = LocalPlayer();
+        if (pp == null || p == null) { CancelBuy("product or player gone"); return; }
+        if (!Plugin.Enabled.Value || !Plugin.BuyAtWholesale.Value) { CancelBuy("switched off"); return; }
+        if (Busy || Requesting) { CancelBuy("already getting a second box"); return; }
+        var held = s_buyOver;
+        var bi = p.BoxInteraction;
+        if (!HeldNormally(p, held) || bi == null || !WouldOpenBox(bi)) { CancelBuy("the box in your hands changed"); return; }
+        var looked = LookedAtPurchasable(p);
+        if (looked == null || looked.Pointer != pp.Pointer) { CancelBuy("looked away"); return; }
+        float d = 0f;
+        try { d = pp.Duration; } catch { }
+        if (now - s_buyStart < d) return;
+
+        s_buyTarget = null;
+        s_buyOver = null;
+        s_purchasedBox = null;
+        bool ok;
+        s_inPurchase = true;
+        try { ok = pp.HoldingInteract(); }
+        finally { s_inPurchase = false; }
+        var box = s_purchasedBox;
+        s_purchasedBox = null;
+        if (!ok)
+        {
+            Info("The game refused the purchase (not enough money, or the product isn't available)");
+            return;
+        }
+        if (box == null)
+        {
+            Plugin.Logger.LogWarning("[PlayerCarry] Bought a box but couldn't find it; it stays at the shelf");
+            return;
+        }
+        // The game's own hints were kept; re-check the held box's "open" hint state.
+        RequestSecondBox(p, held, box);
+    }
+
+    /// <summary>SpawnBoxLocalMarket postfix: the box our purchase just created.</summary>
+    internal static void AfterMarketSpawn(Box box)
+    {
+        if (s_inPurchase && box != null) s_purchasedBox = box;
     }
 
     private static void LogBlocked(string msg)
@@ -373,6 +477,7 @@ internal static class DoubleCarry
     internal static void Tick()
     {
         float now = Time.unscaledTime;
+        if (!ReferenceEquals(s_buyTarget, null)) TickBuy(now);
         if (Requesting) TickRequest(now);
         if (!Busy) return;
 
@@ -549,9 +654,13 @@ internal static class DoubleCarry
         {
             try
             {
-                if (!down) return true;
                 var p = __instance.PlayerInstance;
                 if (p == null || !p.IsLocalPlayerInstance) return true;
+                if (!down)
+                {
+                    if (!ReferenceEquals(s_buyTarget, null)) { CancelBuy("button released too early"); return false; }
+                    return true;
+                }
                 if (Busy)
                 {
                     if (!NothingTargeted(__instance)) return true;   // rack / trash / placement area / placing: top box
@@ -563,7 +672,19 @@ internal static class DoubleCarry
                 var held = __instance.m_Box;
                 if (!HeldNormally(p, held)) return true;
                 var target = LookedAtBox(p, held);
-                if (target == null) return true;
+                if (target == null)
+                {
+                    if (!Plugin.BuyAtWholesale.Value) return true;
+                    var pp = LookedAtPurchasable(p);
+                    if (pp == null) return true;
+                    if (Requesting)
+                    {
+                        LogBlocked($"Still waiting for the host about {Describe(s_requested)}; try again in a few seconds");
+                        return false;
+                    }
+                    StartBuy(p, held, pp);
+                    return false;
+                }
                 if (Requesting)
                 {
                     LogBlocked($"Still waiting for the host about {Describe(s_requested)}; try again in a few seconds");
@@ -676,7 +797,7 @@ internal static class DoubleCarry
         {
             try
             {
-                if (!Promoting) return true;
+                if (!Promoting && !s_inPurchase) return true;
                 var p = __instance.PlayerInstance;
                 return p == null || !p.IsLocalPlayerInstance;
             }
@@ -703,6 +824,57 @@ internal static class DoubleCarry
                 if (box != null && !box.IsOpen) RemoveOpenHint(p);
             }
             catch (Exception e) { Plugin.Logger.LogError($"[PlayerCarry] Hint postfix failed: {e}"); }
+        }
+    }
+
+    [HarmonyPatch(typeof(BoxGenerator), nameof(BoxGenerator.SpawnBoxLocalMarket))]
+    private static class MarketSpawnPatch
+    {
+        private static void Postfix(Box __result)
+        {
+            try { AfterMarketSpawn(__result); }
+            catch (Exception e) { Plugin.Logger.LogError($"[PlayerCarry] Market spawn postfix failed: {e}"); }
+        }
+    }
+
+    /// <summary>During our purchase: keep the held box's interaction (the game switches to the new box).</summary>
+    [HarmonyPatch(typeof(PlayerInteraction), nameof(PlayerInteraction.SetCurrentInteraction))]
+    private static class PurchaseSetInteractionPatch
+    {
+        private static bool Prefix(PlayerInteraction __instance)
+        {
+            try
+            {
+                if (!s_inPurchase) return true;
+                var p = __instance.PlayerInstance;
+                return p == null || !p.IsLocalPlayerInstance;
+            }
+            catch (Exception) { return true; }
+        }
+    }
+
+    [HarmonyPatch(typeof(PlayerInteraction), nameof(PlayerInteraction.SetCurrentInteractable))]
+    private static class PurchaseSetInteractablePatch
+    {
+        private static bool Prefix(PlayerInteraction __instance)
+        {
+            try
+            {
+                if (!s_inPurchase) return true;
+                var p = __instance.PlayerInstance;
+                return p == null || !p.IsLocalPlayerInstance;
+            }
+            catch (Exception) { return true; }
+        }
+    }
+
+    [HarmonyPatch(typeof(InteractionHintsManager), nameof(InteractionHintsManager.Clear))]
+    private static class PurchaseHintsClearPatch
+    {
+        private static bool Prefix(PlayerInstance playerInstance)
+        {
+            try { return !s_inPurchase || playerInstance == null || !playerInstance.IsLocalPlayerInstance; }
+            catch (Exception) { return true; }
         }
     }
 
