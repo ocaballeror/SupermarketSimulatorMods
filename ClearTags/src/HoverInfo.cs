@@ -50,11 +50,14 @@ internal sealed class HoverData
 ///  - A Label (<c>Label</c> component, collider on its own GameObject): the tag of a shelf slot
 ///    (<c>Label.m_DisplaySlot</c>), a rack slot (<c>m_RackSlot</c>) or a vending slot (<c>m_VendingSlot</c>).
 ///  - A price tag: <c>PriceTag</c> (shelf slot, <c>m_DisplaySlot</c>) or <c>VendingPriceTag</c> (vending slot, <c>VendingSlot</c>);
-///    racks have none. Same content as the slot's Label. The price tag is its own object with its own BoxCollider
+///    racks have none. <c>VendingPriceTag</c> is a SUBCLASS of <c>PriceTag</c> (its <c>EnableTag</c> writes only <c>m_VendingSlot</c>,
+///    so the inherited <c>DisplaySlot</c> stays null): <c>Resolve</c> must test for <c>VendingPriceTag</c> before <c>PriceTag</c>,
+///    because <c>GetComponent&lt;PriceTag&gt;()</c> returns vending tags too. Same content as the slot's Label. The price tag is its own object with its own BoxCollider
 ///    (layer Interactable, like the Label), on the same GameObject as the component. That GameObject is inactive in the
 ///    prefab and only activated by <c>PriceTag.EnableTag</c> (<c>DisplaySlot.SetPriceTag</c>, when the slot has a product),
 ///    and the collider is switched off while the furniture is carried or being placed
-///    (<c>Display.set_EnablePriceTagColliders(false)</c> in StartPlacingMode, true again in Place), so it can be hit only then.
+///    (<c>Display.set_EnablePriceTagColliders(false)</c> in StartPlacingMode, true again in Place), so it can be hit only while the slot
+///    has a product and the furniture is standing (not carried or being placed).
 ///
 /// What is shown (decision, no vanilla tooltip exists for this):
 ///  - title: brand + localized name (<see cref="DisplayName"/>); the icon is the product's atlas icon;
@@ -114,25 +117,27 @@ internal static class HoverInfo
             {
                 var go = col.gameObject;
                 var label = go.GetComponent<Label>();
-                var priceTag = label == null ? go.GetComponent<PriceTag>() : null;
-                var vendingTag = label == null && priceTag == null ? go.GetComponent<VendingPriceTag>() : null;
+                // VendingPriceTag derives from PriceTag, so GetComponent<PriceTag>() would also return a vending tag
+                // (whose DisplaySlot is null): the vending tag has to be looked up first.
+                var vendingTag = label == null ? go.GetComponent<VendingPriceTag>() : null;
+                var priceTag = label == null && vendingTag == null ? go.GetComponent<PriceTag>() : null;
                 if (label != null)
                 {
                     target = label.Pointer;
                     s_pLabel = label;
                     text = Cached(target, KLabel);
                 }
-                else if (priceTag != null)
-                {
-                    target = priceTag.Pointer;
-                    s_pPriceTag = priceTag;
-                    text = Cached(target, KPriceTag);
-                }
                 else if (vendingTag != null)
                 {
                     target = vendingTag.Pointer;
                     s_pVendingTag = vendingTag;
                     text = Cached(target, KVendingTag);
+                }
+                else if (priceTag != null)
+                {
+                    target = priceTag.Pointer;
+                    s_pPriceTag = priceTag;
+                    text = Cached(target, KPriceTag);
                 }
                 else
                 {
