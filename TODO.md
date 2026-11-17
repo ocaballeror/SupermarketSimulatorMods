@@ -384,8 +384,8 @@ It should also work at the wholesale store. When the player is holding a box and
 
 **Status:** reviewed  
 **Code:** `ClearTags/`  
-**Review:** 2026-11-17, 5 rounds, hash `f319056202d4`  
-**Waiting on:** In-game test of v0.2.2 (steps in the mod's `CLAUDE.md`); send the `[ClearTags]` lines.
+**Review:** 2026-11-17, 1 round (v0.3.x rework), hash `66fadc5d8622`  
+**Waiting on:** In-game test of v0.3.1 (steps in the mod's `CLAUDE.md`); send the `[ClearTags]` lines.
 
 Features:
 - Make the tags on boxes that show a small icon of what's inside 2x bigger. This number is configurable in the settings.
