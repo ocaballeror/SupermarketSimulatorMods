@@ -132,7 +132,9 @@ internal static class HoverInfo
         if (target == s_cTarget && now - s_cAt < 0.5f) return s_cText;
         s_cTarget = target;
         s_cAt = now;
-        s_cText = build();
+        s_cText = null;   // if build() throws, don't keep showing the previous target's text
+        try { s_cText = build(); }
+        catch (Exception) { s_cText = null; }   // cached as "nothing to show" for 0.5 s, then tried again
         return s_cText;
     }
 

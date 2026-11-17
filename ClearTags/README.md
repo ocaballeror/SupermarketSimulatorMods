@@ -8,8 +8,8 @@ Makes the product tags easier to read.
   - **Shelf tag** (the product label on a shelf slot): quantity is the items on that slot out of its capacity.
   - **Rack tag** (the label on a rack slot): quantity is the items in all boxes in that slot and how many boxes there are.
   - **Vending machine tag**: items on that slot.
-  - **Furniture box tag**: the name of the furniture inside and its price (what the furniture shop charges); no quantity.
-  - **Box price** is what one full box of that product costs to buy at today's market price (the wholesale price), shown for every kind of tag.
+  - **Furniture box tag**: the name of the furniture inside and its price (what the furniture shop charges); no quantity. A paint-can box shows its name only.
+  - **Box price** is what one full box of that product costs to buy at today's market price (the wholesale price), shown for product box tags and shelf, rack and vending tags.
 
 Only the tags on boxes and furniture boxes get bigger. The label icons on shelves, racks and vending machines are left exactly as the game draws them; they only get the hover text.
 

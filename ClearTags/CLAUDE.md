@@ -5,6 +5,8 @@ quantity, box price) when the crosshair is on a box, shelf, rack or vending tag.
 
 ## Status
 
+- v0.2.2 (review round 4): a failing text build is cached as "nothing to show" instead of leaving the previous target's text.
+
 - v0.2.1 (review round 3): hover text for a paint-can box no longer touches `FurnitureBoxData.Furniture` (it logged an error and scanned
   every `FurnitureSO` each frame): the paint-can branch is chosen by `bucketData` (same test as `NetworkFurnitureBox.OnPhotonInstantiate`);
   the text is built only when the target changes and then twice a second at most.
@@ -121,7 +123,7 @@ live in `RackSlotData`, which is what the rack tag reads).
 
 ## In-game test
 
-1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.2.1 loaded` and `Patches applied (5/5)`.
+1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.2.2 loaded` and `Patches applied (5/5)`.
 2. Load a save with boxes (storage room, racks). A `[ClearTags] sweep: N of M boxes had not been resized by the hooks` line (only while
    `VerboseLogging` is on, first check about 5 s after start, then every 30 s) would mean a spawn path isn't covered; **no sweep line
    is the good case**. Look at a box, and at a furniture box (order furniture): the tag is twice as big and centred on
