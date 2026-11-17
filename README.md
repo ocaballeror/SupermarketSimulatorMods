@@ -25,6 +25,7 @@ Each mod folder has its own `README.md` (what it does, its settings, who needs i
 | [Bulk Shelf Transfer](BulkShelfTransfer) | Improvement #9 | Shift+click moves a whole shelf slot into or out of a box, paper bag or crate |
 | [Player Double Carry](PlayerDoubleCarry) | Improvement #10 | Carry two boxes; neither can be opened until one is put down |
 | [Clear Tags](ClearTags) | Improvement #11 | Box tags are 2x bigger (configurable); a hover text on box, shelf and rack tags shows product, quantity and box price (local only) |
+| [Auto Courier Load](AutoCourierLoad) | Improvement #12 | The returning courier picks up closed, name-tagged delivery bags near his parking space and leaves when his trunk covers every active order or a deadline is close (host only) |
 
 ## Game and platform
 
