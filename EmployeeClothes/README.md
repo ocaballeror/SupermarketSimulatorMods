@@ -34,11 +34,12 @@ The employees keep their models, hair, faces and outfits. Only their clothes (sh
 
 ## Where the colours are kept
 
-The host's colours are saved per save slot in `BepInEx/config/oscar.employeeclothes.saves.txt` (one line per save file). If you start a new game in a slot that already had colours, press Reset for each type (or delete that line).
+The host's colours are saved per save slot in `BepInEx/config/oscar.employeeclothes.saves.txt` (one line per save file) every time you press Apply, not with the game's own save. So if you quit without saving the game, the $500 comes back with the old save but the colours stay. If you start a new game in a slot that already had colours, press Reset for each type (or delete that line).
 
 ## Good to know
 
 - **Not recoloured:** two of the restockers (the last two in the preview) have their trousers painted on the same texture as their skin, and the mod can't tell the two apart. Their top, dress and shoes change, their trousers don't.
+- **Gamepad:** the new card may not be reachable with a gamepad, and the panel is made for the mouse. Use the mouse for now.
 - The preview and the first recolouring of each outfit build their textures once, so the first time you open the screen or apply a colour can take a moment.
 - Compatible with the other mods in this collection. A mod that replaces employee materials itself may fight with this one.
 

@@ -28,10 +28,16 @@
  *    Changing the colour is then only a SetColor on the copies (so the live preview is free), and "no colour" swaps the
  *    original material back. Pants are 0.7x, shoes 0.5x and waistcoats 0.8x of the colour when the ShadedGarments
  *    setting is on (so an outfit isn't one flat colour).
- *  - A sweeper (ClothesDriver, every 0.4 s) finds the live employees (Object.FindObjectsOfType per employee class) and
- *    makes every renderer match the stored colour for that employee's type. That covers employees that exist already,
- *    hired later, loaded from a save, spawned by the network on a guest, and anything that restores the original
- *    materials. A texture budget (25 ms per pass) spreads the one-off shade-map creation over a few passes.
+ *  - A sweeper (ClothesDriver, every 0.4 s) finds the employees of every coloured type (FindObjectsByType including
+ *    inactive ones: fired employees are pooled by LeanPool and come back later) and makes the renderers of their model
+ *    (the top Animator's sub-tree, cached, re-scanned every 8 s, re-verified every 3 s) match the stored colour. That
+ *    covers employees that exist already, hired later, loaded from a save, spawned by the network on a guest, and
+ *    anything that restores the original materials. A texture budget (25 ms per pass) spreads the one-off shade-map
+ *    creation over a few passes.
+ *  - Every swap is recorded in a registry (renderer, slot, original material per index). Restoring (Reset, a type losing
+ *    its colour, disabling the mod, a new scene) goes through the registry, so it reaches pooled employees too and runs
+ *    before any material copy is destroyed; a renderer whose copy was destroyed anyway falls back to the recorded
+ *    original. All caches are keyed by GetInstanceID, not by interop pointers.
  *
  * THE UI (clones of existing UI; the screen is a world-space canvas rendered by the PC camera, see ExtraComputers)
  *  - The Customization tab (CustomizationTab > Unlocked > Sections Scroll View > Viewport > Content, a GridLayoutGroup)
@@ -81,7 +87,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.employeeclothes";
     public const string Name = "Employee Clothes";
-    public const string Version = "1.0.0";
+    public const string Version = "1.0.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

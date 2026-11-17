@@ -112,11 +112,11 @@ internal static class Preview
 
     // ------------------------------------------------------------------ models
 
-    private static void AddPrefab(List<GameObject> list, HashSet<IntPtr> seen, Component prefab)
+    private static void AddPrefab(List<GameObject> list, HashSet<int> seen, Component prefab)
     {
         if (prefab == null) return;
         var go = prefab.gameObject;
-        if (go != null && seen.Add(go.Pointer)) list.Add(go);
+        if (go != null && seen.Add(go.GetInstanceID())) list.Add(go);
     }
 
     /// <summary>The scene-asset prefab of every employee of this type (the ScriptableObjects the HR screen lists).</summary>
@@ -125,7 +125,7 @@ internal static class Preview
         var list = new List<GameObject>();
         if (!NoktaSingleton<IDManager>.HasInstance) return list;
         var ids = NoktaSingleton<IDManager>.Instance;
-        var seen = new HashSet<IntPtr>();
+        var seen = new HashSet<int>();
         switch (kind)
         {
             case HrEmployeeKind.Cashier:

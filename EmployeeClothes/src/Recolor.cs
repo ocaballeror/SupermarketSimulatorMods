@@ -40,18 +40,17 @@ internal static class Recolor
         public string BaseProp;
     }
 
-    private static readonly Dictionary<IntPtr, Info> InfoCache = new();                 // original material -> classification
-    private static readonly Dictionary<IntPtr, Texture2D> Neutral = new();               // source texture -> shade map (null = failed)
-    private static readonly Dictionary<(IntPtr, int), Material> Variants = new();        // (original material, slot) -> copy
-    private static readonly Dictionary<IntPtr, Material> OriginalOf = new();             // copy -> original material
-    private static readonly Dictionary<IntPtr, float> GarmentOf = new();                 // copy -> garment shade
-    private static readonly Dictionary<IntPtr, Color> LastTint = new();                  // copy -> colour last set (skip no-op SetColor)
+    // All caches are keyed by GetInstanceID (an interop wrapper's Pointer can be reused after the wrapper is collected).
+    private static readonly Dictionary<int, Info> InfoCache = new();                        // original material -> classification
+    private static readonly Dictionary<int, Texture2D> Neutral = new();                     // source texture -> shade map (null = failed)
+    private static readonly Dictionary<(int, int), Material> Variants = new();              // (original material, slot) -> copy
+    private static readonly Dictionary<int, Material> OriginalOf = new();                   // copy -> original material
+    private static readonly Dictionary<int, float> GarmentOf = new();                       // copy -> garment shade
+    private static readonly Dictionary<int, Color> LastTint = new();                        // copy -> colour last set (skip no-op SetColor)
     private static readonly Stopwatch Watch = new();
     private static double _budgetMs = 25;
     private static bool _loggedFirstMap;
 
-    /// <summary>True while some renderer may still show one of our material copies (a restore pass is needed).</summary>
-    internal static bool NeedsRestore { get; set; }
 
     /// <summary>True when creating a shade map was postponed because the time budget ran out; callers retry later.</summary>
     internal static bool Postponed { get; private set; }
@@ -67,8 +66,8 @@ internal static class Recolor
 
     private static Info Classify(Material orig)
     {
-        var ptr = orig.Pointer;
-        if (InfoCache.TryGetValue(ptr, out var info)) return info;
+        int id = orig.GetInstanceID();
+        if (InfoCache.TryGetValue(id, out var info)) return info;
         info = new Info();
         try
         {
@@ -88,7 +87,7 @@ internal static class Recolor
             }
         }
         catch (Exception e) { Plugin.Debug("Classifying a material failed: " + e.Message); }
-        InfoCache[ptr] = info;
+        InfoCache[id] = info;
         return info;
     }
 
@@ -107,7 +106,7 @@ internal static class Recolor
         // sweep rebuild them (cheap: the shade maps stay).
         try
         {
-            Employees.RestoreAll();
+            RestoreRegistry();
             Preview.OnMaterialsReset();
         }
         catch (Exception e) { Plugin.Debug("Resetting after a settings change failed: " + e.Message); }
@@ -122,7 +121,7 @@ internal static class Recolor
     private static Texture2D GetNeutral(Texture src, out bool postponed)
     {
         postponed = false;
-        var key = src.Pointer;
+        int key = src.GetInstanceID();
         if (Neutral.TryGetValue(key, out var n)) return n;
         if (Watch.IsRunning && Watch.Elapsed.TotalMilliseconds > _budgetMs)
         {
@@ -143,16 +142,28 @@ internal static class Recolor
             n = null;
         }
         Neutral[key] = n;
+        ClearMipRequest(src);
         return n;
     }
 
-    private static readonly Dictionary<IntPtr, float> StreamWaits = new();
+    private static readonly Dictionary<int, float> StreamWaits = new();
+
+    /// <summary>The shade map is built: stop asking the streaming system to keep mip 0 of the source resident.</summary>
+    private static void ClearMipRequest(Texture src)
+    {
+        try
+        {
+            var t2 = src.TryCast<Texture2D>();
+            if (t2 != null && t2.streamingMipmaps) t2.ClearRequestedMipmapLevel();
+        }
+        catch (Exception) { }
+    }
 
     /// <summary>
     /// A texture with streaming mipmaps may only have a small mip loaded; ask for the full one and give it a few passes
     /// (up to 2.5 s) before copying, otherwise the shade map would be blurry for good.
     /// </summary>
-    private static bool WaitForStreaming(Texture src, IntPtr key)
+    private static bool WaitForStreaming(Texture src, int key)
     {
         try
         {
@@ -277,7 +288,7 @@ internal static class Recolor
 
     private static bool TryGetVariant(Material orig, Info info, int slot, out Material variant)
     {
-        var key = (orig.Pointer, slot);
+        var key = (orig.GetInstanceID(), slot);
         if (Variants.TryGetValue(key, out variant) && variant != null) return true;
         variant = null;
         var neutral = GetNeutral(info.BaseTex, out _);
@@ -288,23 +299,54 @@ internal static class Recolor
         if (copy.HasProperty("_BaseMap")) copy.SetTexture("_BaseMap", neutral);
         if (copy.HasProperty("_MainTex")) copy.SetTexture("_MainTex", neutral);
         Variants[key] = copy;
-        OriginalOf[copy.Pointer] = orig;
-        GarmentOf[copy.Pointer] = info.Garment;
+        int cid = copy.GetInstanceID();
+        OriginalOf[cid] = orig;
+        GarmentOf[cid] = info.Garment;
         variant = copy;
         return true;
     }
 
     private static void SetTint(Material m, Color c)
     {
-        float k = TintScale * (GarmentOf.TryGetValue(m.Pointer, out var g) ? g : 1f);
+        float k = TintScale * (GarmentOf.TryGetValue(m.GetInstanceID(), out var g) ? g : 1f);
         var tint = new Color(c.r * k, c.g * k, c.b * k, 1f);
-        if (LastTint.TryGetValue(m.Pointer, out var last) && last == tint) return;
-        LastTint[m.Pointer] = tint;
+        if (LastTint.TryGetValue(m.GetInstanceID(), out var last) && last == tint) return;
+        LastTint[m.GetInstanceID()] = tint;
         if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
         if (m.HasProperty("_Color")) m.SetColor("_Color", tint);
     }
 
     // ------------------------------------------------------------------ applying
+
+    /// <summary>
+    /// Every renderer that has one of our copies on it: the renderer, the slot, and the original material per
+    /// material index. Restoring goes through this registry, so it also reaches pooled (inactive) employees and still
+    /// works when a copy has been destroyed.
+    /// </summary>
+    private sealed class Entry
+    {
+        public Renderer R;
+        public int Slot;
+        public Material[] Originals;
+    }
+
+    private static readonly Dictionary<int, Entry> Registry = new();
+
+    /// <summary>True while some renderer may still show one of our material copies (a restore pass is needed).</summary>
+    internal static bool NeedsRestore
+    {
+        get
+        {
+            foreach (var kv in Registry) if (kv.Value.Slot != PreviewSlot) return true;
+            return false;
+        }
+    }
+
+    private static bool HasOriginals(Entry e)
+    {
+        for (int i = 0; i < e.Originals.Length; i++) if (e.Originals[i] != null) return true;
+        return false;
+    }
 
     /// <summary>
     /// Makes every clothes material on this renderer match <paramref name="color"/> (null = the original material).
@@ -315,34 +357,64 @@ internal static class Recolor
         bool complete = true;
         var mats = r.sharedMaterials;
         if (mats == null) return true;
+        int rid = r.GetInstanceID();
+        Registry.TryGetValue(rid, out var entry);
+        if (entry != null && entry.Originals.Length != mats.Length) entry.Originals = new Material[mats.Length];
         bool changed = false;
         for (int i = 0; i < mats.Length; i++)
         {
             var m = mats[i];
-            if (m == null) continue;
-            bool ours = OriginalOf.TryGetValue(m.Pointer, out var orig);
-            if (!ours) orig = m;
+            Material orig;
+            bool ours;
+            if (m == null)
+            {
+                // A destroyed copy: fall back to the original recorded for this slot of the renderer.
+                orig = entry != null ? entry.Originals[i] : null;
+                if (orig == null) continue;
+                ours = true;
+            }
+            else
+            {
+                ours = OriginalOf.TryGetValue(m.GetInstanceID(), out orig);
+                if (!ours) orig = m;
+            }
             var info = Classify(orig);
             if (!info.Clothes) continue;
             if (!color.HasValue)
             {
-                if (ours) { mats[i] = orig; changed = true; }
+                if (ours) { mats[i] = orig; changed = true; if (entry != null) entry.Originals[i] = null; }
                 continue;
             }
-            if (!TryGetVariant(orig, info, slot, out var v)) { if (Postponed) complete = false; continue; }
+            if (!TryGetVariant(orig, info, slot, out var v))
+            {
+                if (Postponed) complete = false;
+                if (m == null) { mats[i] = orig; changed = true; } // don't leave a destroyed material on the renderer
+                continue;
+            }
             SetTint(v, color.Value);
-            if (v.Pointer != m.Pointer) { mats[i] = v; changed = true; NeedsRestore = true; }
+            if (m == null || v.GetInstanceID() != m.GetInstanceID())
+            {
+                mats[i] = v;
+                changed = true;
+                if (entry == null)
+                {
+                    entry = new Entry { R = r, Slot = slot, Originals = new Material[mats.Length] };
+                    Registry[rid] = entry;
+                }
+                entry.Slot = slot;
+                entry.Originals[i] = orig;
+            }
         }
         if (changed) r.sharedMaterials = mats;
+        if (entry != null && !HasOriginals(entry)) Registry.Remove(rid);
         return complete;
     }
 
-    /// <summary>Applies a colour to all renderers under a model. Returns false if it should be retried.</summary>
-    internal static bool ApplyToObject(GameObject go, int slot, Color? color)
+    /// <summary>Applies a colour to the given renderers. Returns false if it should be retried.</summary>
+    internal static bool ApplyToRenderers(IList<Renderer> rends, int slot, Color? color)
     {
         bool complete = true;
-        var rends = go.GetComponentsInChildren<Renderer>(true);
-        for (int i = 0; i < rends.Length; i++)
+        for (int i = 0; i < rends.Count; i++)
         {
             var r = rends[i];
             if (r == null) continue;
@@ -352,10 +424,62 @@ internal static class Recolor
         return complete;
     }
 
+    /// <summary>Applies a colour to all renderers under a model. Returns false if it should be retried.</summary>
+    internal static bool ApplyToObject(GameObject go, int slot, Color? color) =>
+        ApplyToRenderers(go.GetComponentsInChildren<Renderer>(true), slot, color);
+
+    /// <summary>
+    /// Puts the original materials back on every renderer that has one of our copies (all slots, or only one), found
+    /// through the registry, so inactive pooled employees are included. Must run before any copy is destroyed.
+    /// </summary>
+    internal static void RestoreRegistry(int onlySlot = -1, bool includePreview = true)
+    {
+        List<int> done = null;
+        foreach (var kv in Registry)
+        {
+            var e = kv.Value;
+            if (onlySlot >= 0 && e.Slot != onlySlot) continue;
+            if (!includePreview && e.Slot == PreviewSlot) continue;
+            (done ??= new List<int>()).Add(kv.Key);
+            if (e.R == null) continue;
+            try
+            {
+                var mats = e.R.sharedMaterials;
+                if (mats == null) continue;
+                bool changed = false;
+                for (int i = 0; i < mats.Length && i < e.Originals.Length; i++)
+                {
+                    var orig = e.Originals[i];
+                    if (orig == null) continue;
+                    mats[i] = orig;
+                    changed = true;
+                }
+                if (changed) e.R.sharedMaterials = mats;
+            }
+            catch (Exception ex) { Plugin.Debug("Restoring a renderer failed: " + ex.Message); }
+        }
+        if (done != null) foreach (var k in done) Registry.Remove(k);
+    }
+
+    internal static bool HasEntries(int slot)
+    {
+        foreach (var kv in Registry) if (kv.Value.Slot == slot) return true;
+        return false;
+    }
+
+    /// <summary>Drops registry entries whose renderer was destroyed.</summary>
+    internal static void PruneRegistry()
+    {
+        List<int> dead = null;
+        foreach (var kv in Registry) if (kv.Value.R == null) (dead ??= new List<int>()).Add(kv.Key);
+        if (dead != null) foreach (var k in dead) Registry.Remove(k);
+    }
+
     // ------------------------------------------------------------------ cleanup
 
     private static void DestroyVariants()
     {
+        RestoreRegistry(); // never destroy a copy that a renderer still shows
         foreach (var kv in Variants) if (kv.Value != null) Object.Destroy(kv.Value);
         Variants.Clear();
         OriginalOf.Clear();
@@ -370,6 +494,7 @@ internal static class Recolor
         foreach (var kv in Neutral) if (kv.Value != null) Object.Destroy(kv.Value);
         Neutral.Clear();
         StreamWaits.Clear();
+        Registry.Clear();
         InfoCache.Clear();
     }
 }

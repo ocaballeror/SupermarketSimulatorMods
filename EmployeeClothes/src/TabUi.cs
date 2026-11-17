@@ -8,6 +8,8 @@ using UnityEngine.Localization.Components;
 using UnityEngine.UI;
 using __Project__.Scripts.Computer.Management.CustomizationTab;
 using __Project__.Scripts.UI;
+using __Project__.Scripts.ControllerInputModule;
+using ComputerT = __Project__.Scripts.Computer.Computer;
 using TabComponent = __Project__.Scripts.Computer.Management.CustomizationTab.CustomizationTab;
 using Object = UnityEngine.Object;
 
@@ -46,6 +48,10 @@ internal static class TabUi
     private static readonly Color?[] Pending = new Color?[8];
     private static float _nextFind;
     private static bool _warnedMissing;
+    private static bool _buildFailed;     // Build threw once: log it once and stop retrying (until a new scene)
+    private static ComputerT _comp;       // the store computer (to notice the player leaving it)
+    private static Image _toggleImage;
+    private static Color _toggleBase = Color.white;
     private static bool _hooked;          // the picker's onColorChanged is hooked (otherwise PerFrame polls its colour)
     private static Color _polled;
 
@@ -55,7 +61,7 @@ internal static class TabUi
 
     internal static void Ensure(TabComponent tab)
     {
-        if (!Plugin.Active || tab == null) return;
+        if (!Plugin.Active || tab == null || _buildFailed) return;
         if (_card != null) return;
         try
         {
@@ -75,13 +81,20 @@ internal static class TabUi
         }
         catch (Exception e)
         {
-            Plugin.Error("Adding the Employee Clothes card failed: " + e);
+            Plugin.Error("Adding the Employee Clothes card failed (not retried until the next scene): " + e);
             Remove();
+            _buildFailed = true;
         }
     }
 
     private static void Build(TabComponent tab, Transform content, Transform template)
     {
+        // A card or panel left over from an earlier injection into this same tab must not be duplicated.
+        var oldCard = content.Find(CardName);
+        if (oldCard != null) Object.DestroyImmediate(oldCard.gameObject);
+        var oldPanel = tab.transform.Find(PanelName);
+        if (oldPanel != null) Object.DestroyImmediate(oldPanel.gameObject);
+
         _holder = new GameObject("EmployeeClothes.UiHolder");
         _holder.SetActive(false);
 
@@ -112,6 +125,7 @@ internal static class TabUi
         if (_cardButton == null) throw new InvalidOperationException("the card has no button");
         ResetButton(_cardButton, OnCardClicked);
         SetText(buttonTr.Find("Text (TMP)"), "Open");
+        MakeGamepadInert(_card);
         _card.transform.SetParent(content, false);
         _card.SetActive(true);
         UpdateCard();
@@ -133,10 +147,21 @@ internal static class TabUi
     /// <summary>A new scene was loaded: the UI went with the old scene.</summary>
     internal static void Forget()
     {
+        // Destroy what's still alive (a no-op for objects that went with the old scene), so nothing is left behind
+        // to be duplicated by the next injection.
+        try
+        {
+            if (_card != null) Object.Destroy(_card);
+            if (_panel != null) Object.Destroy(_panel);
+            if (_holder != null) Object.Destroy(_holder);
+        }
+        catch (Exception) { }
         _card = null; _panel = null; _holder = null; _btnTpl = null; _textTpl = null; _pickerTpl = null;
-        _cardButton = null; _cardCost = null; _kindText = null; _infoText = null; _toggleText = null; _raw = null; _picker = null;
+        _cardButton = null; _cardCost = null; _kindText = null; _infoText = null; _toggleText = null; _toggleImage = null; _raw = null; _picker = null;
         _open = false;
         _warnedMissing = false;
+        _buildFailed = false;
+        _comp = null;
     }
 
     private static Transform FindPickerSource()
@@ -204,6 +229,8 @@ internal static class TabUi
         _infoText = MakeText(_panel.transform, "Info", "", 0.02f, 0.135f, 0.61f, 0.21f, TextAlignmentOptions.Left, 16f);
         var toggle = MakeButton(_panel.transform, "Apply to all", "[ ] Apply to all", 0.02f, 0.03f, 0.31f, 0.125f, OnToggleAll);
         _toggleText = toggle.GetComponentInChildren<TMP_Text>(true);
+        _toggleImage = toggle.image;
+        if (_toggleImage != null) _toggleBase = _toggleImage.color;
         MakeButton(_panel.transform, "Reset", "Reset this type", 0.33f, 0.03f, 0.61f, 0.125f, OnReset);
 
         // Right column: picker, swatches, apply.
@@ -220,8 +247,6 @@ internal static class TabUi
         var go = Object.Instantiate(src, _holder.transform);
         go.name = "Color picker";
         var img = go.GetComponent<Image>();
-        // The source may already have made its own material; the copy must make a fresh one in Initialize.
-        if (img != null) img.material = null;
         go.transform.SetParent(_panel.transform, false);
         go.layer = _panel.layer;
         var rt = go.GetComponent<RectTransform>();
@@ -240,11 +265,22 @@ internal static class TabUi
         _picker = go.GetComponent<ColorPicker>();
         // The copy must not share (and later destroy) the source's runtime material: Initialize makes its own.
         _picker.generatedMaterial = null;
-        if (_picker.colorPickerShader == null)
+        // Give the copy its own material with the picker shader. (Initialize(Color) only draws the colour when the image
+        // already has that shader; in its wrong-shader branch it makes the material and returns without ApplyColor, so
+        // the first colour would be missing.) The picker's OnDestroy destroys generatedMaterial.
+        var sh = _picker.colorPickerShader != null ? _picker.colorPickerShader : Shader.Find("UI/ColorPicker");
+        if (sh != null && img != null)
         {
-            var sh = Shader.Find("UI/ColorPicker");
-            if (sh != null) _picker.colorPickerShader = sh;
-            else Plugin.Warn("The colour picker has no shader assigned and 'UI/ColorPicker' wasn't found; use the swatches.");
+            _picker.colorPickerShader = sh;
+            var mat = new Material(sh);
+            mat.hideFlags = HideFlags.HideAndDontSave;
+            img.material = mat;
+            _picker.generatedMaterial = mat;
+        }
+        else
+        {
+            if (img != null) img.material = null;
+            Plugin.Warn("The colour picker has no shader assigned and 'UI/ColorPicker' wasn't found; use the swatches.");
         }
         try
         {
@@ -333,6 +369,38 @@ internal static class TabUi
         if (onClick != null) b.onClick.AddListener((UnityAction)onClick);
     }
 
+    /// <summary>
+    /// The copied card keeps the store-name card's GamepadUISelectable. Its persistent event targets belonged to the
+    /// original card, so every event is emptied; Submit (A) is wired to open this card instead. Whether the card is
+    /// reachable with a gamepad (the tab's selectable parent may have discovered its children before the card
+    /// existed) is unverified.
+    /// </summary>
+    private static void MakeGamepadInert(GameObject card)
+    {
+        try
+        {
+            var gs = card.GetComponent<GamepadUISelectable>();
+            if (gs == null) return;
+            ClearEvent(gs.submitAction);
+            ClearEvent(gs.northAction);
+            ClearEvent(gs.westAction);
+            ClearEvent(gs.backAction);
+            ClearEvent(gs.leftTriggerAction);
+            ClearEvent(gs.rightTriggerAction);
+            ClearEvent(gs.rightJoystickClickAction);
+            if (gs.submitAction != null) gs.submitAction.AddListener((UnityAction)(Action)OnCardClicked);
+        }
+        catch (Exception e) { Plugin.Warn("Making the card's gamepad component inert failed: " + e.Message); }
+    }
+
+    private static void ClearEvent(UnityEvent ev)
+    {
+        if (ev == null) return;
+        ev.RemoveAllListeners();
+        int n = ev.GetPersistentEventCount();
+        for (int i = 0; i < n; i++) ev.SetPersistentListenerState(i, UnityEventCallState.Off);
+    }
+
     private static void SetText(Transform t, string text)
     {
         if (t == null) return;
@@ -376,21 +444,32 @@ internal static class TabUi
 
     private static void OnCardClicked()
     {
+        bool opened = false;
         try
         {
-            if (ClothesStore.IsGuest || _panel == null) return;
+            if (ClothesStore.IsGuest || _panel == null || _open) return;
             float price = Plugin.Price.Value;
+            MoneyManager mm = null;
             if (price > 0f)
             {
-                var mm = NoktaSingleton<MoneyManager>.Instance;
+                mm = NoktaSingleton<MoneyManager>.Instance;
                 if (!mm.HasMoney(price)) { Plugin.Info("Not enough money for the Employee Clothes card"); return; }
+            }
+            // Open first and charge second, so a failure while opening never costs money; a failed charge closes it again.
+            Open();
+            opened = true;
+            if (mm != null)
+            {
                 // Same charge the game makes for the store name (ChangeNameOverlay.ApproveStoreName): UPGRADE_COSTS.
                 mm.MoneyTransition(-price, MoneyManager.TransitionType.UPGRADE_COSTS, true);
                 Plugin.Info($"Charged {PriceText()} for opening Employee Clothes");
             }
-            Open();
         }
-        catch (Exception e) { Plugin.Error("Opening Employee Clothes failed: " + e); }
+        catch (Exception e)
+        {
+            Plugin.Error("Opening Employee Clothes failed: " + e);
+            if (opened) { try { CloseInternal(); } catch (Exception) { } }
+        }
     }
 
     // ------------------------------------------------------------------ opening, switching, applying
@@ -420,6 +499,8 @@ internal static class TabUi
     {
         int n = ClothesStore.Kinds.Length;
         _kindIdx = ((idx % n) + n) % n;
+        _applyAll = false; // "Apply to all" is for one Apply; switching type untick it so a single type can be overridden
+        RefreshToggle();
         var kind = CurrentKind;
         var pend = Pending[(int)kind];
         bool ok = Preview.Show(kind, pend);
@@ -463,6 +544,8 @@ internal static class TabUi
     private static void RefreshToggle()
     {
         if (_toggleText != null) _toggleText.text = _applyAll ? "[x] Apply to all" : "[ ] Apply to all";
+        // Looks like a checkbox: the button is tinted green while it is on.
+        if (_toggleImage != null) _toggleImage.color = _applyAll ? new Color(0.35f, 0.85f, 0.45f, 1f) : _toggleBase;
     }
 
     private static void SetPending(Color c)
@@ -513,6 +596,8 @@ internal static class TabUi
             ClothesStore.Save();
             Plugin.Info($"Applied #{ClothesStore.Hex(pend.Value)} to {(_applyAll ? "all employee types" : ClothesStore.NameOf(CurrentKind))}");
             Employees.Sweep();
+            _applyAll = false;
+            RefreshToggle();
             RefreshTexts();
         }
         catch (Exception e) { Plugin.Error("Applying the colour failed: " + e); }
@@ -533,6 +618,8 @@ internal static class TabUi
             Preview.SetColor(null);
             Plugin.Info($"Reset to the original clothes: {(_applyAll ? "all employee types" : ClothesStore.NameOf(CurrentKind))}");
             Employees.Sweep();
+            _applyAll = false;
+            RefreshToggle();
             RefreshTexts();
         }
         catch (Exception e) { Plugin.Error("Resetting the colour failed: " + e); }
@@ -552,12 +639,32 @@ internal static class TabUi
         }
     }
 
+    /// <summary>
+    /// The player left the computer: Computer.set_OpenPC(false) only deactivates m_PCCam, the screen objects (and so our
+    /// panel) stay active, which would keep the preview camera and models running.
+    /// </summary>
+    private static bool ScreenClosed()
+    {
+        try
+        {
+            if (_comp == null)
+            {
+                var o = Object.FindObjectOfType(Il2CppType.Of<ComputerT>());
+                _comp = o != null ? o.TryCast<ComputerT>() : null;
+            }
+            if (_comp == null) return false;
+            var cam = _comp.m_PCCam;
+            return !_comp.OpenPC || (cam != null && !cam.activeInHierarchy);
+        }
+        catch (Exception) { return false; }
+    }
+
     internal static void Tick()
     {
         if (_card == null)
         {
             // The OnEnable patch normally injects the card; this is the fallback.
-            if (Time.unscaledTime < _nextFind) return;
+            if (_buildFailed || Time.unscaledTime < _nextFind) return;
             _nextFind = Time.unscaledTime + 3f;
             if (!NoktaSingleton<IDManager>.HasInstance) return;
             var all = Resources.FindObjectsOfTypeAll(Il2CppType.Of<TabComponent>());
@@ -569,7 +676,7 @@ internal static class TabUi
             return;
         }
         // The tab or the screen was hidden while the panel was open: close it (it costs again next time).
-        if (_open && (_panel == null || !_panel.activeInHierarchy)) CloseInternal();
+        if (_open && (_panel == null || !_panel.activeInHierarchy || ScreenClosed())) CloseInternal();
         if (_card.activeInHierarchy) UpdateCard();
         if (_open && _infoText != null) RefreshTexts();
     }
