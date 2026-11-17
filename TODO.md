@@ -382,7 +382,9 @@ It should also work at the wholesale store. When the player is holding a box and
 
 ## Improvement #11: More clear tags
 
-**Status:** open
+**Status:** in-progress  
+**Code:** `ClearTags/`  
+**Waiting on:** Review loop.
 
 Features:
 - Make the tags on boxes that show a small icon of what's inside 2x bigger. This number is configurable in the settings.
