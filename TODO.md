@@ -431,7 +431,8 @@ the wrong box type, so make sure to spawn the right one.
 
 **Status:** in-progress  
 **Code:** `EmployeeClothes/`  
-**Waiting on:** Code review, then in-game test (steps in the mod's `CLAUDE.md`); send the `[EmployeeClothes]` lines and a screenshot of the panel.
+**Review:** 2026-11-17, 1 round (fixes applied, not re-reviewed), hash `818fc36cbcda`  
+**Waiting on:** In-game test (steps in the mod's `CLAUDE.md`); send the `[EmployeeClothes]` lines and a screenshot of the panel.
 
 Create a new entry in the customization menu from the game's computer that allows the
 player to pick the color scheme of the clothes of the employees. It costs $500 to access
