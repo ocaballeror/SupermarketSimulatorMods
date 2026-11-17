@@ -2,15 +2,16 @@
 
 Makes the product tags easier to read.
 
-- **Bigger tags on boxes.** The small tag with the product icon on every box is drawn **2x bigger** by default. The factor is a setting.
+- **Bigger tags on boxes.** The small tag with the product icon on every box (and the icon tag on furniture boxes) is drawn **2x bigger** by default. The factor is a setting.
 - **Hover text.** Put your crosshair on a tag and a small label under it shows the **product name**, the **quantity**, and the **price of the box**.
   - **Box tag** (also boxes in racks, and the box in your hands): quantity is the items inside out of the box capacity (for example `12 / 24`).
   - **Shelf tag** (the product label on a shelf slot): quantity is the items on that slot out of its capacity.
   - **Rack tag** (the label on a rack slot): quantity is the items in all boxes in that slot and how many boxes there are.
   - **Vending machine tag**: items on that slot.
+  - **Furniture box tag**: the name of the furniture inside and its price (what the furniture shop charges); no quantity.
   - **Box price** is what one full box of that product costs to buy at today's market price (the wholesale price), shown for every kind of tag.
 
-Only box tags get bigger (boxes that hold furniture are not included). The icons on shelves and racks are painted into the shelf itself by the game, so they can't be resized; they only get the hover text.
+Only the tags on boxes and furniture boxes get bigger. The label icons on shelves, racks and vending machines are painted into the furniture's own model by the game, so they can't be resized from a mod without risking a broken look; they only get the hover text.
 
 ## Settings
 

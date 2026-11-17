@@ -17,6 +17,7 @@ namespace ClearTags;
 ///    cached per instance id (no per-frame allocation while holding a box).
 ///    Racked boxes work too: vanilla swaps their interactable for the RackSlot, but the hit collider is still
 ///    the Box's.
+///  - A furniture box (<c>FurnitureBox</c>, same kind of tag; also the one in the hands): name and price of the furniture inside.
 ///  - A Label (<c>Label</c> component, collider on its own GameObject): the tag of a shelf slot
 ///    (<c>Label.m_DisplaySlot</c>), a rack slot (<c>m_RackSlot</c>) or a vending slot (<c>m_VendingSlot</c>).
 ///
@@ -59,11 +60,17 @@ internal static class HoverInfo
 
         // The box in the hands: it is on "Ignore Raycast", so the physics ray never sees it.
         var held = HeldBox(p);
-        if (held != null && TagHit(held, ray, range + 1f))
+        if (held != null && TagHit(TagScaler.UiOf(held), ray, range + 1f))
         {
             text = BoxText(held);
             target = held.Pointer;
             LastKind = "held box";
+        }
+        else if (HeldFurnitureBox(p) is FurnitureBox heldFb && TagHit(TagScaler.UiOf(heldFb), ray, range + 1f))
+        {
+            text = FurnitureBoxText(heldFb);
+            target = heldFb.Pointer;
+            LastKind = "held furniture box";
         }
         else if (Physics.Raycast(origin, dir, out var hit, range, pi.m_InteractableLayer.value))
         {
@@ -80,11 +87,24 @@ internal static class HoverInfo
                 else
                 {
                     var box = go.GetComponent<Box>();
-                    if (box != null && TagHit(box, ray, range))
+                    if (box != null)
                     {
-                        text = BoxText(box);
-                        target = box.Pointer;
-                        LastKind = box.m_Racked ? "racked box" : "box";
+                        if (TagHit(TagScaler.UiOf(box), ray, range))
+                        {
+                            text = BoxText(box);
+                            target = box.Pointer;
+                            LastKind = box.m_Racked ? "racked box" : "box";
+                        }
+                    }
+                    else
+                    {
+                        var fb = go.GetComponent<FurnitureBox>();
+                        if (fb != null && TagHit(TagScaler.UiOf(fb), ray, range))
+                        {
+                            text = FurnitureBoxText(fb);
+                            target = fb.Pointer;
+                            LastKind = "furniture box";
+                        }
                     }
                 }
             }
@@ -108,6 +128,20 @@ internal static class HoverInfo
             var box = bi.m_Box;
             if (box == null || holder.m_ObjectHolder == null) return null;
             // m_Box can be stale after a drop; the box is only in the hands while it hangs under the holder.
+            return box.transform.parent == holder.m_ObjectHolder ? box : null;
+        }
+        catch (Exception) { return null; }
+    }
+
+    private static FurnitureBox HeldFurnitureBox(PlayerInstance p)
+    {
+        try
+        {
+            var fi = p.FurnitureBoxInteraction;
+            var holder = p.PlayerObjectHolder;
+            if (fi == null || holder == null) return null;
+            var box = fi.m_Box;
+            if (box == null || holder.m_ObjectHolder == null) return null;
             return box.transform.parent == holder.m_ObjectHolder ? box : null;
         }
         catch (Exception) { return null; }
@@ -148,13 +182,14 @@ internal static class HoverInfo
     }
 
     /// <summary>
-    /// Does the ray pass through the (scaled) tag of this box? Each tag quad is tested in its own local space
-    /// against its mesh bounds (a flat box for a quad), so the test follows the quad's real rectangle however the
-    /// box is turned, and it doesn't matter which local plane the mesh lies in.
+    /// Does the ray pass through one of the (scaled) tag quads under this "Icon UI"? Each quad is tested in its own
+    /// local space: the ray is intersected with the quad's plane (the thinnest axis of its mesh bounds), and the hit
+    /// point must lie within the quad's extents in the other two axes (plus 10 %). So the hit area is the quad's real
+    /// rectangle at any box rotation and any scale, with no depth slack, and it doesn't matter which local plane the
+    /// mesh lies in. The "Color Point" of a furniture box (a small solid mesh, not flat) is a tiny extra target.
     /// </summary>
-    private static bool TagHit(Box box, Ray ray, float maxDistance)
+    private static bool TagHit(GameObject ui, Ray ray, float maxDistance)
     {
-        var ui = box.m_IconUI;
         if (ui == null || !ui.activeInHierarchy) return false;
         var tp = GetParts(ui);
         for (int i = 0; i < tp.Renderers.Length; i++)
@@ -164,12 +199,25 @@ internal static class HoverInfo
             var tr = r.transform;
             var lo = tr.InverseTransformPoint(ray.origin);
             var ld = tr.InverseTransformPoint(ray.origin + ray.direction) - lo;
-            if (ld.sqrMagnitude < 1e-12f) continue;
             var lb = tp.Local[i];
-            lb.Expand(0.1f);   // 10 % of the unit quad: slack for grazing angles and the flat thickness
-            var lray = new Ray(lo, ld);   // Ray normalises the direction
-            if (!lb.IntersectRay(lray, out float ldist)) continue;
-            var world = tr.TransformPoint(lray.GetPoint(ldist));
+            var c = lb.center;
+            var e = lb.extents;
+            int k = 0;                                   // the thin axis = the quad's normal
+            if (e.y < e[k]) k = 1;
+            if (e.z < e[k]) k = 2;
+            float dk = ld[k];
+            if (Mathf.Abs(dk) < 1e-8f) continue;         // ray parallel to the quad
+            float t = (c[k] - lo[k]) / dk;
+            if (t < 0f) continue;                        // quad is behind the camera
+            var hit = lo + ld * t;
+            bool inside = true;
+            for (int a2 = 0; a2 < 3; a2++)
+            {
+                if (a2 == k) continue;
+                if (Mathf.Abs(hit[a2] - c[a2]) > e[a2] * 1.1f + 0.01f) { inside = false; break; }
+            }
+            if (!inside) continue;
+            var world = tr.TransformPoint(hit);
             if (Vector3.Distance(ray.origin, world) <= maxDistance) return true;
         }
         return false;
@@ -183,6 +231,46 @@ internal static class HoverInfo
         int max = 0;
         try { max = box.MaxProductCount; } catch (Exception) { }
         return Format(so, max > 0 ? $"{count} / {max}" : count.ToString());
+    }
+
+    /// <summary>
+    /// Furniture box: name of the furniture inside (<c>LocalizationManager.LocalizedFurnitureName</c>), and
+    /// <c>FurnitureSO.Cost</c> as the price (what the furniture shop charges for it; the box is just its packaging).
+    /// There is no quantity, so that line is left out. A paint-bucket box shows the bucket name without a price.
+    /// </summary>
+    private static string FurnitureBoxText(FurnitureBox fb)
+    {
+        var data = fb.Data;
+        if (data == null) return null;
+        string name = null;
+        string price = null;
+        var so = data.Furniture;
+        if (so != null)
+        {
+            try
+            {
+                if (NoktaSingleton<LocalizationManager>.HasInstance)
+                    name = NoktaSingleton<LocalizationManager>.Instance.LocalizedFurnitureName(so.ID);
+            }
+            catch (Exception) { }
+            if (string.IsNullOrEmpty(name)) name = so.FurnitureName;
+            try { price = "$" + so.Cost.ToString("0.00", CultureInfo.InvariantCulture); } catch (Exception) { }
+        }
+        else
+        {
+            var bucket = data.Bucket;
+            if (bucket != null)
+            {
+                try
+                {
+                    if (NoktaSingleton<LocalizationManager>.HasInstance)
+                        name = NoktaSingleton<LocalizationManager>.Instance.LocalizedBucketName(bucket.ID);
+                }
+                catch (Exception) { }
+            }
+        }
+        if (string.IsNullOrEmpty(name)) return null;
+        return price != null ? $"<b>{name}</b>\nPrice: {price}" : $"<b>{name}</b>";
     }
 
     private static string LabelText(Label label, out string kind)

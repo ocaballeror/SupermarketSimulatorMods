@@ -5,24 +5,25 @@ quantity, box price) when the crosshair is on a box, shelf, rack or vending tag.
 
 ## Status
 
-- v0.1.1 (review round 1): tag hit test is now per quad in local space; scale on all three axes; the 3 s full scan became a
-  30 s scan that only runs while `VerboseLogging` is on (the hooks are what resize boxes; the scan is a diagnostic safety net, so
-  once the test confirms `sweep: N of M` never reports N > 0, set `VerboseLogging` to false by default); no game access from `Load`;
-  tag renderers cached per box; separate error flags.
+- v0.2.0 (review round 2): `FurnitureBox` tags are scaled and have a hover text (see below); the tag hit test is now a ray vs
+  quad-plane test (no depth slack); a decision on shelf/rack/vending tags (NOT scaled, with evidence) is in "Shelf, rack, vending
+  tags: why they are not scaled".
+- v0.1.1 (review round 1): tag hit test per quad in local space; scale on all three axes; the full scan became a 30 s scan that
+  only runs while `VerboseLogging` is on (the hooks are what resize boxes; the scan is a diagnostic safety net, so once the test
+  confirms `sweep: N of M` never appears, set `VerboseLogging` to false by default); no game access from `Load`; tag renderers
+  cached per box; separate error flags.
 - v0.1.0: written and builds. **Not tested in-game**; everything below marked "unverified" is untested.
-- Not done on purpose: scaling the **shelf/rack/vending** tags (see "Shelf and rack tags"). The request's third
-  bullet ("this works also for the tags in shelves and racks") is implemented for the hover text only.
 - Open questions for the first test: (1) is `OnGUI` called on the injected behaviour (look for
-  `OnGUI is drawing the hover text (first time)`); (2) do the box tags look right at 2x (position, overlap);
-  (3) does the box-tag hover work at the top edge/corner (the tag is tested with a padded bounds box, but the ray
-  must first hit the box's own collider); (4) is the shelf Label's collider enabled and under the painted icon.
+  `OnGUI is drawing the hover text (first time)`); (2) do the box and furniture-box tags look right at 2x (position, overlap,
+  the furniture box's "Color Point"); (3) does the hover work near the tag's edge (the ray must first hit the box's own
+  collider); (4) is the shelf Label's collider enabled and under the painted icon.
 
 ## Files
 
 | File | What |
 |---|---|
 | `src/Plugin.cs` | Config, master switch (patch apply/unpatch + resize all live), `Info` log helper. |
-| `src/TagScaler.cs` | Box tag scaling + the three Harmony postfixes (`Box.OnEnable`, `Initialize`, `Setup`). Doc comment has the mechanism. |
+| `src/TagScaler.cs` | Box and furniture-box tag scaling + the five Harmony postfixes (`Box.OnEnable`, `Initialize`, `Setup`; `FurnitureBox.OnEnable`, `Initialize`). Doc comment has the mechanism. |
 | `src/HoverInfo.cs` | Target detection and hover text. Doc comment has the decisions. |
 | `src/ClearTagsBehaviour.cs` | Injected MonoBehaviour: `Update` (hover target, 30 s diagnostic sweep), `OnGUI` (draws the text). |
 | `src/ClampedFloat.cs` | Clamp-only setting type (typed number, no slider); same as SelfCheckoutSpeed. |
@@ -43,6 +44,12 @@ So scale the **children**, never "Icon UI" (that would scale about the box origi
 - Boxes are pooled (`OnSpawn`/`OnDespawn`) and rendered instanced when static (`ToggleInstanced`, the box mesh only;
   the tag objects stay normal renderers).
 
+**Furniture box tag** (verified in `resources.assets`): same "Icon UI" layout as the product box, but no `m_IconUI` field and no
+`LODGroup`: `FurnitureBox.m_ProductIconImage` (0x28) is the "Icon" child, its parent is "Icon UI" (`TagScaler.UiOf(FurnitureBox)`). Children:
+"BG", "Icon" and "Color Point" (a small solid mesh, scale 0.025, near the frame's corner). Scaling also moves each child's position about
+BG's position by the factor, so the Color Point stays in the same spot of the (bigger) frame. `FurnitureBox.Data` (`FurnitureBoxData`):
+`Furniture` (`FurnitureSO`: `ID`, `FurnitureName`, `Cost`) or `Bucket` (paint). Hooks: `OnEnable`, `Initialize` (unique RVAs).
+
 **Shelf, rack, vending tags** (`Label` MonoBehaviour, an `IInteractable` with `Type` = 5 `ONCE`, prefab "Label":
 `Label`, `Highlightable`, `BoxCollider`, `GenericLODGroup`; children "Visuals/Optimized" (a MeshRenderer, inactive in
 the prefab; `Label.m_Renderer`), "UI/ProductTextContainer" and "WeightedProductTextContainer" (TMP count texts)):
@@ -59,19 +66,19 @@ the prefab; `Label.m_Renderer`), "UI/ProductTextContainer" and "WeightedProductT
 
 ## Mechanism
 
-**Scale** (`TagScaler`): postfix on `Box.OnEnable`, `Initialize`, `Setup` -> `Apply(box)`; plus, on every settings change (and, while `VerboseLogging` is on, a diagnostic sweep every 30 s), (`ResizeAll`, `FindObjectsOfType<Box>(includeInactive: true)`). State per "Icon UI"
+**Scale** (`TagScaler`): postfix on `Box.OnEnable`, `Initialize`, `Setup` and `FurnitureBox.OnEnable`, `Initialize` -> `Apply(ui)`; plus, on every settings change (and, while `VerboseLogging` is on, a diagnostic sweep every 30 s), (`ResizeAll`, `FindObjectsOfType<Box>` and `<FurnitureBox>` with `includeInactive: true`). State per "Icon UI"
 instance id: the children's original `localScale` (captured the first time a box is seen with factor != 1) and the
-applied factor; new scale = base * factor on all three axes; only written when the factor changed, so nothing
+applied factor; new scale = base * factor on all three axes, new position = centre + (base position - centre) * factor (centre = BG's position); only written when the factor changed, so nothing
 compounds; factor 1 restores the base. `LODGroup.RecalculateBounds()` after a change. The sweep logs
 `sweep: N of M boxes had not been resized by the hooks`: if N > 0 shows up in tests, a spawn path isn't covered by
-the three hooks. Stale ids are pruned during `ResizeAll`.
+the five hooks. Stale ids are pruned during `ResizeAll`.
 
 **Hover** (`HoverInfo.Resolve`, every frame from `Update`): local player, cursor locked, not paused. Same ray as
 `PlayerInteraction.Raycast` (camera position + forward, `m_InteractionDistance`, `m_InteractableLayer`). First the held box
 (`BoxInteraction.m_Box`, only while its parent is `PlayerObjectHolder.m_ObjectHolder`, since `m_Box` can be stale), then
 `Physics.Raycast`: a hit collider with a `Label` gives the slot info; with a `Box` it is a tag hit only if the same ray
-also intersects one of the tag quads: tested per quad in the quad's local space against its mesh bounds (padded by 0.1 local
-units), so a turned box doesn't enlarge the hit area; the renderers/bounds are cached per `m_IconUI` instance id. Racked boxes: vanilla
+also intersects one of the tag quads: tested per quad in the quad's local space (ray vs the plane of the thinnest mesh-bounds axis, then
+the hit point within the other extents * 1.1 + 0.01), so a turned box doesn't enlarge the hit area and there is no depth slack; the renderers/bounds are cached per `m_IconUI` instance id. Racked boxes: vanilla
 turns a racked box hit into its RackSlot interactable, but the hit collider is still the Box's, so this works.
 Not handled: a ray that misses the box collider but would hit the (scaled) tag poking out beyond the box edge.
 
@@ -89,6 +96,7 @@ draw logs a line).
 | Shelf tag (`Label.DisplaySlot`) | same | `DisplaySlot.ProductCount` / `GridLayoutInStorage.productCount` | `BoxPrice` |
 | Rack tag (`Label.RackSlot`) | same, id from `RackSlot.Data.ProductID` | `RackSlot.ProductCount` (all boxes) and `Data.BoxCount` boxes | `BoxPrice` |
 | Vending tag | same | `VendingSlot.ProductCount` | `BoxPrice` |
+| Furniture box (loose, held) | `LocalizationManager.LocalizedFurnitureName(id)` (fallback `FurnitureSO.FurnitureName`); paint box: `LocalizedBucketName` | none (omitted) | `FurnitureSO.Cost` (the shop price of the furniture inside), none for a paint box |
 
 `ProductSO.BoxPrice` (virtual, `WeightedProductSO` overrides) = `PriceManager.CurrentCost(id) * GridLayoutInBox.productCount`
 (same as `PriceManager.TotalBoxPrice(id)`), i.e. the wholesale price of a **full** box at today's cost. It is shown for every
@@ -107,15 +115,17 @@ live in `RackSlotData`, which is what the rack tag reads).
 
 ## In-game test
 
-1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.1.1 loaded` and `Patches applied (3/3)`.
-2. Load a save with boxes (storage room, racks): expect `[ClearTags] ... boxes resized (x2)` after about 2 s (the first sweep)
-   or no line if the hooks already handled them (that is the good case). Look at a box: the tag is twice as big and centred on
+1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.1.1 loaded` and `Patches applied (5/5)`.
+2. Load a save with boxes (storage room, racks). A `[ClearTags] sweep: N of M boxes had not been resized by the hooks` line (only while
+   `VerboseLogging` is on, first check about 5 s after start, then every 30 s) would mean a spawn path isn't covered; **no sweep line
+   is the good case**. Look at a box, and at a furniture box (order furniture): the tag is twice as big and centred on
    the same spot. Check a small (8x8x8), a big (30x20x20) and a racked box.
 3. Order a delivery / pick up and put down a box / open and close it: the tag stays big, never grows further.
 4. Change `ScaleMultiplier` in the config manager (for example 3, then 1, then 2): all boxes follow at once, no compounding.
    Toggle `Enabled` off and on: boxes return to normal and back.
 5. Crosshair on the tag of a box on the floor, on a rack, and the box in your hands (look down at it): the hover text appears
-   below the crosshair with name, quantity and box price. Crosshair on the box body away from the tag: no text.
+   below the crosshair with name, quantity and box price (furniture box: name and price). The hover must stay off when the crosshair is
+   clearly beside the tag, also on a box turned about 45 degrees. Crosshair on the box body away from the tag: no text.
 6. Crosshair on a shelf slot's icon label and on a rack slot's label: hover text with the quantity as in the table above.
 7. Multiplayer (host with the mod, guest without, and the other way round): nothing different for the other player.
 
@@ -125,14 +135,29 @@ whether the label collider is hit at all (the game's own highlight/hint appears 
 
 ## Scope notes
 
-- `FurnitureBox` (boxes that hold furniture, own class, own `m_ProductIconImage`) is not covered: the request is about boxes with
-  products inside. Easy to add later (same idea, another type).
-- The hover text strings are English only ("Quantity", "Box price", "box/boxes"); product names are localized.
-- Shelf/rack/vending icon scaling: see "Shelf and rack tags" / Ideas. The user has to decide whether hover-only is enough.
+- The hover text strings are English only ("Quantity", "Box price", "Price", "box/boxes"); product and furniture names are localized.
+- Hover on a tag the ray reaches only outside the box collider (scaled tag poking out past the box edge) is not handled: it needs a
+  candidate list of nearby boxes.
 
-## Ideas, not done
+## Shelf, rack, vending tags: why they are not scaled
 
-- Scale shelf/rack tags: would need an overlay quad per slot with the product icon (`ProductAtlasManager.SetLabelData` works on
-  any `MeshRenderer`; `Label.m_Renderer`/"Visuals/Optimized" is an unused quad of unknown size and orientation), or a replaced
-  shelf shader. Not attempted without being able to see the result.
-- Hover on a tag the ray reaches only outside the box collider (scaled tag poking out): needs a candidate list of nearby boxes.
+The user asked for these to be enlarged too (round 2). Evidence gathered (UnityPy on `resources.assets`, Cpp2IL dumps), and why it was
+not shipped:
+- The painted label is part of the furniture's model: `SM_Shelf_Single` contains two flat plates, 0.1 wide x 0.057 high, at the front
+  face (slot-local z about 0.318, y 0.14 to 0.197 in mesh space, one for the price tag at mesh z 0 to 0.1, one for the label at -0.1 to 0),
+  with uniform UV density; the shader (`Shader Graphs/Furniture_Shader`) draws the label/price tag in them, switched per slot by the bits
+  of `_LabelMask`/`_LabelMask2` (bit 2i = `DisplaySlot.m_PriceTag` active, bit 2i+1 = `m_Label` active; the icon comes from
+  `_AtlasIndexMatrix`/`_IDMatrix`). The prefab's `Label` object (collider 0.02 x 0.07 x 0.105 at slot z 0.294, i.e. about 0.024 behind
+  the plate) has an inactive `Visuals/Optimized` cube (`SM_PriceTag_Cube`, 0.1 x 0.008 x 0.057, material `Label`) that is not drawn.
+- An overlay would need: a quad at the plate, per furniture model (dozens of shelf, fridge, pegboard, hanger, stall, oven, rack and
+  vending meshes, each with its own plate pose); the real size of the icon inside the plate and the draw order of the count text
+  (`UI/ProductTextContainer` is at label-local x +0.004, i.e. behind the plate surface by the numbers above, so its z-order can't be
+  derived from the data); and either a covering plate bigger than the painted one or clearing the label bit in
+  `LabelMaskController.UpdateLabelMask` (patchable: postfix, odd bits of the two floats) to hide the painted one. A 2x plate would also
+  overlap the neighbouring price tag (its plate is adjacent).
+- The only verified piece: `ProductAtlasManager.SetLabelData(productID, MeshRenderer)` is self-contained (sets the atlas material
+  and `_BaseMap` offset on that renderer), so an overlay quad could show the right icon. Position, size, text order and look per
+  furniture model can't be checked without seeing the game, so nothing was shipped (and no `ScaleShelfTags` setting exists).
+- To do it for the standard shelf as a prototype: needs a screenshot loop with the user (plate pose from the mesh dump above, overlay
+  as a child of the `Label` GameObject at label-local x about +0.026, y 0.0015, z -0.007, size 0.1 x 0.057 x factor, label bit cleared).
+

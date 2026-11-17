@@ -8,7 +8,7 @@ using Object = UnityEngine.Object;
 namespace ClearTags;
 
 /// <summary>
-/// Makes the product icon tag on boxes bigger (config <c>ScaleMultiplier</c>).
+/// Makes the product icon tag on boxes and furniture boxes bigger (config <c>ScaleMultiplier</c>).
 ///
 /// What the tag is: every box prefab (CardboardBox_*, with and without the PhotonView) has a child
 /// "Icon UI" (<c>Box.m_IconUI</c>, with a LODGroup) whose children "BG" (the frame) and "Icon" (the product
@@ -38,7 +38,9 @@ internal static class TagScaler
     private sealed class State
     {
         public float Applied = 1f;
-        public Vector3[] Base;
+        public Vector3[] BaseScale;
+        public Vector3[] BasePos;
+        public Vector3 Center;   // the "BG" quad's position: children scale about it
     }
 
     private static readonly Dictionary<int, State> States = new();
@@ -46,11 +48,25 @@ internal static class TagScaler
     /// <summary>The factor tags should have right now (1 while the mod is off).</summary>
     internal static float Factor => Plugin.Active ? Plugin.TagScale.Value : 1f;
 
-    /// <summary>Resize one box's tag to the current factor. Returns true when it actually changed.</summary>
-    internal static bool Apply(Box box)
+    /// <summary>The "Icon UI" object of a product box, or null.</summary>
+    internal static GameObject UiOf(Box box) => box != null ? box.m_IconUI : null;
+
+    /// <summary>
+    /// The "Icon UI" object of a furniture box (it has no m_IconUI field; its icon quad
+    /// <c>FurnitureBox.m_ProductIconImage</c> is a child of "Icon UI", next to "BG" and a small "Color Point").
+    /// </summary>
+    internal static GameObject UiOf(FurnitureBox fb)
     {
-        if (box == null) return false;
-        var ui = box.m_IconUI;
+        if (fb == null) return null;
+        var r = fb.m_ProductIconImage;
+        if (r == null) return null;
+        var parent = r.transform.parent;
+        return parent != null ? parent.gameObject : null;
+    }
+
+    /// <summary>Resize one tag to the current factor. Returns true when it actually changed.</summary>
+    internal static bool Apply(GameObject ui)
+    {
         if (ui == null) return false;
         float f = Factor;
         var tr = ui.transform;
@@ -60,17 +76,29 @@ internal static class TagScaler
         if (!States.TryGetValue(id, out var st))
         {
             if (Mathf.Approximately(f, 1f)) return false;   // nothing to apply, nothing to restore
-            st = new State { Base = new Vector3[n] };
-            for (int i = 0; i < n; i++) st.Base[i] = tr.GetChild(i).localScale;
+            st = new State { BaseScale = new Vector3[n], BasePos = new Vector3[n] };
+            int centre = 0;
+            for (int i = 0; i < n; i++)
+            {
+                var c = tr.GetChild(i);
+                st.BaseScale[i] = c.localScale;
+                st.BasePos[i] = c.localPosition;
+                if (c.name == "BG") centre = i;
+            }
+            if (n > 0) st.Center = st.BasePos[centre];
             States[id] = st;
         }
-        if (st.Base.Length != n) return false;               // not the layout we know: leave it alone
+        if (st.BaseScale.Length != n) return false;         // not the layout we know: leave it alone
         if (Mathf.Approximately(st.Applied, f)) return false;
 
         for (int i = 0; i < n; i++)
         {
-            var b = st.Base[i];
-            tr.GetChild(i).localScale = b * f;   // all three axes: a flat quad's thickness is invisible, and this is right whichever plane the mesh lies in
+            var c = tr.GetChild(i);
+            // All three axes: a flat quad's thickness is invisible, and this is right whichever plane the mesh lies in.
+            c.localScale = st.BaseScale[i] * f;
+            // Scale the layout about the frame's centre too (the furniture box's little "Color Point" sits inside the
+            // frame; BG and Icon are within a few millimetres of the centre, so they hardly move).
+            c.localPosition = st.Center + (st.BasePos[i] - st.Center) * f;
         }
         st.Applied = f;
         try
@@ -83,8 +111,8 @@ internal static class TagScaler
         return true;
     }
 
-    /// <summary>Resize every box that exists right now (used when the setting changes, and for the slow sweep).</summary>
-    /// <returns>how many boxes were changed</returns>
+    /// <summary>Resize every box and furniture box that exists right now (settings change, diagnostic sweep).</summary>
+    /// <returns>how many tags were changed</returns>
     internal static int ResizeAll(string reason, bool logMissed = false)
     {
         int total = 0, changed = 0;
@@ -98,11 +126,24 @@ internal static class TagScaler
                 total++;
                 try
                 {
-                    var ui = box.m_IconUI;
+                    var ui = UiOf(box);
                     if (ui != null) live.Add(ui.GetInstanceID());
-                    if (Apply(box)) changed++;
+                    if (Apply(ui)) changed++;
                 }
                 catch (Exception e) { Plugin.Logger.LogWarning($"[ClearTags] resize failed on a box: {e.Message}"); }
+            }
+            foreach (var o in Object.FindObjectsOfType(Il2CppType.Of<FurnitureBox>(), true))
+            {
+                var fb = o.TryCast<FurnitureBox>();
+                if (fb == null) continue;
+                total++;
+                try
+                {
+                    var ui = UiOf(fb);
+                    if (ui != null) live.Add(ui.GetInstanceID());
+                    if (Apply(ui)) changed++;
+                }
+                catch (Exception e) { Plugin.Logger.LogWarning($"[ClearTags] resize failed on a furniture box: {e.Message}"); }
             }
             // Forget tags of destroyed boxes.
             if (States.Count > live.Count)
@@ -130,7 +171,14 @@ internal static class TagScaler
     internal static void OnBox(Box box)
     {
         if (!Plugin.Active) return;
-        try { Apply(box); }
+        try { Apply(UiOf(box)); }
+        catch (Exception e) { Plugin.Logger.LogWarning($"[ClearTags] resize failed: {e.Message}"); }   // fail open
+    }
+
+    internal static void OnFurnitureBox(FurnitureBox fb)
+    {
+        if (!Plugin.Active) return;
+        try { Apply(UiOf(fb)); }
         catch (Exception e) { Plugin.Logger.LogWarning($"[ClearTags] resize failed: {e.Message}"); }   // fail open
     }
 }
@@ -151,4 +199,16 @@ internal static class BoxInitializePatch
 internal static class BoxSetupPatch
 {
     private static void Postfix(Box __instance) => TagScaler.OnBox(__instance);
+}
+
+[HarmonyPatch(typeof(FurnitureBox), nameof(FurnitureBox.OnEnable))]
+internal static class FurnitureBoxOnEnablePatch
+{
+    private static void Postfix(FurnitureBox __instance) => TagScaler.OnFurnitureBox(__instance);
+}
+
+[HarmonyPatch(typeof(FurnitureBox), nameof(FurnitureBox.Initialize))]
+internal static class FurnitureBoxInitializePatch
+{
+    private static void Postfix(FurnitureBox __instance) => TagScaler.OnFurnitureBox(__instance);
 }
