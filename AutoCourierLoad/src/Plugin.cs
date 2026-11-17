@@ -13,7 +13,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.autocourierload";
     public const string Name = "Auto Courier Load";
-    public const string Version = "0.1.0";
+    public const string Version = "0.2.0";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -54,15 +54,16 @@ public class Plugin : BasePlugin
                 "less than this many seconds left (the countdown shown on the order's note, in real " +
                 "seconds). Type a number, 0 to 600. 0 = never leave because of a deadline.",
                 new ClampedFloat(0f, 600f)));
-        LeaveWhenFull = Config.Bind("AutoCourierLoad", "LeaveWhenFull", true,
-            "He also leaves as soon as his trunk is full, instead of waiting for you to press E. " +
-            "Turn this off to make him leave only when his trunk covers every active order or an order " +
-            "is about to run out.");
+        LeaveWhenFull = Config.Bind("AutoCourierLoad", "LeaveWhenFull", false,
+            "He also leaves as soon as his trunk is full, even if other orders are still active, instead of " +
+            "waiting for you to press E or for a deadline. Off by default: he then leaves only when his " +
+            "trunk covers every active order or an order is about to run out. \"Full\" follows MaxBags if " +
+            "that is lower than his trunk size.");
         KeepScanningSeconds = Config.Bind("AutoCourierLoad", "KeepScanningSeconds", 30f,
             new ConfigDescription(
                 "After he is back at his parking space, bags that you put down there within this many " +
                 "seconds are still picked up. Type a number, 0 to 600. 0 = he looks only once, right " +
-                "when he arrives.",
+                "when he arrives. Once he has loaded something he keeps looking for as long as he waits.",
                 new ClampedFloat(0f, 600f)));
         Diagnostics = Config.Bind("Diagnostics", "Diagnostics", true,
             "Log [AutoCourier] lines to BepInEx/LogOutput.log: arrival, each bag loaded, why he leaves. " +

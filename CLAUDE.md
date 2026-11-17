@@ -221,6 +221,7 @@ Game systems that only one mod touches are documented next to that mod, not in s
 | Product tags: box icon tag, shelf/rack `Label`, hover info, box price | `ClearTags/CLAUDE.md` |
 | Janitor (cleaning lady): state machine, stains, mop, movement | `SupermarketFixes/CLAUDE.md` (Game reference: janitor) |
 | Online orders: pending list, notebooks, unread badge, courier claims | `SupermarketFixes/CLAUDE.md` (Game reference: online orders and the courier) |
+| Courier: state machine, hand-over (`ReceiveBag`), dispatch (E), bag carrying, order deadlines | `AutoCourierLoad/CLAUDE.md` (Game reference: courier) |
 
 Boxes, holding objects, interactions, input and networking are used by several mods, so they stay in section 8.
 

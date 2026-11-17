@@ -23,7 +23,8 @@ namespace AutoCourierLoad;
 ///    "Back and waiting at the park" is Courier.IsAvailableForHandOver (setup present, not riding, not
 ///    dispatched, scooter at the park or the park blocked) together with the active state being Idle.
 ///  - Handing a bag over by hand is OnlineOrderInteraction.GiveBagToCourier: the player drops the bag from his
-///    hands, clears his claim on the order (CourierManager.SetPlayerClaim(id, false)), and the master runs
+///    hands, clears his claim on the order (CourierManager.SetPlayerClaim(id, false); ReceiveBag does this itself
+///    too), and the master runs
 ///    Courier.ReceiveBag(bag) (a guest instead transfers the bag's PhotonView to the master and sends
 ///    NetworkCourier.GiveBag_Master -> CourierGiveBag_RPC -> ReceiveBag). ReceiveBag, on the master, requires
 ///    state == Idle, IsAvailableForHandOver, ParcelCount < MaxOrderCount (the trunk limit, 3 for a new courier,
@@ -55,7 +56,8 @@ namespace AutoCourierLoad;
 ///    0.4 s) looks at each visit: while the courier is still returning it only watches the bags near his
 ///    park spot (so a bag that was already lying there counts as settled when he arrives); once he is Idle,
 ///    IsAvailableForHandOver and not dispatched, it scans every bag in OnlineOrderPaperBagContainer.m_PaperBags
-///    for the first time and then again for KeepScanningSeconds. A bag qualifies when it is active, not
+///    for the first time and then again for KeepScanningSeconds (or for as long as he waits with something
+///    loaded and not yet leaving). A bag qualifies when it is active, not
 ///    IsCarried (nobody holds it, it is not in a trunk), within ScanRadius metres of Courier.ParkPosition,
 ///    passes the game's own TryResolveHandOverOrder, has been lying free for at least 0.75 s, and was not
 ///    thrown into the drop area by the courier himself (see below). Bags with the least time left go first.
@@ -66,7 +68,7 @@ namespace AutoCourierLoad;
 ///    host hands a bag over. Loading stops at min(MaxBags, MaxOrderCount) or when the courier stops being
 ///    ready; the mod checks the conditions ReceiveBag checks first, because a failed ReceiveBag would throw
 ///    the bag into the drop area.
-///  - After the last load (1.2 s later, so the stow animation can play) the mod decides whether he leaves:
+///  - After the last load (1.2 s later, a short pause so the trunk state has reached everybody) the mod decides whether he leaves:
 ///    one of the orders in his trunk has under LeaveUnderSeconds left (per the countdown above), or no
 ///    active order is left unclaimed by a courier (OrderManager.GeneratedOrderLists, not expired, all in
 ///    CourierManager.m_ClaimedOrders), or the trunk is full (LeaveWhenFull). Then it calls
@@ -87,7 +89,7 @@ internal static class AutoLoad
 {
     private const float TickInterval = 0.4f;
     private const float SettleSeconds = 0.75f;
-    private const float DepartDelay = 1.2f;
+    private const float DepartDelay = 1.2f;          // stowing is instant (no tween); this is just a short pause
     private const float MinScanWindow = 1.5f;
     private const float GiveUpSeconds = 180f;       // a visit that never becomes ready (courier dismissed, ...)
     private const float DefaultDayEnd = 46800f;
@@ -140,8 +142,17 @@ internal static class AutoLoad
     {
         if (!Plugin.Active || courier == null || IsGuest) return;
         foreach (var v in s_visits)
-            if (v.Ptr == courier.Pointer) return;
-        s_visits.Add(new Visit { Courier = courier, Ptr = courier.Pointer, ArmedAt = Time.unscaledTime });
+        {
+            if (v.Ptr != courier.Pointer) continue;
+            // Back again before the old visit ended: start it afresh.
+            v.ArmedAt = Time.time;
+            v.ReadyAt = -1f;
+            v.Scans = 0;
+            v.Loaded = 0;
+            v.FirstSeen.Clear();
+            return;
+        }
+        s_visits.Add(new Visit { Courier = courier, Ptr = courier.Pointer, ArmedAt = Time.time });
         Log($"courier #{courier.EmployeeId} is back from a delivery; watching {Plugin.ScanRadius.Value:0.#} m around his parking space");
     }
 
@@ -158,7 +169,7 @@ internal static class AutoLoad
     internal static void Tick()
     {
         if (!Plugin.Active || s_visits.Count == 0) return;
-        float now = Time.unscaledTime;
+        float now = Time.time;
         if (now < s_next) return;
         s_next = now + TickInterval;
         if (IsGuest) { s_visits.Clear(); return; }
@@ -198,7 +209,8 @@ internal static class AutoLoad
         }
 
         // Even "0 = only when he arrives" lasts a moment, so that bags that were lying there before count as settled.
-        bool scanning = v.Scans == 0 || now - v.ReadyAt <= Math.Max(Plugin.KeepScanningSeconds.Value, MinScanWindow);
+        // While he waits with something loaded, keep looking: the bag he is waiting for may arrive late.
+        bool scanning = v.Scans == 0 || v.Loaded > 0 || now - v.ReadyAt <= Math.Max(Plugin.KeepScanningSeconds.Value, MinScanWindow);
         if (scanning)
         {
             v.Scans++;
@@ -337,7 +349,7 @@ internal static class AutoLoad
         var order = cand.Order;
         try
         {
-            // Same preparation as a player's hand-over (OnlineOrderInteraction.GiveBagToCourier).
+            // Like a player's hand-over: take the bag over first. (ReceiveBag itself drops the player claim.)
             if (PhotonNetwork.IsConnected)
             {
                 var nb = bag.NetworkOrderPaperBag;
@@ -345,8 +357,6 @@ internal static class AutoLoad
                 if (pv != null && !pv.IsMine && PhotonNetwork.LocalPlayer != null)
                     pv.TransferOwnership(PhotonNetwork.LocalPlayer);
             }
-            if (NoktaSingleton<CourierManager>.HasInstance)
-                NoktaSingleton<CourierManager>.Instance.SetPlayerClaim(order.ID, false);
 
             bool ok = c.ReceiveBag(bag);
             if (ok)
