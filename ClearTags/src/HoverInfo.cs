@@ -49,6 +49,12 @@ internal sealed class HoverData
 ///  - A furniture box (<c>FurnitureBox</c>, same kind of tag; also the one in the hands): name and price of the furniture inside.
 ///  - A Label (<c>Label</c> component, collider on its own GameObject): the tag of a shelf slot
 ///    (<c>Label.m_DisplaySlot</c>), a rack slot (<c>m_RackSlot</c>) or a vending slot (<c>m_VendingSlot</c>).
+///  - A price tag: <c>PriceTag</c> (shelf slot, <c>m_DisplaySlot</c>) or <c>VendingPriceTag</c> (vending slot, <c>VendingSlot</c>);
+///    racks have none. Same content as the slot's Label. The price tag is its own object with its own BoxCollider
+///    (layer Interactable, like the Label), on the same GameObject as the component. That GameObject is inactive in the
+///    prefab and only activated by <c>PriceTag.EnableTag</c> (<c>DisplaySlot.SetPriceTag</c>, when the slot has a product),
+///    and the collider is switched off while the furniture is carried or being placed
+///    (<c>Display.set_EnablePriceTagColliders(false)</c> in StartPlacingMode, true again in Place), so it can be hit only then.
 ///
 /// What is shown (decision, no vanilla tooltip exists for this):
 ///  - title: brand + localized name (<see cref="DisplayName"/>); the icon is the product's atlas icon;
@@ -108,11 +114,25 @@ internal static class HoverInfo
             {
                 var go = col.gameObject;
                 var label = go.GetComponent<Label>();
+                var priceTag = label == null ? go.GetComponent<PriceTag>() : null;
+                var vendingTag = label == null && priceTag == null ? go.GetComponent<VendingPriceTag>() : null;
                 if (label != null)
                 {
                     target = label.Pointer;
                     s_pLabel = label;
                     text = Cached(target, KLabel);
+                }
+                else if (priceTag != null)
+                {
+                    target = priceTag.Pointer;
+                    s_pPriceTag = priceTag;
+                    text = Cached(target, KPriceTag);
+                }
+                else if (vendingTag != null)
+                {
+                    target = vendingTag.Pointer;
+                    s_pVendingTag = vendingTag;
+                    text = Cached(target, KVendingTag);
                 }
                 else
                 {
@@ -155,10 +175,12 @@ internal static class HoverInfo
     private static float s_cAt;
 
     // What to build on a cache miss. Static fields and an int kind instead of a lambda: no closure is allocated per frame.
-    private const int KBox = 0, KFurn = 1, KLabel = 2;
+    private const int KBox = 0, KFurn = 1, KLabel = 2, KPriceTag = 3, KVendingTag = 4;
     private static Box s_pBox;
     private static FurnitureBox s_pFb;
     private static Label s_pLabel;
+    private static PriceTag s_pPriceTag;
+    private static VendingPriceTag s_pVendingTag;
 
     /// <summary>
     /// The text is built (game lookups, string formatting) only when the target changes, and then at most twice a
@@ -177,6 +199,8 @@ internal static class HoverInfo
             {
                 case KBox: s_cText = BoxData(s_pBox); break;
                 case KFurn: s_cText = FurnitureBoxData(s_pFb); break;
+                case KPriceTag: s_cText = PriceTagData(s_pPriceTag, out var pk); LastKind = pk; break;
+                case KVendingTag: s_cText = VendingPriceTagData(s_pVendingTag, out var vk); LastKind = vk; break;
                 default: s_cText = LabelData(s_pLabel, out var k); LastKind = k; break;
             }
         }
@@ -383,7 +407,29 @@ internal static class HoverInfo
                 if (vs != null) { kind = "vending tag"; id = vs.ProductID; }
             }
         }
-        var so = Lookup(id);
+        return ProductData(id);
+    }
+
+    /// <summary>The price tag of a shelf slot: the same content as that slot's Label.</summary>
+    private static HoverData PriceTagData(PriceTag tag, out string kind)
+    {
+        kind = "shelf price tag";
+        var ds = tag.DisplaySlot;
+        return ds != null ? ProductData(ds.ProductID) : null;
+    }
+
+    /// <summary>The price tag of a vending machine slot: the same content as that slot's Label.</summary>
+    private static HoverData VendingPriceTagData(VendingPriceTag tag, out string kind)
+    {
+        kind = "vending price tag";
+        var vs = tag.VendingSlot;
+        return vs != null ? ProductData(vs.ProductID) : null;
+    }
+
+    /// <summary>Icon and brand + name of a product id (what every shelf/rack/vending tag shows), or null when the id is unknown.</summary>
+    private static HoverData ProductData(int productId)
+    {
+        var so = Lookup(productId);
         return so != null ? ProductHeader(so) : null;
     }
 

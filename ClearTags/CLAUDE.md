@@ -5,6 +5,7 @@ style (icon, brand + name; on a box also quantity and box price) when the crossh
 
 ## Status
 
+- v0.3.2 (user's in-game test of 0.3.1: tag size, location and hover fine): `Hover/TextSize` default 18 -> 22 (the whole panel scales with it: padding, gaps, icon, separator and title are all derived from the size; only the 40-unit offset below the crosshair is fixed); the hover also works on the **price tag** of a shelf item (`PriceTag`) and of a vending machine item (`VendingPriceTag`), same content as the slot's Label (`HoverInfo.ProductData(id)` is shared by all three). **Not yet tested in-game.**
 - v0.3.1 (review round 1 of 0.3.0): the tag size is now capped per box so it really fits the lid (0.3.0 only shifted/centred it, so the 8x8x8, 20x10x7 and anything at 3x+ still hung over);
   the face is computed from local transforms (zero-scale pooled furniture boxes) and retried; panel canvas has a `CanvasScaler` (1920x1080, match height; sizes in reference units);
   rebuilt panel state reset; icon failure not cached; error counters count consecutive failures; fallback text and Resolve closures no longer allocate per frame;
@@ -77,7 +78,7 @@ BG's position by the factor, so the Color Point stays in the same spot of the (b
 `Furniture` (`FurnitureSO`: `ID`, `FurnitureName`, `Cost`) or `Bucket` (paint). Hooks: `OnEnable`, `Initialize` (unique RVAs).
 
 **Shelf, rack, vending tags** (`Label` MonoBehaviour, an `IInteractable` with `Type` = 5 `ONCE`, prefab "Label":
-`Label`, `Highlightable`, `BoxCollider`, `GenericLODGroup`; children "Visuals/Optimized" (a MeshRenderer, inactive in
+`Label`, `Highlightable`, `BoxCollider`, `GenericLODGroup`; layer 6 "Interactable"; children "Visuals/Optimized" (a MeshRenderer, inactive in
 the prefab; `Label.m_Renderer`), "UI/ProductTextContainer" and "WeightedProductTextContainer" (TMP count texts)):
 - `Label.m_DisplaySlot` (+0x48), `m_RackSlot` (+0x50), `m_VendingSlot` (+0x58) say which slot it belongs to
   (`DisplaySetup`/`RackSetup`/`VendingSetup`).
@@ -88,7 +89,14 @@ the prefab; `Label.m_Renderer`), "UI/ProductTextContainer" and "WeightedProductT
   Icon size/position come from the shelf mesh UVs and the shader. `Label.SetProductIcon` (the old per-label quad
   path, `SetLabelData` on `Label.m_Renderer`) has no callers.
 - `Label.set_ProductCount` writes the count into the TMP text of the label (the number you see next to the icon).
-- `DisplaySlot.EnableLabelCollider` toggles the Label's collider; no caller found in the dumps (unverified when it is on).
+- `DisplaySlot.EnableLabelCollider` / `EnablePriceTagCollider` toggle `Collider.enabled` on `GetComponent<Collider>()` of `m_Label` / `m_PriceTag` (same for `VendingSlot`). Only callers are
+  `Display`/`VendingMachine` `set_EnableLabelColliders` / `set_EnablePriceTagColliders`, which `StartPlacingMode` sets to false (the furniture is being carried) and `Place` back to true. So both colliders are on whenever the furniture stands.
+
+**Price tags** (`PriceTag` on shelf slots, `m_DisplaySlot` +0x48, property `DisplaySlot`; `VendingPriceTag` on vending slots, property `VendingSlot`; racks have no price tag class). Verified with UnityPy
+(`resources.assets`, e.g. the `Freezer_Double_*` prefabs: "Display Slot (Freezer)" > "Price Tag") and the dumps: the "Price Tag" object has `BoxCollider` + `PriceTag` (or `VendingPriceTag`) + `Highlightable` + `GenericLODGroup`
+**on one GameObject, layer 6 "Interactable"** (same as the Label, so it is in `PlayerInteraction.m_InteractableLayer`), children "Visuals/Cube" (inactive) and "UI/Price Text" (TMP). The GameObject is **inactive in the
+prefab**: `DisplaySlot.SetPriceTag` (called from the slot's product add/remove paths) calls `PriceTag.EnableTag(slot)`, which stores the slot and `SetActive(true)` on it; `DisableTag` does `SetActive(false)`. So the price tag
+(and its collider) can only be hit when the slot has a product, and not while the furniture is carried or in placing mode (collider disabled, see above). The same as the vanilla interaction (the game edits the price through it).
 
 ## Mechanism
 
@@ -115,7 +123,7 @@ a tag that pokes out) no longer applies for the same reason.
 **Hover** (`HoverInfo.Resolve`, every frame from `Update`): local player, cursor locked, not paused. Same ray as
 `PlayerInteraction.Raycast` (camera position + forward, `m_InteractionDistance`, `m_InteractableLayer`). First the held box
 (`BoxInteraction.m_Box`, only while its parent is `PlayerObjectHolder.m_ObjectHolder`, since `m_Box` can be stale), then
-`Physics.Raycast`: a hit collider with a `Label` gives the slot info; with a `Box` it is a tag hit only if the same ray
+`Physics.Raycast`: a hit collider with a `Label`, a `PriceTag` or a `VendingPriceTag` (each on the collider's own GameObject) gives the slot info (the price tag shows the same as the Label; `LastKind` "shelf price tag" / "vending price tag"); with a `Box` it is a tag hit only if the same ray
 also intersects one of the tag quads: tested per quad in the quad's local space (ray vs the plane of the thinnest mesh-bounds axis, then
 the hit point within the other extents * 1.1 + 0.01), so a turned box doesn't enlarge the hit area and there is no depth slack; the renderers/bounds are cached per `m_IconUI` instance id. Racked boxes: vanilla
 turns a racked box hit into its RackSlot interactable, but the hit collider is still the Box's, so this works.
@@ -150,7 +158,7 @@ and `ClearTagsBehaviour.OnGUI` draws the old IMGUI text from `HoverPanel.Fallbac
 | Target | Title | Icon | Rows |
 |---|---|---|---|
 | Box (loose, racked, held) | brand + name (see below) | `ProductAtlasManager.GetProductIcon(id, RawImage)` | `Quantity:` `Box.ProductCount` / `MaxProductCount` (green), `Box price:` `ProductSO.BoxPrice` |
-| Shelf tag (`Label.DisplaySlot`), rack tag (`Label.RackSlot`, id from `RackSlot.Data.ProductID`), vending tag | same | same | none (quantity and price are box-only, user decision) |
+| Shelf tag (`Label.DisplaySlot`), rack tag (`Label.RackSlot`, id from `RackSlot.Data.ProductID`), vending tag (`Label.VendingSlot`), shelf price tag (`PriceTag.DisplaySlot`), vending price tag (`VendingPriceTag.VendingSlot`) | same | same | none (quantity and price are box-only, user decision) |
 | Furniture box (loose, held) | `LocalizationManager.LocalizedFurnitureName(id)` (fallback `FurnitureSO.FurnitureName`); paint box: `LocalizedBucketName` | `FurnitureSO.FurnitureIcon` sprite (texture + `textureRect` as `uvRect`); none for a paint box | `Price:` `FurnitureSO.Cost` (the shop price of the furniture inside), none for a paint box |
 
 **Brand and icon (verified in the dumps):**
@@ -179,7 +187,7 @@ live in `RackSlotData`, which is what the rack tag reads).
 
 ## In-game test
 
-1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.3.0 loaded` and `Patches applied (5/5)`.
+1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.3.2 loaded` and `Patches applied (5/5)`.
 2. Load a save with boxes (storage room, racks). **Tag position:** a 15x15x15, an 8x8x8, a 20x10x7, a 30x20x20 and a 40x26x26 furniture box, loose, racked and in your hands: the
    tag lies completely on the lid (nothing hangs over an edge); on big boxes it is 2x, on the smallest (8x8x8, 20x10x7) about 1.7x. `[ClearTags] tag capped to x... (requested x2.0) ...`
    lines (once per lid size) show where it was reduced. A `[ClearTags] sweep: N of M ...` line (only while `VerboseLogging` is on) would mean a spawn path isn't hooked;
@@ -190,9 +198,9 @@ live in `RackSlotData`, which is what the rack tag reads).
    at the left, the name as a light-blue header with the brand ("Kilemol Cleaner"), a thin white line, then `Quantity:` (green) and `Box price:`. `LogOutput.log` has one line
    `hover panel created: font 'UptownBoy...' from ...; background: hint window Image (sprite Frame_SpeechBubble01 ...)`. Check the icon is the product's, not blank/garbled,
    and the panel looks like the key-hint list on the left (rounded, same font).
-6. Crosshair on a shelf label, a rack label and a vending label: panel with icon and name only (no quantity, no price).
+6. Crosshair on a shelf label, a rack label and a vending label: panel with icon and name only (no quantity, no price). **New in 0.3.2:** the same on the **price tag** of a shelf item and of a vending machine item (log `hover (shelf price tag): ...` / `hover (vending price tag): ...`); racks have no price tag. If the price tag doesn't react, tell me whether the crosshair shows the vanilla price-edit hint there (then the collider is hit but the mod's component lookup failed).
 7. Furniture box (order furniture): its icon (if the sprite exists), name and `Price:`; a paint-can box: name only, no errors in the logs.
-8. `TextSize` 12 / 30 and another resolution/window size: the panel scales; the hover stays off when the crosshair is beside the tag.
+8. `TextSize` default is now 22 (the panel is bigger than in 0.3.1); try 12 / 30 and another resolution/window size: the panel scales; the hover stays off when the crosshair is beside the tag.
 9. If the panel never shows but a plain dark text does, send the `[ClearTags]` warnings (`hover panel attempt N failed`, `hover panel failed`).
 10. Multiplayer (host with the mod, guest without, and the other way round): nothing different for the other player.
 

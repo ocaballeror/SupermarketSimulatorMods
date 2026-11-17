@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.cleartags";
     public const string Name = "Clear Tags";
-    public const string Version = "0.3.1";
+    public const string Version = "0.3.2";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -45,8 +45,8 @@ public class Plugin : BasePlugin
                 new ClampedFloat(0.5f, 5f)));
         HoverText = Config.Bind("Hover", "ShowHoverText", true,
             "Show a small panel (product icon and name; on a box also the quantity and the box price) while your crosshair is on a box tag, " +
-            "a shelf tag or a rack tag (also on the box you are holding).");
-        HoverTextSize = Config.Bind("Hover", "TextSize", 18f,
+            "a shelf, rack or vending tag or price tag (also on the box you are holding).");
+        HoverTextSize = Config.Bind("Hover", "TextSize", 22f,
             new ConfigDescription("Size of the hover panel text (at 1080p; the whole panel scales with it and with the screen height). Type a number from 8 to 48.",
                 new ClampedFloat(8f, 48f)));
         Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
