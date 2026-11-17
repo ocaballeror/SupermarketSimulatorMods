@@ -16,8 +16,8 @@ namespace ClearTags;
 /// box origin with scale 1; BG and Icon carry the tag position (e.g. (-0.092, 0.484, -0.113)) in their own
 /// local position and their size in localScale (about 0.16). So the scale must go on the two children, NOT
 /// on "Icon UI": scaling the parent would move the tag away from its spot (scaling about the box origin).
-/// Multiplying the children's localScale x and y keeps each quad centred on the same spot (z is the quad's
-/// thickness and stays).
+/// Multiplying the children's whole localScale keeps each quad centred on the same spot (a flat quad's
+/// thickness is invisible, and all three axes is right whichever local plane the mesh lies in).
 /// <c>Box.Initialize</c> and <c>Box.Setup</c> only call SetActive on "Icon UI" and ProductAtlasManager.SetLabelData
 /// (the icon texture) and never touch the scale, so a scale set once stays.
 ///
@@ -70,7 +70,7 @@ internal static class TagScaler
         for (int i = 0; i < n; i++)
         {
             var b = st.Base[i];
-            tr.GetChild(i).localScale = new Vector3(b.x * f, b.y * f, b.z);
+            tr.GetChild(i).localScale = b * f;   // all three axes: a flat quad's thickness is invisible, and this is right whichever plane the mesh lies in
         }
         st.Applied = f;
         try
@@ -133,8 +133,6 @@ internal static class TagScaler
         try { Apply(box); }
         catch (Exception e) { Plugin.Logger.LogWarning($"[ClearTags] resize failed: {e.Message}"); }   // fail open
     }
-
-    internal static void Reset() => States.Clear();
 }
 
 [HarmonyPatch(typeof(Box), nameof(Box.OnEnable))]

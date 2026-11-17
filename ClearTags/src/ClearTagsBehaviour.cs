@@ -6,16 +6,17 @@ namespace ClearTags;
 /// <summary>
 /// Per-frame hook (registered into IL2CPP via BasePlugin.AddComponent): finds the hover target in Update,
 /// draws the text in OnGUI (IMGUI: a dark box with the text under the crosshair), and re-checks all boxes
-/// every few seconds as a safety net for the tag scale.
+/// every 30 s as a diagnostic safety net for the tag scale (only while VerboseLogging is on; the Box hooks
+/// are what normally resize new boxes, a full scan is too heavy to run for nothing).
 /// </summary>
 public class ClearTagsBehaviour : MonoBehaviour
 {
     public ClearTagsBehaviour(IntPtr ptr) : base(ptr) { }
 
-    private const float SweepInterval = 3f;
+    private const float SweepInterval = 30f;
 
     private string _text;
-    private float _nextSweep = 2f;
+    private float _nextSweep = 5f;
     private bool _drawLogged;
     private GUIStyle _style;
     private GUIContent _content;
@@ -25,7 +26,7 @@ public class ClearTagsBehaviour : MonoBehaviour
         try
         {
             float now = Time.unscaledTime;
-            if (Plugin.Active && now >= _nextSweep)
+            if (Plugin.Active && Plugin.Verbose.Value && now >= _nextSweep)
             {
                 _nextSweep = now + SweepInterval;
                 TagScaler.ResizeAll("sweep", logMissed: true);
@@ -37,11 +38,12 @@ public class ClearTagsBehaviour : MonoBehaviour
         catch (Exception e)
         {
             _text = null;
-            if (!_errLogged) { _errLogged = true; Plugin.Logger.LogError($"[ClearTags] hover failed: {e}"); }
+            if (!_hoverErrLogged) { _hoverErrLogged = true; Plugin.Logger.LogError($"[ClearTags] hover failed: {e}"); }
         }
     }
 
-    private bool _errLogged;
+    private bool _hoverErrLogged;
+    private bool _guiErrLogged;
 
     private void OnGUI()
     {
@@ -85,7 +87,7 @@ public class ClearTagsBehaviour : MonoBehaviour
         }
         catch (Exception e)
         {
-            if (!_errLogged) { _errLogged = true; Plugin.Logger.LogError($"[ClearTags] OnGUI failed: {e}"); }
+            if (!_guiErrLogged) { _guiErrLogged = true; Plugin.Logger.LogError($"[ClearTags] OnGUI failed: {e}"); }
         }
     }
 }

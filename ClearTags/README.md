@@ -10,7 +10,7 @@ Makes the product tags easier to read.
   - **Vending machine tag**: items on that slot.
   - **Box price** is what one full box of that product costs to buy at today's market price (the wholesale price), shown for every kind of tag.
 
-Only box tags get bigger. The icons on shelves and racks are painted into the shelf itself by the game, so they can't be resized; they only get the hover text.
+Only box tags get bigger (boxes that hold furniture are not included). The icons on shelves and racks are painted into the shelf itself by the game, so they can't be resized; they only get the hover text.
 
 ## Settings
 
@@ -23,6 +23,8 @@ Only box tags get bigger. The icons on shelves and racks are painted into the sh
 | Hover | `ShowHoverText` | `true` | Show the hover text. |
 | Hover | `TextSize` | `18` | Font size of the hover text, 8 to 48 (scales with your screen resolution). |
 | Diagnostics | `VerboseLogging` | `true` | Logs what the mod does (`[ClearTags]` lines in `BepInEx/LogOutput.log`). |
+
+The words in the hover text ("Quantity", "Box price") are English whatever the game language; product names follow the game language.
 
 ## Who needs it (multiplayer)
 

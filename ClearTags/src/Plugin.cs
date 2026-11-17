@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.cleartags";
     public const string Name = "Clear Tags";
-    public const string Version = "0.1.0";
+    public const string Version = "0.1.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -55,18 +55,18 @@ public class Plugin : BasePlugin
         TagScale.SettingChanged += (_, _) => OnScaleChanged();
 
         AddComponent<ClearTagsBehaviour>();
-        SetActive(Enabled.Value);
+        SetActive(Enabled.Value, initial: true);
         Log.LogInfo($"{Name} {Version} loaded ({(Active ? "enabled" : "disabled")}, tag scale x{TagScale.Value})");
     }
 
-    private void SetActive(bool on)
+    private void SetActive(bool on, bool initial = false)
     {
         if (on == Active) return;
         if (on)
         {
             ApplyPatches();
             Active = true;
-            TagScaler.ResizeAll("enabled");
+            if (!initial) TagScaler.ResizeAll("enabled");   // Load() must not touch the game; the hooks handle boxes spawned later
         }
         else
         {

@@ -5,6 +5,10 @@ quantity, box price) when the crosshair is on a box, shelf, rack or vending tag.
 
 ## Status
 
+- v0.1.1 (review round 1): tag hit test is now per quad in local space; scale on all three axes; the 3 s full scan became a
+  30 s scan that only runs while `VerboseLogging` is on (the hooks are what resize boxes; the scan is a diagnostic safety net, so
+  once the test confirms `sweep: N of M` never reports N > 0, set `VerboseLogging` to false by default); no game access from `Load`;
+  tag renderers cached per box; separate error flags.
 - v0.1.0: written and builds. **Not tested in-game**; everything below marked "unverified" is untested.
 - Not done on purpose: scaling the **shelf/rack/vending** tags (see "Shelf and rack tags"). The request's third
   bullet ("this works also for the tags in shelves and racks") is implemented for the hover text only.
@@ -20,7 +24,7 @@ quantity, box price) when the crosshair is on a box, shelf, rack or vending tag.
 | `src/Plugin.cs` | Config, master switch (patch apply/unpatch + resize all live), `Info` log helper. |
 | `src/TagScaler.cs` | Box tag scaling + the three Harmony postfixes (`Box.OnEnable`, `Initialize`, `Setup`). Doc comment has the mechanism. |
 | `src/HoverInfo.cs` | Target detection and hover text. Doc comment has the decisions. |
-| `src/ClearTagsBehaviour.cs` | Injected MonoBehaviour: `Update` (hover target, 3 s sweep), `OnGUI` (draws the text). |
+| `src/ClearTagsBehaviour.cs` | Injected MonoBehaviour: `Update` (hover target, 30 s diagnostic sweep), `OnGUI` (draws the text). |
 | `src/ClampedFloat.cs` | Clamp-only setting type (typed number, no slider); same as SelfCheckoutSpeed. |
 
 ## Game reference: tags
@@ -30,7 +34,8 @@ quantity, box price) when the crosshair is on a box, shelf, rack or vending tag.
 quads "BG" and "Icon" (`MeshFilter`+`MeshRenderer`; "Icon" is `Box.m_ProductIconImage`, 0x28). The tag's position
 is the children's *local position* (for example (-0.092, 0.484, -0.113) on a 20x20x20, same for BG and Icon) and
 the size is their local scale (BG about 0.16, Icon about 0.15 x 0.175, z 1). No collider anywhere under "Icon UI".
-So scale the **children**, never "Icon UI" (that would scale about the box origin and move the tag).
+So scale the **children**, never "Icon UI" (that would scale about the box origin and move the tag). All three axes of the children are multiplied (z of a quad is
+  invisible, and it stays correct whichever local plane the mesh lies in).
 - Box code only does `m_IconUI.SetActive(product != null)` and `ProductAtlasManager.SetLabelData(productID, m_ProductIconImage)`
   (in `Initialize` and `Setup`); nothing resets the scale.
 - The quad rotation was not read (UnityPy dump only printed local position and scale); the tag is somewhere near the
@@ -54,10 +59,9 @@ the prefab; `Label.m_Renderer`), "UI/ProductTextContainer" and "WeightedProductT
 
 ## Mechanism
 
-**Scale** (`TagScaler`): postfix on `Box.OnEnable`, `Initialize`, `Setup` -> `Apply(box)`; plus a sweep every 3 s and
-on every settings change (`ResizeAll`, `FindObjectsOfType<Box>(includeInactive: true)`). State per "Icon UI"
+**Scale** (`TagScaler`): postfix on `Box.OnEnable`, `Initialize`, `Setup` -> `Apply(box)`; plus, on every settings change (and, while `VerboseLogging` is on, a diagnostic sweep every 30 s), (`ResizeAll`, `FindObjectsOfType<Box>(includeInactive: true)`). State per "Icon UI"
 instance id: the children's original `localScale` (captured the first time a box is seen with factor != 1) and the
-applied factor; new scale = base * factor on x and y (z unchanged); only written when the factor changed, so nothing
+applied factor; new scale = base * factor on all three axes; only written when the factor changed, so nothing
 compounds; factor 1 restores the base. `LODGroup.RecalculateBounds()` after a change. The sweep logs
 `sweep: N of M boxes had not been resized by the hooks`: if N > 0 shows up in tests, a spawn path isn't covered by
 the three hooks. Stale ids are pruned during `ResizeAll`.
@@ -66,7 +70,8 @@ the three hooks. Stale ids are pruned during `ResizeAll`.
 `PlayerInteraction.Raycast` (camera position + forward, `m_InteractionDistance`, `m_InteractableLayer`). First the held box
 (`BoxInteraction.m_Box`, only while its parent is `PlayerObjectHolder.m_ObjectHolder`, since `m_Box` can be stale), then
 `Physics.Raycast`: a hit collider with a `Label` gives the slot info; with a `Box` it is a tag hit only if the same ray
-also intersects the padded (0.03) union of the world bounds of the `MeshRenderer`s under `m_IconUI`. Racked boxes: vanilla
+also intersects one of the tag quads: tested per quad in the quad's local space against its mesh bounds (padded by 0.1 local
+units), so a turned box doesn't enlarge the hit area; the renderers/bounds are cached per `m_IconUI` instance id. Racked boxes: vanilla
 turns a racked box hit into its RackSlot interactable, but the hit collider is still the Box's, so this works.
 Not handled: a ray that misses the box collider but would hit the (scaled) tag poking out beyond the box edge.
 
@@ -102,7 +107,7 @@ live in `RackSlotData`, which is what the rack tag reads).
 
 ## In-game test
 
-1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.1.0 loaded` and `Patches applied (3/3)`.
+1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.1.1 loaded` and `Patches applied (3/3)`.
 2. Load a save with boxes (storage room, racks): expect `[ClearTags] ... boxes resized (x2)` after about 2 s (the first sweep)
    or no line if the hooks already handled them (that is the good case). Look at a box: the tag is twice as big and centred on
    the same spot. Check a small (8x8x8), a big (30x20x20) and a racked box.
@@ -117,6 +122,13 @@ live in `RackSlotData`, which is what the rack tag reads).
 Send back the `[ClearTags]` lines from `BepInEx/LogOutput.log` (resize counts, `hover (...)` lines, any `OnGUI`/`hover failed`
 errors), and say whether the tag looks right and whether the text is readable. If the shelf/rack hover never appears, say
 whether the label collider is hit at all (the game's own highlight/hint appears when it is).
+
+## Scope notes
+
+- `FurnitureBox` (boxes that hold furniture, own class, own `m_ProductIconImage`) is not covered: the request is about boxes with
+  products inside. Easy to add later (same idea, another type).
+- The hover text strings are English only ("Quantity", "Box price", "box/boxes"); product names are localized.
+- Shelf/rack/vending icon scaling: see "Shelf and rack tags" / Ideas. The user has to decide whether hover-only is enough.
 
 ## Ideas, not done
 

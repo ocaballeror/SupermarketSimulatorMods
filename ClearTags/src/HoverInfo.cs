@@ -11,8 +11,10 @@ namespace ClearTags;
 /// <c>m_InteractionDistance</c>, only colliders in <c>m_InteractableLayer</c>; the game takes the IInteractable
 /// from the hit collider's own GameObject, so we do too):
 ///  - A box tag. The tag quads have no collider, so the ray first has to hit the box's collider (or the held
-///    box, which the ray can't hit: it is on "Ignore Raycast"), then the same ray is tested against the world
-///    bounds of the tag renderers under <c>Box.m_IconUI</c> (padded a little; this follows the scaled size).
+///    box, which the ray can't hit: it is on "Ignore Raycast"), then the same ray is tested, in each tag quad's
+///    own local space, against its mesh bounds (a flat box for a quad; padded 10 %). That follows the quad's
+///    real rectangle at any box rotation and at the scaled size. The renderers under <c>Box.m_IconUI</c> are
+///    cached per instance id (no per-frame allocation while holding a box).
 ///    Racked boxes work too: vanilla swaps their interactable for the RackSlot, but the hit collider is still
 ///    the Box's.
 ///  - A Label (<c>Label</c> component, collider on its own GameObject): the tag of a shelf slot
@@ -111,22 +113,66 @@ internal static class HoverInfo
         catch (Exception) { return null; }
     }
 
-    /// <summary>Does the ray pass through the (scaled) tag of this box?</summary>
+    private sealed class TagParts
+    {
+        public MeshRenderer[] Renderers;
+        public Bounds[] Local;   // each quad's mesh bounds in its own local space
+    }
+
+    // The renderers under a box's "Icon UI", cached per instance id so holding a box doesn't allocate every frame.
+    private static readonly System.Collections.Generic.Dictionary<int, TagParts> Parts = new();
+
+    private static TagParts GetParts(GameObject ui)
+    {
+        int id = ui.GetInstanceID();
+        if (Parts.TryGetValue(id, out var tp))
+        {
+            bool ok = true;
+            foreach (var r in tp.Renderers) if (r == null) { ok = false; break; }
+            if (ok) return tp;
+        }
+        if (Parts.Count > 512) Parts.Clear();   // boxes come and go; ids of destroyed ones just get dropped here
+        var list = new System.Collections.Generic.List<MeshRenderer>();
+        var bl = new System.Collections.Generic.List<Bounds>();
+        foreach (var r in ui.GetComponentsInChildren<MeshRenderer>(true))
+        {
+            var mf = r.GetComponent<MeshFilter>();
+            var mesh = mf != null ? mf.sharedMesh : null;
+            if (mesh == null) continue;
+            list.Add(r);
+            bl.Add(mesh.bounds);
+        }
+        tp = new TagParts { Renderers = list.ToArray(), Local = bl.ToArray() };
+        Parts[id] = tp;
+        return tp;
+    }
+
+    /// <summary>
+    /// Does the ray pass through the (scaled) tag of this box? Each tag quad is tested in its own local space
+    /// against its mesh bounds (a flat box for a quad), so the test follows the quad's real rectangle however the
+    /// box is turned, and it doesn't matter which local plane the mesh lies in.
+    /// </summary>
     private static bool TagHit(Box box, Ray ray, float maxDistance)
     {
         var ui = box.m_IconUI;
         if (ui == null || !ui.activeInHierarchy) return false;
-        bool any = false;
-        var bounds = new Bounds();
-        foreach (var r in ui.GetComponentsInChildren<MeshRenderer>())
+        var tp = GetParts(ui);
+        for (int i = 0; i < tp.Renderers.Length; i++)
         {
+            var r = tp.Renderers[i];
             if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
-            if (!any) { bounds = r.bounds; any = true; }
-            else bounds.Encapsulate(r.bounds);
+            var tr = r.transform;
+            var lo = tr.InverseTransformPoint(ray.origin);
+            var ld = tr.InverseTransformPoint(ray.origin + ray.direction) - lo;
+            if (ld.sqrMagnitude < 1e-12f) continue;
+            var lb = tp.Local[i];
+            lb.Expand(0.1f);   // 10 % of the unit quad: slack for grazing angles and the flat thickness
+            var lray = new Ray(lo, ld);   // Ray normalises the direction
+            if (!lb.IntersectRay(lray, out float ldist)) continue;
+            var world = tr.TransformPoint(lray.GetPoint(ldist));
+            if (Vector3.Distance(ray.origin, world) <= maxDistance) return true;
         }
-        if (!any) return false;
-        bounds.Expand(0.03f);   // the quads are flat; a little slack so grazing angles still count
-        return bounds.IntersectRay(ray, out float d) && d <= maxDistance;
+        return false;
     }
 
     private static string BoxText(Box box)
