@@ -10,8 +10,8 @@ using Hashtable = ExitGames.Client.Photon.Hashtable;
 namespace EmployeeClothes;
 
 /// <summary>
-/// The chosen clothes colour per employee type, where it comes from and where it goes.
-///  - Host / solo player: the colours are edited in the UI, saved per save file in a text file next to the other
+/// The chosen clothes color per employee type, where it comes from and where it goes.
+///  - Host / solo player: the colors are edited in the UI, saved per save file in a text file next to the other
 ///    BepInEx configs and published as a Photon room property for guests.
 ///  - Guest: read-only, taken from the room property the host published (polled; unmodded hosts publish nothing).
 /// </summary>
@@ -27,11 +27,11 @@ internal static class ClothesStore
     };
 
     private static readonly Color?[] Colors = new Color?[8]; // indexed by (int)HrEmployeeKind
-    private static string _key;               // save file the colours belong to (host / solo)
+    private static string _key;               // save file the colors belong to (host / solo)
     private static string _lastRemote = "\u0001"; // last room string applied on a guest (sentinel = none yet)
     private static bool _wasGuest;
 
-    /// <summary>Bumped whenever any colour changes (the sweeper re-applies on the next pass anyway).</summary>
+    /// <summary>Bumped whenever any color changes (the sweeper re-applies on the next pass anyway).</summary>
     internal static int Version { get; private set; }
 
     internal static bool AnySet
@@ -163,16 +163,16 @@ internal static class ClothesStore
                 if (tab > 0 && line.Substring(0, tab) == key) return line.Substring(tab + 1);
             }
         }
-        catch (Exception e) { Plugin.Warn("Reading the saved colours failed: " + e.Message); }
+        catch (Exception e) { Plugin.Warn("Reading the saved colors failed: " + e.Message); }
         return null;
     }
 
-    /// <summary>Writes the current colours under the current save's key (host / solo only).</summary>
+    /// <summary>Writes the current colors under the current save's key (host / solo only).</summary>
     internal static void Save()
     {
         if (IsGuest) return;
         var key = _key ?? SaveKey();
-        if (key == null) { Plugin.Warn("No save file known; the colours are applied but won't be remembered after a restart."); return; }
+        if (key == null) { Plugin.Warn("No save file known; the colors are applied but won't be remembered after a restart."); return; }
         _key = key;
         try
         {
@@ -187,9 +187,9 @@ internal static class ClothesStore
             var s = Serialize();
             if (s.Length > 0) lines.Add(key + "\t" + s);
             File.WriteAllLines(FilePath, lines);
-            Plugin.Debug($"Saved colours for '{key}': '{s}'");
+            Plugin.Debug($"Saved colors for '{key}': '{s}'");
         }
-        catch (Exception e) { Plugin.Warn("Saving the colours failed: " + e.Message); }
+        catch (Exception e) { Plugin.Warn("Saving the colors failed: " + e.Message); }
     }
 
     private static void LoadFor(string key)
@@ -197,7 +197,7 @@ internal static class ClothesStore
         _key = key;
         var line = ReadLine(key);
         Deserialize(line ?? "");
-        Plugin.Info($"Colours for save '{key}': {(string.IsNullOrEmpty(line) ? "none" : line)}");
+        Plugin.Info($"Colors for save '{key}': {(string.IsNullOrEmpty(line) ? "none" : line)}");
     }
 
     // ------------------------------------------------------------------ room property
@@ -233,9 +233,9 @@ internal static class ClothesStore
             string have = RoomString() ?? "";
             if (want == have) return;
             SetRoomString(want);
-            Plugin.Info($"Published the colours to the room: '{want}'");
+            Plugin.Info($"Published the colors to the room: '{want}'");
         }
-        catch (Exception e) { Plugin.Debug("Publishing the colours failed: " + e.Message); }
+        catch (Exception e) { Plugin.Debug("Publishing the colors failed: " + e.Message); }
     }
 
     // ------------------------------------------------------------------ driver hooks
@@ -251,7 +251,7 @@ internal static class ClothesStore
             {
                 _lastRemote = remote;
                 Deserialize(remote);
-                Plugin.Info($"Colours from the host: {(remote.Length == 0 ? "none" : remote)}");
+                Plugin.Info($"Colors from the host: {(remote.Length == 0 ? "none" : remote)}");
             }
             return;
         }
@@ -262,14 +262,14 @@ internal static class ClothesStore
         PublishRoom();
     }
 
-    /// <summary>A new game scene was loaded: forget which save the colours belong to.</summary>
+    /// <summary>A new game scene was loaded: forget which save the colors belong to.</summary>
     internal static void OnNewScene()
     {
         _key = null;
         _lastRemote = "\u0001";
     }
 
-    /// <summary>Marks the colours as changed so the next sweep re-applies them.</summary>
+    /// <summary>Marks the colors as changed so the next sweep re-applies them.</summary>
     internal static void Touch() => Version++;
 
     internal static void OnEnabled()

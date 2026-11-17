@@ -18,7 +18,7 @@ namespace EmployeeClothes;
 /// <summary>
 /// The card in the computer's Customization tab and the panel it opens. Everything is cloned from existing UI (see the
 /// header of Plugin.cs): the card from "Store Name UI", texts and buttons from that card's children, the background from
-/// the tab's BG, the colour picker from the store-name colour picker. Layout uses anchor fractions of the tab (695x367 in
+/// the tab's BG, the color picker from the store-name color picker. Layout uses anchor fractions of the tab (695x367 in
 /// the shipped scene), so it doesn't depend on the exact size.
 /// </summary>
 internal static class TabUi
@@ -52,10 +52,10 @@ internal static class TabUi
     private static ComputerT _comp;       // the store computer (to notice the player leaving it)
     private static Transform _toggleTpl;   // the game's own ToggleSwitch (HR tab), cloned for "Apply to all"
     private static ToggleSwitch _toggleSwitch;
-    private static string _message;       // a one-off line for the info text (cleared when the colour or type changes)
+    private static string _message;       // a one-off line for the info text (cleared when the color or type changes)
     private static Image _toggleImage;
     private static Color _toggleBase = Color.white;
-    private static bool _hooked;          // the picker's onColorChanged is hooked (otherwise PerFrame polls its colour)
+    private static bool _hooked;          // the picker's onColorChanged is hooked (otherwise PerFrame polls its color)
     private static Color _polled;
 
     internal static bool Injected => _card != null;
@@ -112,7 +112,7 @@ internal static class TabUi
         if (desc != null) Object.DestroyImmediate(desc.gameObject);
         ResetButton(_btnTpl.GetComponent<Button>(), null);
 
-        // The colour picker template (cloned from the store-name colour picker when it exists).
+        // The color picker template (cloned from the store-name color picker when it exists).
         _pickerTpl = FindPickerSource();
         _toggleTpl = MakeToggleTemplate();
 
@@ -121,7 +121,8 @@ internal static class TabUi
         _card.name = CardName;
         Strip(_card);
         SetText(_card.transform.Find("Title"), "Employee Clothes");
-        SetText(_card.transform.Find("Title/Description"), "Choose the colour of your employees' clothes. Pay once to open; change as often as you like until you close it.");
+        SetText(_card.transform.Find("Title/Description"), "Change the color of the employee's uniform");
+        FitOneLine(_card.transform.Find("Title/Description"));
         SetText(_card.transform.Find("Cost Info/Cost"), "Cost:");
         _cardCost = _card.transform.Find("Cost Info/Cost Text")?.GetComponent<TMP_Text>();
         var buttonTr = _card.transform.Find("Purcase Button");
@@ -138,7 +139,7 @@ internal static class TabUi
         if (contentRt != null) LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
 
         BuildPanel(tab);
-        Plugin.Info($"Card added to the Customization tab (colour picker {(_picker != null ? "cloned" : "not available: swatches only")})");
+        Plugin.Info($"Card added to the Customization tab (color picker {(_picker != null ? "cloned" : "not available: swatches only")})");
     }
 
     /// <summary>Removes the injected UI (mod switched off or scene change).</summary>
@@ -190,8 +191,8 @@ internal static class TabUi
                     && (cp.transform.parent == null || cp.transform.parent.name != PanelName)) return cp.transform;
             }
         }
-        catch (Exception e) { Plugin.Warn("Looking for the colour picker failed: " + e.Message); }
-        Plugin.Warn("No game colour picker found; the panel will offer colour swatches only.");
+        catch (Exception e) { Plugin.Warn("Looking for the color picker failed: " + e.Message); }
+        Plugin.Warn("No game color picker found; the panel will offer color swatches only.");
         return null;
     }
 
@@ -217,7 +218,7 @@ internal static class TabUi
             Anchors(bg.GetComponent<RectTransform>(), 0f, 0f, 1f, 1f);
         }
 
-        var title = MakeText(_panel.transform, "Title", "Employee clothes: pick a colour", 0.02f, 0.90f, 0.78f, 0.99f, TextAlignmentOptions.Left, 26f);
+        var title = MakeText(_panel.transform, "Title", "Employee clothes: pick a color", 0.02f, 0.90f, 0.78f, 0.99f, TextAlignmentOptions.Left, 26f);
         MakeButton(_panel.transform, "Done", "Done", 0.80f, 0.915f, 0.98f, 0.985f, () => EndSession("Done"));
 
         MakeButton(_panel.transform, "Prev", "<", 0.02f, 0.78f, 0.09f, 0.89f, () => ShowKind(_kindIdx - 1));
@@ -260,7 +261,7 @@ internal static class TabUi
     }
 
     /// <summary>
-    /// Finds one of the game's own switches (ToggleSwitch: a Slider with a handle button and on/off colours, used for the
+    /// Finds one of the game's own switches (ToggleSwitch: a Slider with a handle button and on/off colors, used for the
     /// working / not-working switch of the HR employee cards and in the licence items) and keeps a stripped copy as a
     /// template. The HR one (51x18) is preferred over the big licence one. Prefab assets referenced by loaded objects
     /// are found by FindObjectsOfTypeAll even when no HR card is on screen; if none is loaded the text button is used.
@@ -363,9 +364,9 @@ internal static class TabUi
         _picker = go.GetComponent<ColorPicker>();
         // The copy must not share (and later destroy) the source's runtime material: Initialize makes its own.
         _picker.generatedMaterial = null;
-        // Give the copy its own material with the picker shader. (Initialize(Color) only draws the colour when the image
+        // Give the copy its own material with the picker shader. (Initialize(Color) only draws the color when the image
         // already has that shader; in its wrong-shader branch it makes the material and returns without ApplyColor, so
-        // the first colour would be missing.) The picker's OnDestroy destroys generatedMaterial.
+        // the first color would be missing.) The picker's OnDestroy destroys generatedMaterial.
         var sh = _picker.colorPickerShader != null ? _picker.colorPickerShader : Shader.Find("UI/ColorPicker");
         if (sh != null && img != null)
         {
@@ -378,7 +379,7 @@ internal static class TabUi
         else
         {
             if (img != null) img.material = null;
-            Plugin.Warn("The colour picker has no shader assigned and 'UI/ColorPicker' wasn't found; use the swatches.");
+            Plugin.Warn("The color picker has no shader assigned and 'UI/ColorPicker' wasn't found; use the swatches.");
         }
         try
         {
@@ -388,7 +389,7 @@ internal static class TabUi
         catch (Exception e)
         {
             _hooked = false;
-            Plugin.Warn("Hooking the colour picker's event failed (" + e.Message + "); polling its colour instead.");
+            Plugin.Warn("Hooking the color picker's event failed (" + e.Message + "); polling its color instead.");
         }
         go.SetActive(true);
     }
@@ -499,6 +500,25 @@ internal static class TabUi
         for (int i = 0; i < n; i++) ev.SetPersistentListenerState(i, UnityEventCallState.Off);
     }
 
+    /// <summary>
+    /// The description box of the store-name card is 200x22 (one line of "Change the apperance of the entrance"); a longer
+    /// text shrinks to fit that one line instead of wrapping out of the card.
+    /// </summary>
+    private static void FitOneLine(Transform t)
+    {
+        try
+        {
+            var tmp = t != null ? t.GetComponent<TMP_Text>() : null;
+            if (tmp == null) return;
+            float size = tmp.fontSize;
+            tmp.textWrappingMode = TextWrappingModes.NoWrap;
+            tmp.enableAutoSizing = true;
+            tmp.fontSizeMax = size;
+            tmp.fontSizeMin = Math.Max(6f, size * 0.6f);
+        }
+        catch (Exception e) { Plugin.Debug("Fitting the card description failed: " + e.Message); }
+    }
+
     private static void SetText(Transform t, string text)
     {
         if (t == null) return;
@@ -519,7 +539,7 @@ internal static class TabUi
 
     // ------------------------------------------------------------------ the card
 
-    private static string PriceText() => "$" + Plugin.Price.Value.ToString("N0", CultureInfo.InvariantCulture);
+    private static string PriceText() => "$" + Plugin.Price.Value.ToString("0.00", CultureInfo.InvariantCulture);
 
     private static void UpdateCard()
     {
@@ -639,7 +659,7 @@ internal static class TabUi
         {
             _suppress = true;
             try { _picker.Initialize(pend ?? new Color(0.20f, 0.45f, 0.90f, 1f)); }
-            catch (Exception e) { Plugin.Warn("Setting the colour picker failed: " + e.Message); }
+            catch (Exception e) { Plugin.Warn("Setting the color picker failed: " + e.Message); }
             finally { _suppress = false; }
             if (!_hooked) { try { _polled = _picker.color; } catch (Exception) { } }
         }
@@ -656,12 +676,12 @@ internal static class TabUi
             var stored = ClothesStore.Get(kind);
             string s;
             if (_message != null) s = _message;
-            else if (!pend.HasValue) s = "Original clothes. Pick a colour, then press Apply.";
+            else if (!pend.HasValue) s = "Original clothes. Pick a color, then press Apply.";
             else
             {
                 string hex = "#" + ClothesStore.Hex(pend.Value);
                 bool applied = stored.HasValue && ClothesStore.Hex(stored.Value) == ClothesStore.Hex(pend.Value);
-                s = applied ? $"Colour {hex} (applied)" : $"Colour {hex} (press Apply)";
+                s = applied ? $"Color {hex} (applied)" : $"Color {hex} (press Apply)";
             }
             _infoText.text = s;
         }
@@ -734,9 +754,9 @@ internal static class TabUi
         {
             var kind = CurrentKind;
             var pend = Pending[(int)kind];
-            if (!pend.HasValue) { _message = "Pick a colour first."; RefreshTexts(); return; }
+            if (!pend.HasValue) { _message = "Pick a color first."; RefreshTexts(); return; }
 
-            // Info only: say so when every targeted type already has this colour (applying again is harmless and free).
+            // Info only: say so when every targeted type already has this color (applying again is harmless and free).
             string hex = ClothesStore.Hex(pend.Value);
             bool changes = false;
             foreach (var k in ClothesStore.Kinds)
@@ -761,7 +781,7 @@ internal static class TabUi
         }
         catch (Exception e)
         {
-            Plugin.Error("Applying the colour failed: " + e);
+            Plugin.Error("Applying the color failed: " + e);
             _message = "Applying failed, see the log.";
             RefreshTexts();
         }
@@ -787,12 +807,12 @@ internal static class TabUi
             RefreshToggle();
             RefreshTexts();
         }
-        catch (Exception e) { Plugin.Error("Resetting the colour failed: " + e); }
+        catch (Exception e) { Plugin.Error("Resetting the color failed: " + e); }
     }
 
     // ------------------------------------------------------------------ per frame / per pass
 
-    /// <summary>Fallback when the picker's event couldn't be hooked: poll its colour while the panel is open.</summary>
+    /// <summary>Fallback when the picker's event couldn't be hooked: poll its color while the panel is open.</summary>
     internal static void PerFrame()
     {
         if (!_open || _picker == null || _hooked || _suppress) return;

@@ -9,7 +9,7 @@ using Object = UnityEngine.Object;
 
 namespace EmployeeClothes;
 
-/// <summary>Finds the employees (active or pooled) and makes their clothes match the stored colours.</summary>
+/// <summary>Finds the employees (active or pooled) and makes their clothes match the stored colors.</summary>
 internal static class Employees
 {
     private sealed class Cached
@@ -27,7 +27,7 @@ internal static class Employees
     private static int _lastVersion = -1;
     private static float _nextPrune;
 
-    /// <summary>One sweep: for every employee of a coloured type apply its colour; restore types that lost theirs.</summary>
+    /// <summary>One sweep: for every employee of a colored type apply its color; restore types that lost theirs.</summary>
     internal static void Sweep()
     {
         if (!ClothesStore.AnySet && !Recolor.NeedsRestore) return;
@@ -73,7 +73,7 @@ internal static class Employees
         var c = ClothesStore.Get(kind);
         if (!c.HasValue)
         {
-            // No colour for this type (any more): everything of this type that we changed goes back, pooled ones too.
+            // No color for this type (any more): everything of this type that we changed goes back, pooled ones too.
             if (Recolor.HasEntries(slot)) Recolor.RestoreRegistry(slot);
             return;
         }
@@ -106,12 +106,12 @@ internal static class Employees
                 cd.Version = ClothesStore.Version;
                 cd.NextCheck = now + 3f;
             }
-            catch (Exception e) { Plugin.Debug($"Recolouring a {kind} failed: {e.Message}"); }
+            catch (Exception e) { Plugin.Debug($"Recoloring a {kind} failed: {e.Message}"); }
         }
         if (n != LastCount[slot] || _lastVersion != ClothesStore.Version)
         {
             LastCount[slot] = n;
-            Plugin.Debug($"{ClothesStore.NameOf(kind)}: {n} employee(s) in the scene (incl. pooled), colour #{ClothesStore.Hex(c.Value)}");
+            Plugin.Debug($"{ClothesStore.NameOf(kind)}: {n} employee(s) in the scene (incl. pooled), color #{ClothesStore.Hex(c.Value)}");
         }
     }
 }
@@ -134,7 +134,7 @@ public class ClothesDriver : MonoBehaviour
 
         if (Time.unscaledTime < _next) return;
         _next = Time.unscaledTime + 0.4f;
-        try { ClothesStore.Tick(); } catch (Exception e) { LogOnce("Colour sync", e); }
+        try { ClothesStore.Tick(); } catch (Exception e) { LogOnce("Color sync", e); }
         try { Employees.Sweep(); } catch (Exception e) { LogOnce("Employee sweep", e); }
         try { TabUi.Tick(); } catch (Exception e) { LogOnce("Tab update", e); }
     }

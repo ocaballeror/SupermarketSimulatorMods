@@ -1,5 +1,5 @@
 /*
- * EmployeeClothes: pick the colour of the employees' clothes from the computer (Improvement #15).
+ * EmployeeClothes: pick the color of the employees' clothes from the computer (Improvement #15).
  *
  * HOW THE GAME BUILDS EMPLOYEES (verified in the shipped assets with UnityPy, 2026-11-17; nothing here has been
  * run in-game yet)
@@ -11,31 +11,45 @@
  *  - The look is a skinned Mixamo-style model under "Animated Model" (or similar): SkinnedMeshRenderers LOD0/1/2,
  *    URP/Lit materials with a baked albedo texture (_BaseMap == _MainTex) and _BaseColor = white. There is NO
  *    per-employee customisation at runtime (CharacterCustomize / BmanCustomize ... exist but aren't on employees) and no
- *    tint property to turn. EmployeeTypeColorsSO is only the HR card accent colour, not the clothes.
- *  - Clothes are separate materials (shirt, pants, shoes, jacket, waistcoat, dress, hat, helmet ...), but names lie:
- *    the Restocker's T-shirt is "Hair_Mat" (texture Low_Hair_Tshirt_Mat / Low_Hair_Yaka_Mat). Two restockers
- *    (Restocker_05/06) use a "BritneyBodyMAT" atlas that holds jeans, top, hands and face together; it is NOT recoloured
- *    (a tint can't tell skin from jeans), so those two keep their trousers.
+ *    tint property to turn. EmployeeTypeColorsSO is only the HR card accent color, not the clothes.
+ *  - Clothes are mostly separate materials (shirt, pants, jacket, waistcoat, dress, hat, helmet ...), but names lie and some
+ *    materials are atlases. The classifier looks at "material name | base texture name" (Recolor.ClothesRx) and then
+ *    refuses anything shoe, boot, hair or "yaka" (Recolor.NotClothesRx): shoes are never recolored, and the materials
+ *    called "Hair_Mat" (textures Low_Hair_Tshirt_Mat / Low_Hair_Yaka_Mat) are the hair plus the "RESTOCKER" name badge
+ *    (checked by drawing their UV islands over the textures), not a T-shirt. A few clothes materials also hold things
+ *    that aren't clothes: BritneyBodyMAT (Restocker_05/06: jeans + hands + face + hair + ears), Low_Dress_Mat (Restocker_03/05:
+ *    a blue knit hat + a dark hair blob + the badge), Man_02_Down_Dress_Diff (Baker: jeans + boots + belts), BouncerBody_MAT
+ *    (guard: suit + shoes + belt), Female_Scientist_TOP (a red emblem). For these only the garment pixels are recolored (per
+ *    texture rule: blue hue, jeans islands, suit panels), see "Masked atlases" below. The full verified table of every
+ *    renderer of every employee prefab is in EmployeeClothes/CLAUDE.md.
  *
- * HOW THE CLOTHES ARE RECOLOURED (no model, no mesh and no animation is touched)
- *  - The garments' textures already have colour (blue shirts, red dresses, black suits), so multiplying _BaseColor would
+ * HOW THE CLOTHES ARE RECOLORED (no model, no mesh and no animation is touched)
+ *  - The garments' textures already have color (blue shirts, red dresses, black suits), so multiplying _BaseColor would
  *    only darken them. Instead, once per source texture, a "shade map" is made on the CPU: the texture is copied through
  *    a RenderTexture (the originals aren't readable), each pixel's luminance is compared with the texture's mean
  *    luminance, shade = 1 + (L - mean) * 1.4 clamped to 0.45..1.45, and the map stores shade / 1.45 as grey (alpha is
  *    kept). Folds, seams and logos survive as light/dark variation. The map is compressed to DXT5 (about 1 MB each).
  *  - For every (original material, employee type) a material copy is made whose _BaseMap/_MainTex is the shade map and
- *    whose _BaseColor/_Color is chosen colour * 1.45 * garment shade. The renderer's sharedMaterials entry is swapped.
- *    Changing the colour is then only a SetColor on the copies (so the live preview is free), and "no colour" swaps the
- *    original material back. Pants are 0.7x, shoes 0.5x and waistcoats 0.8x of the colour when the ShadedGarments
- *    setting is on (so an outfit isn't one flat colour).
- *  - A sweeper (ClothesDriver, every 0.4 s) finds the employees of every coloured type (FindObjectsByType including
+ *    whose _BaseColor/_Color is chosen color * 1.45 * garment shade. The renderer's sharedMaterials entry is swapped.
+ *    Changing the color is then only a SetColor on the copies (so the live preview is free), and "no color" swaps the
+ *    original material back. Pants are 0.7x and waistcoats 0.8x of the color when the ShadedGarments setting is on (so
+ *    an outfit isn't one flat color).
+ *  - Masked atlases: for the mixed materials above, a working copy of the texture (at most 512x512, through a RenderTexture)
+ *    is made once; the rule picks the garment pixels, and the shade of each garment pixel is computed like the shade map
+ *    (relative to the garment pixels' mean). For every (material, employee type) a baked RGBA texture is kept: garment
+ *    pixels = color * shade (lookup tables, in linear space like the material tint), every other pixel = the original.
+ *    A new color is one pass over the garment pixels plus SetPixels32/Apply (a few ms), skipped when the color is the same
+ *    as last time. Recolor.GetMaterial(original, slot, color) is the API (cached copy per (material, slot)); the time budget
+ *    postpones a bake to the next pass, so dragging a color picker never stalls a frame. The baked textures belong to the
+ *    material copies and are destroyed with them (after the original materials are put back).
+ *  - A sweeper (ClothesDriver, every 0.4 s) finds the employees of every colored type (FindObjectsByType including
  *    inactive ones: fired employees are pooled by LeanPool and come back later) and makes the renderers of their model
- *    (the top Animator's sub-tree, cached, re-scanned every 8 s, re-verified every 3 s) match the stored colour. That
+ *    (the top Animator's sub-tree, cached, re-scanned every 8 s, re-verified every 3 s) match the stored color. That
  *    covers employees that exist already, hired later, loaded from a save, spawned by the network on a guest, and
  *    anything that restores the original materials. A texture budget (25 ms per pass) spreads the one-off shade-map
  *    creation over a few passes.
  *  - Every swap is recorded in a registry (renderer, slot, original material per index). Restoring (Reset, a type losing
- *    its colour, disabling the mod, a new scene) goes through the registry, so it reaches pooled employees too and runs
+ *    its color, disabling the mod, a new scene) goes through the registry, so it reaches pooled employees too and runs
  *    before any material copy is destroyed; a renderer whose copy was destroyed anyway falls back to the recorded
  *    original. All caches are keyed by GetInstanceID, not by interop pointers.
  *
@@ -47,7 +61,7 @@
  *    CustomizationTab.OnEnable (fallback: a poll in the driver).
  *  - The price (default $500) is charged when the card is CLICKED and the panel opens: charge first, and the panel
  *    opens only if the charge worked (a failure after charging refunds it). This is a paid SESSION: inside it, picking
- *    colours, Apply, Apply to all, Reset and switching type are all free. The session ends on Done, on switching to
+ *    colors, Apply, Apply to all, Reset and switching type are all free. The session ends on Done, on switching to
  *    another tab (the panel is deactivated: PanelWatcher.OnDisable), on leaving the computer (a patch on
  *    Computer.OpenPC = false, plus a Tick check of the PC camera) and on a scene change or disabling the mod. The panel
  *    is only ever activated by a charged click, so it can't be re-entered for free; reopening costs again. The charge is
@@ -55,13 +69,13 @@
  *    MoneyManager.MoneyTransition(-price, UPGRADE_COSTS, true) (MoneyManager already broadcasts to guests); a guest
  *    would use NetworkMoneyManager.OnMoneyTransition_MasterRequest (guests can't open the panel, the branch mirrors
  *    the game). The game's feedback for "can't afford" is the card button being disabled while !HasMoney(price)
- *    (ChangeNameItem.UpdatePurchaseButton / CheckRequirements), which the card does too; it shows the price. The colours
+ *    (ChangeNameItem.UpdatePurchaseButton / CheckRequirements), which the card does too; it shows the price. The colors
  *    are written to the mod's own file at every Apply and Reset (not with the game save).
  *  - The panel (a child of the tab, over a clone of the tab background) has: a RenderTexture preview, arrows to switch
- *    between the 8 employee types (HrEmployeeKind), the game's own ColorPicker widget (cloned from the store-name colour
+ *    between the 8 employee types (HrEmployeeKind), the game's own ColorPicker widget (cloned from the store-name color
  *    picker in the NameChangeCanvas; its Image material is reset so it makes its own), 12 swatches (a fallback if the
  *    picker's shader doesn't work), an "Apply to all" switch (a clone of the game's own ToggleSwitch from the HR tab:
- *    a Slider + handle Button + on/off colours; its gamepad glyph and caption are removed and onValueChanged is ours),
+ *    a Slider + handle Button + on/off colors; its gamepad glyph and caption are removed and onValueChanged is ours),
  *    Apply, Reset and Done.
  *  - The preview: a camera far below the map (y = -5000, an unnamed layer) renders to a 1024x512 RenderTexture. It sees
  *    clones of the model sub-tree ("Animated Model", found as the top Animator) of every prefab of the selected type, in a
@@ -70,16 +84,16 @@
  *
  * MULTIPLAYER
  *  - The host runs the employees; guests have their own copies of the same models (Photon instantiates the networked
- *    prefab), and materials are local, so the colour must be applied on every client that wants to see it.
- *  - Only the host (or the solo player) can change the colours (card disabled for guests: a guest's choice would need a
- *    custom RPC and a way to charge the host). The host publishes the colours as the Photon ROOM property
+ *    prefab), and materials are local, so the color must be applied on every client that wants to see it.
+ *  - Only the host (or the solo player) can change the colors (card disabled for guests: a guest's choice would need a
+ *    custom RPC and a way to charge the host). The host publishes the colors as the Photon ROOM property
  *    "oscar.employeeclothes" (a string like "Restocker=ff8800;Cashier=2255aa"). The game itself keeps "Money",
  *    "roomStartTime" and "RackCount" there and every room-property listener only reads its own key, so unmodded clients
  *    ignore ours. Late joiners get it from the room; modded guests poll it every 0.4 s and apply it. Unmodded guests
- *    see the original colours (harmless).
- *  - Persistence: the host's colours are saved in BepInEx/config/oscar.employeeclothes.saves.txt, one line per save file
+ *    see the original colors (harmless).
+ *  - Persistence: the host's colors are saved in BepInEx/config/oscar.employeeclothes.saves.txt, one line per save file
  *    (SaveManager.CurrentSaveFilePath's file name), because the game's own save format can't be extended. A new game in
- *    a used slot inherits that slot's colours (use Reset, or delete the line).
+ *    a used slot inherits that slot's colors (use Reset, or delete the line).
  *
  * Patches are few on purpose: CustomizationTab.OnEnable (inject the card) and IDManager.Awake (a new game scene: forget
  * cached objects). Everything else is polling and public API calls, so a game update breaks little.
@@ -99,7 +113,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.employeeclothes";
     public const string Name = "Employee Clothes";
-    public const string Version = "1.0.3";
+    public const string Version = "1.0.4";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -125,17 +139,17 @@ public class Plugin : BasePlugin
         Price = Config.Bind("Customization", "Price", 500f,
             new ConfigDescription(
                 "What it costs to open the Employee Clothes screen in the computer's Customization tab. Once it is " +
-                "open you can change colours as often as you like (Apply, Apply to all, Reset, switching types are " +
+                "open you can change colors as often as you like (Apply, Apply to all, Reset, switching types are " +
                 "free) until you close it (Done, another tab, leaving the computer); opening it again costs again. " +
                 "Type a number; 0 makes it free.",
                 new ClampedFloat(0f, 1000000f)));
         ShadedGarments = Config.Bind("Appearance", "ShadedGarments", true,
-            "When on, trousers, shoes and waistcoats are a darker shade of the chosen colour (trousers 70%, " +
-            "waistcoat 80%, shoes 50%), so the outfit isn't one flat colour. When off, every garment is exactly " +
-            "the chosen colour (still shaded by its folds and seams).");
+            "When on, trousers and waistcoats are a darker shade of the chosen color (trousers 70%, " +
+            "waistcoat 80%), so the outfit isn't one flat color. When off, every garment is exactly " +
+            "the chosen color (still shaded by its folds and seams).");
         SyncToGuests = Config.Bind("Multiplayer", "SyncToGuests", true,
-            "Host only: share the chosen colours with the guests (as a Photon room property), so guests who also have " +
-            "this mod see the same colours. Guests without the mod simply see the original clothes.");
+            "Host only: share the chosen colors with the guests (as a Photon room property), so guests who also have " +
+            "this mod see the same colors. Guests without the mod simply see the original clothes.");
         PreviewLight = Config.Bind("Appearance", "PreviewLight", 30f,
             new ConfigDescription(
                 "Brightness of the two lights in the model preview. If the preview looks too dark or washed out, " +

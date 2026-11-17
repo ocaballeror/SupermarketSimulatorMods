@@ -162,7 +162,7 @@ internal static class Preview
         for (int i = 0; i < ts.Length; i++) ts[i].gameObject.layer = layer;
     }
 
-    /// <summary>Shows the models of this type (with the given colour, or the original clothes when null).</summary>
+    /// <summary>Shows the models of this type (with the given color, or the original clothes when null).</summary>
     internal static bool Show(HrEmployeeKind kind, Color? color)
     {
         if (!EnsureStage()) return false;
