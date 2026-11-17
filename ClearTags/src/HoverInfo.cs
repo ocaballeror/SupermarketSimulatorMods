@@ -4,8 +4,37 @@ using UnityEngine;
 
 namespace ClearTags;
 
+/// <summary>One row of the hover panel ("label: value").</summary>
+internal sealed class HoverRow
+{
+    public string Label, Value;
+    public bool Positive;   // value drawn in the game's green (like the positive numbers on the Daily Statistics screen), else white
+}
+
+/// <summary>What the hover panel shows: a title (with brand), an icon, and label/value rows.</summary>
+internal sealed class HoverData
+{
+    public string Title;
+    public int ProductId;          // > 0: icon from ProductAtlasManager.GetProductIcon
+    public Sprite IconSprite;      // furniture: FurnitureSO.FurnitureIcon
+    public string IconKey = "";    // changes only when the icon must be refreshed
+    public readonly System.Collections.Generic.List<HoverRow> Rows = new();
+    public string Signature => _sig ??= Build();
+    private string _sig;
+
+    public void Add(string label, string value, bool positive = false) { Rows.Add(new HoverRow { Label = label, Value = value, Positive = positive }); _sig = null; }
+
+    private string Build()
+    {
+        var sb = new System.Text.StringBuilder(Title ?? "");
+        sb.Append('|').Append(IconKey);
+        foreach (var r in Rows) sb.Append('|').Append(r.Label).Append(':').Append(r.Value);
+        return sb.ToString();
+    }
+}
+
 /// <summary>
-/// Works out what the crosshair is on and builds the hover text.
+/// Works out what the crosshair is on and what the hover panel shows (see <see cref="HoverPanel"/> for how it is drawn).
 ///
 /// Targets (the same ray the game uses in PlayerInteraction.Raycast: camera position + forward, up to
 /// <c>m_InteractionDistance</c>, only colliders in <c>m_InteractableLayer</c>; the game takes the IInteractable
@@ -22,14 +51,12 @@ namespace ClearTags;
 ///    (<c>Label.m_DisplaySlot</c>), a rack slot (<c>m_RackSlot</c>) or a vending slot (<c>m_VendingSlot</c>).
 ///
 /// What is shown (decision, no vanilla tooltip exists for this):
-///  - name: <c>LocalizationManager.LocalizedProductName(id)</c> (falls back to <c>ProductSO.ProductName</c>);
-///  - quantity: box = items inside / capacity (<c>Box.ProductCount</c> / <c>MaxProductCount</c>); shelf slot =
-///    items on the slot / capacity (<c>GridLayoutInStorage.productCount</c>); rack slot = items in all its
-///    boxes and the number of boxes; vending slot = items on the slot;
-///  - price: <c>ProductSO.BoxPrice</c>, the price of one full box of that product at the current market cost
-///    (<c>PriceManager.CurrentCost(id) * GridLayoutInBox.productCount</c>, the price the wholesale market
-///    charges for a box). Shown for every kind of tag, also on a half-empty box, so it always means "what a
-///    box of this costs to buy".
+///  - title: brand + localized name (<see cref="DisplayName"/>); the icon is the product's atlas icon;
+///  - ONLY on a product box (loose, racked or held): quantity = items inside / capacity (<c>Box.ProductCount</c> /
+///    <c>MaxProductCount</c>) and the box price = <c>ProductSO.BoxPrice</c>, the price of one full box of that product at
+///    the current market cost (<c>PriceManager.CurrentCost(id) * GridLayoutInBox.productCount</c>);
+///  - shelf, rack and vending tags: icon and name only, nothing else;
+///  - furniture box: furniture name, its shop price, the furniture's icon sprite; a paint-can box: name only.
 /// </summary>
 internal static class HoverInfo
 {
@@ -37,7 +64,7 @@ internal static class HoverInfo
     internal static string LastKind = "";
 
     /// <summary>The text to show now, or null.</summary>
-    internal static string Resolve()
+    internal static HoverData Resolve()
     {
         if (!Plugin.Active || !Plugin.HoverText.Value) return null;
         if (!NoktaSingleton<PlayerManager>.HasInstance) return null;
@@ -55,7 +82,7 @@ internal static class HoverInfo
         var ray = new Ray(origin, dir);
         float range = pi.m_InteractionDistance;
 
-        string text = null;
+        HoverData text = null;
         IntPtr target = IntPtr.Zero;
 
         // The box in the hands: it is on "Ignore Raycast", so the physics ray never sees it.
@@ -63,13 +90,13 @@ internal static class HoverInfo
         if (held != null && TagHit(TagScaler.UiOf(held), ray, range + 1f))
         {
             target = held.Pointer;
-            text = Cached(target, () => BoxText(held));
+            text = Cached(target, () => BoxData(held));
             LastKind = "held box";
         }
         else if (HeldFurnitureBox(p) is FurnitureBox heldFb && TagHit(TagScaler.UiOf(heldFb), ray, range + 1f))
         {
             target = heldFb.Pointer;
-            text = Cached(target, () => FurnitureBoxText(heldFb));
+            text = Cached(target, () => FurnitureBoxData(heldFb));
             LastKind = "held furniture box";
         }
         else if (Physics.Raycast(origin, dir, out var hit, range, pi.m_InteractableLayer.value))
@@ -82,7 +109,7 @@ internal static class HoverInfo
                 if (label != null)
                 {
                     target = label.Pointer;
-                    text = Cached(target, () => { var t = LabelText(label, out var k); LastKind = k; return t; });
+                    text = Cached(target, () => { var t = LabelData(label, out var k); LastKind = k; return t; });
                 }
                 else
                 {
@@ -92,7 +119,7 @@ internal static class HoverInfo
                         if (TagHit(TagScaler.UiOf(box), ray, range))
                         {
                             target = box.Pointer;
-                            text = Cached(target, () => BoxText(box));
+                            text = Cached(target, () => BoxData(box));
                             LastKind = box.m_Racked ? "racked box" : "box";
                         }
                     }
@@ -102,7 +129,7 @@ internal static class HoverInfo
                         if (fb != null && TagHit(TagScaler.UiOf(fb), ray, range))
                         {
                             target = fb.Pointer;
-                            text = Cached(target, () => FurnitureBoxText(fb));
+                            text = Cached(target, () => FurnitureBoxData(fb));
                             LastKind = "furniture box";
                         }
                     }
@@ -113,20 +140,20 @@ internal static class HoverInfo
         if (target != s_lastTarget)
         {
             s_lastTarget = target;
-            if (text != null) Plugin.Info($"hover ({LastKind}): {text.Replace("\n", " | ")}");
+            if (text != null) Plugin.Info($"hover ({LastKind}): {text.Signature}");
         }
         return text;
     }
 
     private static IntPtr s_cTarget;
-    private static string s_cText;
+    private static HoverData s_cText;
     private static float s_cAt;
 
     /// <summary>
     /// The text is built (game lookups, string formatting) only when the target changes, and then at most twice a
     /// second so quantities stay current; not 60 times a second.
     /// </summary>
-    private static string Cached(IntPtr target, Func<string> build)
+    private static HoverData Cached(IntPtr target, Func<HoverData> build)
     {
         float now = Time.unscaledTime;
         if (target == s_cTarget && now - s_cAt < 0.5f) return s_cText;
@@ -243,27 +270,31 @@ internal static class HoverInfo
         return false;
     }
 
-    private static string BoxText(Box box)
+    private static HoverData BoxData(Box box)
     {
         var so = box.Product;
         if (so == null) return null;
+        var d = ProductHeader(so);
         int count = box.ProductCount;
         int max = 0;
         try { max = box.MaxProductCount; } catch (Exception) { }
-        return Format(so, max > 0 ? $"{count} / {max}" : count.ToString());
+        d.Add("Quantity:", max > 0 ? $"{count} / {max}" : count.ToString(), positive: true);
+        d.Add("Box price:", Money(() => so.BoxPrice));
+        return d;
     }
 
     /// <summary>
     /// Furniture box: name of the furniture inside (<c>LocalizationManager.LocalizedFurnitureName</c>), and
     /// <c>FurnitureSO.Cost</c> as the price (what the furniture shop charges for it; the box is just its packaging).
-    /// There is no quantity, so that line is left out. A paint-bucket box shows the bucket name without a price.
+    /// There is no quantity. The icon is <c>FurnitureSO.FurnitureIcon</c> (a sprite of the furniture-shop atlas). A paint-bucket
+    /// box shows the bucket name without a price or icon.
     /// </summary>
-    private static string FurnitureBoxText(FurnitureBox fb)
+    private static HoverData FurnitureBoxData(FurnitureBox fb)
     {
         var data = fb.Data;
         if (data == null) return null;
+        var d = new HoverData();
         string name = null;
-        string price = null;
         // Same test as NetworkFurnitureBox.OnPhotonInstantiate: bucketData set (and its first field not -1) = paint can box.
         // FurnitureBoxData.Furniture and .Bucket both read the same id field, and Furniture logs an error and scans every
         // FurnitureSO when the id isn't a furniture id, so only touch the one that applies.
@@ -281,7 +312,14 @@ internal static class HoverInfo
                 }
                 catch (Exception) { }
                 if (string.IsNullOrEmpty(name)) name = so.FurnitureName;
-                try { price = "$" + so.Cost.ToString("0.00", CultureInfo.InvariantCulture); } catch (Exception) { }
+                try
+                {
+                    var icon = so.FurnitureIcon;
+                    if (icon != null) { d.IconSprite = icon; d.IconKey = "f" + so.ID; }
+                }
+                catch (Exception) { }
+                string price = Money(() => so.Cost);
+                if (price != null) d.Add("Price:", price);
             }
         }
         else
@@ -298,44 +336,35 @@ internal static class HoverInfo
             }
         }
         if (string.IsNullOrEmpty(name)) return null;
-        return price != null ? $"<b>{name}</b>\nPrice: {price}" : $"<b>{name}</b>";
+        d.Title = name;
+        return d;
     }
 
-    private static string LabelText(Label label, out string kind)
+    /// <summary>Shelf, rack and vending tags: only the product (icon and brand + name); quantity and price are for boxes only.</summary>
+    private static HoverData LabelData(Label label, out string kind)
     {
         kind = "label";
+        int id = 0;
         var ds = label.DisplaySlot;
-        if (ds != null)
+        if (ds != null) { kind = "shelf tag"; id = ds.ProductID; }
+        else
         {
-            kind = "shelf tag";
-            int id = ds.ProductID;
-            var so = Lookup(id);
-            if (so == null) return null;
-            int cap = 0;
-            try { cap = so.GridLayoutInStorage.productCount; } catch (Exception) { }
-            int count = ds.ProductCount;
-            return Format(so, cap > 0 ? $"{count} / {cap}" : count.ToString());
+            var rs = label.RackSlot;
+            if (rs != null)
+            {
+                kind = "rack tag";
+                var data = rs.Data;
+                if (data == null) return null;
+                id = data.ProductID;
+            }
+            else
+            {
+                var vs = label.VendingSlot;
+                if (vs != null) { kind = "vending tag"; id = vs.ProductID; }
+            }
         }
-        var rs = label.RackSlot;
-        if (rs != null)
-        {
-            kind = "rack tag";
-            var data = rs.Data;
-            if (data == null) return null;
-            var so = Lookup(data.ProductID);
-            if (so == null) return null;
-            int boxes = data.BoxCount;
-            return Format(so, $"{rs.ProductCount} ({boxes} {(boxes == 1 ? "box" : "boxes")})");
-        }
-        var vs = label.VendingSlot;
-        if (vs != null)
-        {
-            kind = "vending tag";
-            var so = Lookup(vs.ProductID);
-            if (so == null) return null;
-            return Format(so, vs.ProductCount.ToString());
-        }
-        return null;
+        var so = Lookup(id);
+        return so != null ? ProductHeader(so) : null;
     }
 
     private static ProductSO Lookup(int productId)
@@ -344,7 +373,23 @@ internal static class HoverInfo
         return NoktaSingleton<IDManager>.Instance.ProductSO(productId);
     }
 
-    private static string Format(ProductSO so, string quantity)
+    private static HoverData ProductHeader(ProductSO so)
+    {
+        return new HoverData { Title = DisplayName(so), ProductId = so.ID, IconKey = "p" + so.ID };
+    }
+
+    private static string Money(Func<float> value)
+    {
+        try { return "$" + value().ToString("0.00", CultureInfo.InvariantCulture); } catch (Exception) { return null; }
+    }
+
+    /// <summary>
+    /// "Brand Name", for example "Kilemol Cleaner". The game's own cards (market, pricing, scanner) show
+    /// <c>ProductSO.ProductBrand</c> (a plain, not localized string, field at 0x30) in a separate text next to the localized name
+    /// (<c>LocalizationManager.LocalizedProductName(id)</c>, which <c>ProductSO.TempProductName</c> wraps), so the two are joined here. The brand
+    /// is left out when it is empty or the name already contains it.
+    /// </summary>
+    internal static string DisplayName(ProductSO so)
     {
         string name = null;
         try
@@ -356,9 +401,10 @@ internal static class HoverInfo
         if (string.IsNullOrEmpty(name)) name = so.ProductName;
         if (string.IsNullOrEmpty(name)) name = "Product " + so.ID;
 
-        string price = "?";
-        try { price = "$" + so.BoxPrice.ToString("0.00", CultureInfo.InvariantCulture); } catch (Exception) { }
-
-        return $"<b>{name}</b>\nQuantity: {quantity}\nBox price: {price}";
+        string brand = null;
+        try { brand = so.ProductBrand?.Trim(); } catch (Exception) { }
+        if (!string.IsNullOrEmpty(brand) && name.IndexOf(brand, StringComparison.OrdinalIgnoreCase) < 0)
+            return brand + " " + name;
+        return name;
     }
 }

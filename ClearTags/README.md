@@ -2,16 +2,14 @@
 
 Makes the product tags easier to read.
 
-- **Bigger tags on boxes.** The small tag with the product icon on every box (and the icon tag on furniture boxes) is drawn **2x bigger** by default. The factor is a setting.
-- **Hover text.** Put your crosshair on a tag and a small label under it shows the **product name**, the **quantity**, and the **price of the box**.
-  - **Box tag** (also boxes in racks, and the box in your hands): quantity is the items inside out of the box capacity (for example `12 / 24`).
-  - **Shelf tag** (the product label on a shelf slot): quantity is the items on that slot out of its capacity.
-  - **Rack tag** (the label on a rack slot): quantity is the items in all boxes in that slot and how many boxes there are.
-  - **Vending machine tag**: items on that slot.
-  - **Furniture box tag**: the name of the furniture inside and its price (what the furniture shop charges); no quantity. A paint-can box shows its name only.
-  - **Box price** is what one full box of that product costs to buy at today's market price (the wholesale price), shown for product box tags and shelf, rack and vending tags.
+- **Bigger tags on boxes.** The small tag with the product icon on every box (and the icon tag on furniture boxes) is drawn **2x bigger** by default. The factor is a setting. The tag is nudged as needed so it always stays on the box lid instead of hanging over the edge (on the smallest boxes a 2x tag fills the whole lid).
+- **Hover panel.** Put your crosshair on a tag and a small panel in the game's own menu style (dark rounded panel, the game's font, product icon at the left) appears under the crosshair.
+  - **Box tag** (also boxes in racks, and the box in your hands): the product icon, **brand and name** (for example `Kilemol Cleaner`), the **quantity** (items inside out of the box capacity, for example `12 / 24`) and the **box price**.
+  - **Shelf, rack and vending machine tags**: the product icon and brand and name only.
+  - **Furniture box tag**: the furniture's icon, name and price (what the furniture shop charges). A paint-can box shows its name only.
+  - **Box price** is what one full box of that product costs to buy at today's market price (the wholesale price).
 
-Only the tags on boxes and furniture boxes get bigger. The label icons on shelves, racks and vending machines are left exactly as the game draws them; they only get the hover text.
+Only the tags on boxes and furniture boxes get bigger. The label icons on shelves, racks and vending machines are left exactly as the game draws them; they only get the hover panel.
 
 ## Settings
 
@@ -19,17 +17,17 @@ Only the tags on boxes and furniture boxes get bigger. The label icons on shelve
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch. Takes effect right away: tags go back to normal size and the hover text disappears. |
+| General | `Enabled` | `true` | Master switch. Takes effect right away: tags go back to normal size and the hover panel disappears. |
 | Tags | `ScaleMultiplier` | `2` | A number you type in: 1 = normal size, 2 = twice as big, 1.5 is fine too, from 0.5 to 5. Applies at once, also to boxes already in the store. If your PC uses a decimal comma, type `1,5`. |
-| Hover | `ShowHoverText` | `true` | Show the hover text. |
-| Hover | `TextSize` | `18` | Font size of the hover text, 8 to 48 (scales with your screen resolution). |
+| Hover | `ShowHoverText` | `true` | Show the hover panel. |
+| Hover | `TextSize` | `18` | Text size of the hover panel, 8 to 48; the whole panel scales with it and with your screen resolution. |
 | Diagnostics | `VerboseLogging` | `true` | Logs what the mod does (`[ClearTags]` lines in `BepInEx/LogOutput.log`). |
 
-The words in the hover text ("Quantity", "Box price") are English whatever the game language; product names follow the game language.
+The words in the hover panel ("Quantity", "Box price", "Price") are English whatever the game language; product and furniture names follow the game language. Brand names are shown as the game stores them.
 
 ## Who needs it (multiplayer)
 
-**Only the player who wants the bigger tags and the hover text.** Everything is local: it changes how boxes look on your screen and draws a label on your screen. Nothing is sent over the network and no game data changes. The host and the other players can be unmodded, and every player who installs it gets their own settings.
+**Only the player who wants the bigger tags and the hover text.** Everything is local: it changes how boxes look on your screen and draws a panel on your screen. Nothing is sent over the network and no game data changes. The host and the other players can be unmodded, and every player who installs it gets their own settings.
 
 ## Install
 
@@ -38,4 +36,4 @@ Copy `ClearTags.dll` into `BepInEx/plugins/` (the folder itself, not a subfolder
 ## Compatibility
 
 - Doesn't change any game logic, so it should work with other mods. A mod that resizes the same box tag objects could conflict.
-- The hover text is drawn on top of the screen with Unity's built-in GUI, so it also shows on top of other overlays.
+- The hover panel reuses the game's own font and panel style. If the game's UI can't be found (for example after a game update), the mod falls back to a plain dark text box.

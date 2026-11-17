@@ -4,8 +4,9 @@ using UnityEngine;
 namespace ClearTags;
 
 /// <summary>
-/// Per-frame hook (registered into IL2CPP via BasePlugin.AddComponent): finds the hover target in Update,
-/// draws the text in OnGUI (IMGUI: a dark box with the text under the crosshair), and re-checks all boxes
+/// Per-frame hook (registered into IL2CPP via BasePlugin.AddComponent): finds the hover target in Update and hands it to
+/// <see cref="HoverPanel"/> (a uGUI panel in the game's style). Only when that panel can't be built does OnGUI draw the old
+/// IMGUI text (a dark box with the text under the crosshair). It also re-checks all boxes
 /// every 30 s as a diagnostic safety net for the tag scale (only while VerboseLogging is on; the Box hooks
 /// are what normally resize new boxes, a full scan is too heavy to run for nothing).
 /// </summary>
@@ -15,7 +16,7 @@ public class ClearTagsBehaviour : MonoBehaviour
 
     private const float SweepInterval = 30f;
 
-    private string _text;
+    private string _text;   // IMGUI fallback only
     private float _nextSweep = 5f;
     private bool _drawLogged;
     private GUIStyle _style;
@@ -34,12 +35,15 @@ public class ClearTagsBehaviour : MonoBehaviour
         }
         catch (Exception e) { Plugin.Logger.LogError($"[ClearTags] sweep failed: {e}"); }
 
-        try { _text = HoverInfo.Resolve(); }
+        HoverData data = null;
+        try { data = HoverInfo.Resolve(); }
         catch (Exception e)
         {
-            _text = null;
+            data = null;
             if (!_hoverErrLogged) { _hoverErrLogged = true; Plugin.Logger.LogError($"[ClearTags] hover failed: {e}"); }
         }
+        HoverPanel.Update(data);   // never throws
+        _text = HoverPanel.UseFallback ? HoverPanel.FallbackText : null;
     }
 
     private bool _hoverErrLogged;
@@ -54,7 +58,7 @@ public class ClearTagsBehaviour : MonoBehaviour
             if (!_drawLogged)
             {
                 _drawLogged = true;
-                Plugin.Logger.LogInfo("[ClearTags] OnGUI is drawing the hover text (first time)");
+                Plugin.Logger.LogInfo("[ClearTags] OnGUI is drawing the hover text (plain fallback, first time)");
             }
 
             float scale = Screen.height / 1080f;

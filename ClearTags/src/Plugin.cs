@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.cleartags";
     public const string Name = "Clear Tags";
-    public const string Version = "0.2.2";
+    public const string Version = "0.3.0";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -43,10 +43,10 @@ public class Plugin : BasePlugin
                 "Only affects what you see.",
                 new ClampedFloat(0.5f, 5f)));
         HoverText = Config.Bind("Hover", "ShowHoverText", true,
-            "Show the product name, the quantity and the price of the box while your crosshair is on a box tag, " +
+            "Show a small panel (product icon and name; on a box also the quantity and the box price) while your crosshair is on a box tag, " +
             "a shelf tag or a rack tag (also on the box you are holding).");
         HoverTextSize = Config.Bind("Hover", "TextSize", 18f,
-            new ConfigDescription("Font size of the hover text (at 1080p; scales with the screen height). Type a number from 8 to 48.",
+            new ConfigDescription("Size of the hover panel text (at 1080p; the whole panel scales with it and with the screen height). Type a number from 8 to 48.",
                 new ClampedFloat(8f, 48f)));
         Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
             "Log what the mod does (tag [ClearTags] in BepInEx/LogOutput.log): boxes it resized, and each new hover target.");
