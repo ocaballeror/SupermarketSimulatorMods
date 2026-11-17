@@ -1,6 +1,7 @@
 using System;
 using HarmonyLib;
 using TabComponent = __Project__.Scripts.Computer.Management.CustomizationTab.CustomizationTab;
+using ComputerT = __Project__.Scripts.Computer.Computer;
 
 namespace EmployeeClothes;
 
@@ -35,5 +36,16 @@ internal static class NewSceneResetPatch
             Plugin.Debug("New scene: caches reset");
         }
         catch (Exception e) { Plugin.Error("Scene reset failed: " + e); }
+    }
+}
+
+/// <summary>The player left the computer (Computer.OpenPC set to false): the paid session is over, at once.</summary>
+[HarmonyPatch(typeof(ComputerT), nameof(ComputerT.OpenPC), MethodType.Setter)]
+internal static class ComputerClosePatch
+{
+    private static void Postfix(bool value)
+    {
+        try { if (!value) TabUi.EndSession("left the computer"); }
+        catch (Exception e) { Plugin.Error("Computer close hook failed: " + e); }
     }
 }

@@ -52,8 +52,6 @@ internal static class TabUi
     private static ComputerT _comp;       // the store computer (to notice the player leaving it)
     private static Transform _toggleTpl;   // the game's own ToggleSwitch (HR tab), cloned for "Apply to all"
     private static ToggleSwitch _toggleSwitch;
-    private static Button _applyButton;
-    private static TMP_Text _applyLabel;
     private static string _message;       // a one-off line for the info text (cleared when the colour or type changes)
     private static Image _toggleImage;
     private static Color _toggleBase = Color.white;
@@ -123,8 +121,8 @@ internal static class TabUi
         _card.name = CardName;
         Strip(_card);
         SetText(_card.transform.Find("Title"), "Employee Clothes");
-        SetText(_card.transform.Find("Title/Description"), "Choose the colour of your employees' clothes. Opening is free; each change costs the price shown.");
-        SetText(_card.transform.Find("Cost Info/Cost"), "Per change:");
+        SetText(_card.transform.Find("Title/Description"), "Choose the colour of your employees' clothes. Pay once to open; change as often as you like until you close it.");
+        SetText(_card.transform.Find("Cost Info/Cost"), "Cost:");
         _cardCost = _card.transform.Find("Cost Info/Cost Text")?.GetComponent<TMP_Text>();
         var buttonTr = _card.transform.Find("Purcase Button");
         _cardButton = buttonTr != null ? buttonTr.GetComponent<Button>() : null;
@@ -135,6 +133,9 @@ internal static class TabUi
         _card.transform.SetParent(content, false);
         _card.SetActive(true);
         UpdateCard();
+        // The grid (2 fixed columns, cells 300x120, spacing 30) lays the card out as the 4th cell, in the free slot of row 2.
+        var contentRt = content.GetComponent<RectTransform>();
+        if (contentRt != null) LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
 
         BuildPanel(tab);
         Plugin.Info($"Card added to the Customization tab (colour picker {(_picker != null ? "cloned" : "not available: swatches only")})");
@@ -143,7 +144,7 @@ internal static class TabUi
     /// <summary>Removes the injected UI (mod switched off or scene change).</summary>
     internal static void Remove()
     {
-        try { CloseInternal(); } catch (Exception) { }
+        try { EndSession(); } catch (Exception) { }
         if (_card != null) Object.Destroy(_card);
         if (_panel != null) Object.Destroy(_panel);
         if (_holder != null) Object.Destroy(_holder);
@@ -163,7 +164,7 @@ internal static class TabUi
         }
         catch (Exception) { }
         _card = null; _panel = null; _holder = null; _btnTpl = null; _textTpl = null; _pickerTpl = null;
-        _cardButton = null; _cardCost = null; _kindText = null; _infoText = null; _toggleText = null; _toggleImage = null; _toggleTpl = null; _toggleSwitch = null; _applyButton = null; _applyLabel = null; _raw = null; _picker = null;
+        _cardButton = null; _cardCost = null; _kindText = null; _infoText = null; _toggleText = null; _toggleImage = null; _toggleTpl = null; _toggleSwitch = null; _raw = null; _picker = null;
         _open = false;
         _warnedMissing = false;
         _buildFailed = false;
@@ -217,7 +218,7 @@ internal static class TabUi
         }
 
         var title = MakeText(_panel.transform, "Title", "Employee clothes: pick a colour", 0.02f, 0.90f, 0.78f, 0.99f, TextAlignmentOptions.Left, 26f);
-        MakeButton(_panel.transform, "Done", "Done", 0.80f, 0.915f, 0.98f, 0.985f, CloseInternal);
+        MakeButton(_panel.transform, "Done", "Done", 0.80f, 0.915f, 0.98f, 0.985f, () => EndSession("Done"));
 
         MakeButton(_panel.transform, "Prev", "<", 0.02f, 0.78f, 0.09f, 0.89f, () => ShowKind(_kindIdx - 1));
         _kindText = MakeText(_panel.transform, "Kind", "", 0.10f, 0.78f, 0.53f, 0.89f, TextAlignmentOptions.Center, 24f);
@@ -246,11 +247,16 @@ internal static class TabUi
         // Right column: picker, swatches, apply.
         if (_pickerTpl != null) BuildPicker(tw, th);
         for (int i = 0; i < Swatches.Length; i++) MakeSwatch(_panel.transform, i);
-        _applyButton = MakeButton(_panel.transform, "Apply", "Apply", 0.64f, 0.03f, 0.98f, 0.125f, OnApply);
-        _applyLabel = _applyButton.GetComponentInChildren<TMP_Text>(true);
-        RefreshApply();
+        MakeButton(_panel.transform, "Apply", "Apply", 0.64f, 0.03f, 0.98f, 0.125f, OnApply);
 
+        _panel.AddComponent<PanelWatcher>();   // ends the session at once when the panel gets deactivated (tab switch)
         _panel.SetActive(false);
+    }
+
+    /// <summary>The panel was deactivated (its tab was hidden, the screen closed, ...): the session is over.</summary>
+    internal static void OnPanelDisabled()
+    {
+        if (_open) EndSession("panel disabled");
     }
 
     /// <summary>
@@ -519,7 +525,8 @@ internal static class TabUi
     {
         if (_cardButton == null) return;
         bool guest = ClothesStore.IsGuest;
-        _cardButton.interactable = !guest;   // opening is free; the price is charged by Apply
+        // Like ChangeNameItem.UpdatePurchaseButton / CheckRequirements: the button is disabled while money is short.
+        _cardButton.interactable = !guest && !_open && Affordable(Plugin.Price.Value);
         if (_cardCost != null)
         {
             var s = guest ? "Host only" : PriceText();
@@ -527,21 +534,44 @@ internal static class TabUi
         }
     }
 
+    /// <summary>
+    /// The card was clicked: charge, and open the panel only if the charge worked. The charge is the whole price of a
+    /// session (see EndSession); the same click on the card again, after the session ended, charges again.
+    /// </summary>
     private static void OnCardClicked()
     {
+        bool charged = false;
+        float price = 0f;
         try
         {
             if (ClothesStore.IsGuest || _panel == null || _open) return;
+            price = Plugin.Price.Value;
+            if (!Affordable(price)) { Plugin.Info("Not enough money for Employee Clothes"); UpdateCard(); return; }
+            if (price > 0f)
+            {
+                Charge(price);
+                charged = true;
+                Plugin.Info($"Charged {PriceText()} for opening Employee Clothes");
+            }
             Open();
         }
         catch (Exception e)
         {
             Plugin.Error("Opening Employee Clothes failed: " + e);
-            try { CloseInternal(); } catch (Exception) { }
+            try { EndSession("open failed"); } catch (Exception) { }
+            if (charged)
+            {
+                try
+                {
+                    NoktaSingleton<MoneyManager>.Instance.MoneyTransition(price, MoneyManager.TransitionType.UPGRADE_COSTS, true);
+                    Plugin.Info("Refunded the charge");
+                }
+                catch (Exception e2) { Plugin.Error("Refunding the charge failed: " + e2.Message); }
+            }
         }
     }
 
-    // ------------------------------------------------------------------ the charge (per Apply)
+    // ------------------------------------------------------------------ the charge (per opening)
 
     private static bool Affordable(float price)
     {
@@ -552,24 +582,14 @@ internal static class TabUi
 
     /// <summary>
     /// Takes the money the way the game does when the store name is approved (ChangeNameOverlay.ApproveStoreName):
-    /// offline or host MoneyTransition(-price, UPGRADE_COSTS, true); a guest asks the master. Guests can't open this
-    /// panel's Apply (host only), the branch just mirrors the game.
+    /// offline or host MoneyTransition(-price, UPGRADE_COSTS, true); a guest asks the master. Guests can't open the panel
+    /// (host only), the branch just mirrors the game.
     /// </summary>
     private static void Charge(float price)
     {
         var mm = NoktaSingleton<MoneyManager>.Instance;
         if (ClothesStore.IsGuest) mm.NetworkMoneyManager.OnMoneyTransition_MasterRequest(-price, MoneyManager.TransitionType.UPGRADE_COSTS, true);
         else mm.MoneyTransition(-price, MoneyManager.TransitionType.UPGRADE_COSTS, true);
-    }
-
-    /// <summary>The Apply button shows the price and, like the store-name confirm button, is disabled when money is short.</summary>
-    private static void RefreshApply()
-    {
-        if (_applyButton == null) return;
-        float price = Plugin.Price.Value;
-        SetIfChanged(_applyLabel, price > 0f ? $"Apply ({PriceText()})" : "Apply");
-        bool ok = !ClothesStore.IsGuest && Affordable(price);
-        if (_applyButton.interactable != ok) _applyButton.interactable = ok;
     }
 
     // ------------------------------------------------------------------ opening, switching, applying
@@ -581,18 +601,25 @@ internal static class TabUi
         RefreshToggle();
         _open = true;
         _message = null;
-        RefreshApply();
         _polled = default;
         _panel.SetActive(true);
         _panel.transform.SetAsLastSibling();
         ShowKind(_kindIdx);
     }
 
-    private static void CloseInternal()
+    /// <summary>
+    /// Ends the paid session. A session lasts from the (paid) click on the card until: Done, switching to another tab
+    /// (the panel is deactivated: PanelWatcher.OnDisable), leaving the computer (Computer.OpenPC set to false, or the
+    /// PC camera inactive), a scene change (Forget) or the mod being switched off. The panel is then deactivated for
+    /// good: it is only ever activated by a successful, charged click on the card, so it can't come back for free.
+    /// </summary>
+    internal static void EndSession(string reason = null)
     {
+        bool was = _open;
         _open = false;
-        if (_panel != null) _panel.SetActive(false);
+        try { if (_panel != null && _panel.activeSelf) _panel.SetActive(false); } catch (Exception) { }
         Preview.Hide();
+        if (was) Plugin.Debug("Employee Clothes session ended" + (reason != null ? " (" + reason + ")" : ""));
     }
 
     private static HrEmployeeKind CurrentKind => ClothesStore.Kinds[_kindIdx];
@@ -709,7 +736,7 @@ internal static class TabUi
             var pend = Pending[(int)kind];
             if (!pend.HasValue) { _message = "Pick a colour first."; RefreshTexts(); return; }
 
-            // What would change? Nothing to pay for when every targeted type already has this colour.
+            // Info only: say so when every targeted type already has this colour (applying again is harmless and free).
             string hex = ClothesStore.Hex(pend.Value);
             bool changes = false;
             foreach (var k in ClothesStore.Kinds)
@@ -720,39 +747,21 @@ internal static class TabUi
             }
             if (!changes) { _message = "Already applied."; RefreshTexts(); return; }
 
-            float price = Plugin.Price.Value;
-            if (!Affordable(price))
-            {
-                // The game has no "not enough money" popup for this; it disables the confirm button (ChangeNameItem.UpdatePurchaseButton).
-                _message = $"Not enough money ({PriceText()} needed).";
-                Plugin.Info("Not enough money to apply the colour");
-                RefreshApply();
-                RefreshTexts();
-                return;
-            }
-            if (price > 0f)
-            {
-                // Charge first: if it fails, nothing is applied. One Apply is one charge, also for "Apply to all".
-                Charge(price);
-                Plugin.Info($"Charged {PriceText()} for changing the employee clothes");
-            }
-
             if (_applyAll)
                 foreach (var k in ClothesStore.Kinds) { ClothesStore.Set(k, pend); Pending[(int)k] = pend; }
             else
                 ClothesStore.Set(kind, pend);
-            ClothesStore.Save();   // the colours are saved to the mod's own file together with the charge
+            ClothesStore.Save();   // saved to the mod's own file at every Apply (and Reset), so closing needs no extra step
             Plugin.Info($"Applied #{hex} to {(_applyAll ? "all employee types" : ClothesStore.NameOf(kind))}");
             Employees.Sweep();
             _applyAll = false;
             RefreshToggle();
-            _message = price > 0f ? $"Applied. Charged {PriceText()}." : "Applied.";
-            RefreshApply();
+            _message = "Applied.";
             RefreshTexts();
         }
         catch (Exception e)
         {
-            Plugin.Error("Applying the colour failed (nothing was applied if the charge failed): " + e);
+            Plugin.Error("Applying the colour failed: " + e);
             _message = "Applying failed, see the log.";
             RefreshTexts();
         }
@@ -771,8 +780,8 @@ internal static class TabUi
             }
             ClothesStore.Save();
             Preview.SetColor(null);
-            _message = "Reset to the original clothes (free).";
-            Plugin.Info($"Reset to the original clothes (free): {(_applyAll ? "all employee types" : ClothesStore.NameOf(CurrentKind))}");
+            _message = "Reset to the original clothes.";
+            Plugin.Info($"Reset to the original clothes: {(_applyAll ? "all employee types" : ClothesStore.NameOf(CurrentKind))}");
             Employees.Sweep();
             _applyAll = false;
             RefreshToggle();
@@ -821,7 +830,7 @@ internal static class TabUi
         {
             // The OnEnable patch normally injects the card; this is the fallback.
             if (_buildFailed || Time.unscaledTime < _nextFind) return;
-            _nextFind = Time.unscaledTime + 3f;
+            _nextFind = Time.unscaledTime + 1f;
             if (!NoktaSingleton<IDManager>.HasInstance) return;
             var all = Resources.FindObjectsOfTypeAll(Il2CppType.Of<TabComponent>());
             for (int i = 0; i < all.Length; i++)
@@ -831,9 +840,22 @@ internal static class TabUi
             }
             return;
         }
-        // The tab or the screen was hidden while the panel was open: close it (it costs again next time).
-        if (_open && (_panel == null || !_panel.activeInHierarchy || ScreenClosed())) CloseInternal();
+        // Safety net for the immediate hooks (PanelWatcher.OnDisable, the OpenPC patch): the panel got hidden, or the PC
+        // camera went inactive, while a session was open: end it (the next one costs again).
+        if (_open && (_panel == null || !_panel.activeInHierarchy || ScreenClosed())) EndSession("panel or screen hidden");
         if (_card.activeInHierarchy) UpdateCard();
-        if (_open) { RefreshApply(); if (_infoText != null) RefreshTexts(); }
+        if (_open && _infoText != null) RefreshTexts();
+    }
+}
+
+/// <summary>Sits on the panel: OnDisable fires when the tab is switched away or the screen is hidden.</summary>
+public class PanelWatcher : MonoBehaviour
+{
+    public PanelWatcher(IntPtr ptr) : base(ptr) { }
+
+    private void OnDisable()
+    {
+        try { TabUi.OnPanelDisabled(); }
+        catch (Exception) { }
     }
 }
