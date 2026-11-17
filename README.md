@@ -24,6 +24,7 @@ Each mod folder has its own `README.md` (what it does, its settings, who needs i
 | [Grid Mode Default](GridModeDefault) | Improvement #8 | Grid mode is on by default when placing furniture |
 | [Bulk Shelf Transfer](BulkShelfTransfer) | Improvement #9 | Shift+click moves a whole shelf slot into or out of a box, paper bag or crate |
 | [Player Double Carry](PlayerDoubleCarry) | Improvement #10 | Carry two boxes; neither can be opened until one is put down |
+| [Clear Tags](ClearTags) | Improvement #11 | Box tags are 2x bigger (configurable); a hover text on box, shelf and rack tags shows product, quantity and box price (local only) |
 
 ## Game and platform
 

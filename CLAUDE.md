@@ -218,6 +218,7 @@ Game systems that only one mod touches are documented next to that mod, not in s
 | Moving furniture and putting it back | `FurnitureMoveCancel/CLAUDE.md` |
 | Shelf slots, crates and paper bags, product fly animations | `BulkShelfTransfer/CLAUDE.md` |
 | Carrying two boxes (player) | `PlayerDoubleCarry/CLAUDE.md` |
+| Product tags: box icon tag, shelf/rack `Label`, hover info, box price | `ClearTags/CLAUDE.md` |
 | Janitor (cleaning lady): state machine, stains, mop, movement | `SupermarketFixes/CLAUDE.md` (Game reference: janitor) |
 | Online orders: pending list, notebooks, unread badge, courier claims | `SupermarketFixes/CLAUDE.md` (Game reference: online orders and the courier) |
 
