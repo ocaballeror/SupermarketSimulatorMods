@@ -22,7 +22,7 @@ namespace ClearTags;
 /// (the icon texture) and never touch the scale, so a scale set once stays.
 ///
 /// When it runs: postfixes on Box.OnEnable, Initialize and Setup (every spawn path: store boxes, boxes
-/// loaded from the save, boxes the host spawned for a guest, pooled boxes coming back), plus a slow sweep over
+/// loaded from the save, boxes the host spawned for a guest, pooled boxes coming back), plus a diagnostic sweep (every 30 s, only while VerboseLogging is on) over
 /// all boxes (<see cref="ClearTagsBehaviour"/>) that also logs when a box was missed by the hooks.
 ///
 /// No compounding: the scale a tag had when the mod first saw it is remembered per "Icon UI" GameObject
