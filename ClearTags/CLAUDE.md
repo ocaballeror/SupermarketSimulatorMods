@@ -5,9 +5,15 @@ quantity, box price) when the crosshair is on a box, shelf, rack or vending tag.
 
 ## Status
 
+- v0.2.1 (review round 3): hover text for a paint-can box no longer touches `FurnitureBoxData.Furniture` (it logged an error and scanned
+  every `FurnitureSO` each frame): the paint-can branch is chosen by `bucketData` (same test as `NetworkFurnitureBox.OnPhotonInstantiate`);
+  the text is built only when the target changes and then twice a second at most.
+- **Scope, decided by the user (final):** only the tags on product boxes and furniture boxes are enlarged. Shelf, rack and vending label
+  graphics are intentionally never changed; those labels (and the box tags) only get the floating hover text. No overlay quad, no
+  `ScaleShelfTags` setting, not a gap or a to-do.
+
 - v0.2.0 (review round 2): `FurnitureBox` tags are scaled and have a hover text (see below); the tag hit test is now a ray vs
-  quad-plane test (no depth slack); a decision on shelf/rack/vending tags (NOT scaled, with evidence) is in "Shelf, rack, vending
-  tags: why they are not scaled".
+  quad-plane test (no depth slack).
 - v0.1.1 (review round 1): tag hit test per quad in local space; scale on all three axes; the full scan became a 30 s scan that
   only runs while `VerboseLogging` is on (the hooks are what resize boxes; the scan is a diagnostic safety net, so once the test
   confirms `sweep: N of M` never appears, set `VerboseLogging` to false by default); no game access from `Load`; tag renderers
@@ -115,7 +121,7 @@ live in `RackSlotData`, which is what the rack tag reads).
 
 ## In-game test
 
-1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.1.1 loaded` and `Patches applied (5/5)`.
+1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.2.1 loaded` and `Patches applied (5/5)`.
 2. Load a save with boxes (storage room, racks). A `[ClearTags] sweep: N of M boxes had not been resized by the hooks` line (only while
    `VerboseLogging` is on, first check about 5 s after start, then every 30 s) would mean a spawn path isn't covered; **no sweep line
    is the good case**. Look at a box, and at a furniture box (order furniture): the tag is twice as big and centred on
@@ -124,7 +130,7 @@ live in `RackSlotData`, which is what the rack tag reads).
 4. Change `ScaleMultiplier` in the config manager (for example 3, then 1, then 2): all boxes follow at once, no compounding.
    Toggle `Enabled` off and on: boxes return to normal and back.
 5. Crosshair on the tag of a box on the floor, on a rack, and the box in your hands (look down at it): the hover text appears
-   below the crosshair with name, quantity and box price (furniture box: name and price). The hover must stay off when the crosshair is
+   below the crosshair with name, quantity and box price (furniture box: name and price; a paint-can box: name only, no price, and no error lines in `LogOutput.log` or `Player.log` while you look at it). The hover must stay off when the crosshair is
    clearly beside the tag, also on a box turned about 45 degrees. Crosshair on the box body away from the tag: no text.
 6. Crosshair on a shelf slot's icon label and on a rack slot's label: hover text with the quantity as in the table above.
 7. Multiplayer (host with the mod, guest without, and the other way round): nothing different for the other player.
@@ -139,25 +145,9 @@ whether the label collider is hit at all (the game's own highlight/hint appears 
 - Hover on a tag the ray reaches only outside the box collider (scaled tag poking out past the box edge) is not handled: it needs a
   candidate list of nearby boxes.
 
-## Shelf, rack, vending tags: why they are not scaled
+## Shelf, rack, vending label graphics: intentionally unchanged
 
-The user asked for these to be enlarged too (round 2). Evidence gathered (UnityPy on `resources.assets`, Cpp2IL dumps), and why it was
-not shipped:
-- The painted label is part of the furniture's model: `SM_Shelf_Single` contains two flat plates, 0.1 wide x 0.057 high, at the front
-  face (slot-local z about 0.318, y 0.14 to 0.197 in mesh space, one for the price tag at mesh z 0 to 0.1, one for the label at -0.1 to 0),
-  with uniform UV density; the shader (`Shader Graphs/Furniture_Shader`) draws the label/price tag in them, switched per slot by the bits
-  of `_LabelMask`/`_LabelMask2` (bit 2i = `DisplaySlot.m_PriceTag` active, bit 2i+1 = `m_Label` active; the icon comes from
-  `_AtlasIndexMatrix`/`_IDMatrix`). The prefab's `Label` object (collider 0.02 x 0.07 x 0.105 at slot z 0.294, i.e. about 0.024 behind
-  the plate) has an inactive `Visuals/Optimized` cube (`SM_PriceTag_Cube`, 0.1 x 0.008 x 0.057, material `Label`) that is not drawn.
-- An overlay would need: a quad at the plate, per furniture model (dozens of shelf, fridge, pegboard, hanger, stall, oven, rack and
-  vending meshes, each with its own plate pose); the real size of the icon inside the plate and the draw order of the count text
-  (`UI/ProductTextContainer` is at label-local x +0.004, i.e. behind the plate surface by the numbers above, so its z-order can't be
-  derived from the data); and either a covering plate bigger than the painted one or clearing the label bit in
-  `LabelMaskController.UpdateLabelMask` (patchable: postfix, odd bits of the two floats) to hide the painted one. A 2x plate would also
-  overlap the neighbouring price tag (its plate is adjacent).
-- The only verified piece: `ProductAtlasManager.SetLabelData(productID, MeshRenderer)` is self-contained (sets the atlas material
-  and `_BaseMap` offset on that renderer), so an overlay quad could show the right icon. Position, size, text order and look per
-  furniture model can't be checked without seeing the game, so nothing was shipped (and no `ScaleShelfTags` setting exists).
-- To do it for the standard shelf as a prototype: needs a screenshot loop with the user (plate pose from the mesh dump above, overlay
-  as a child of the `Label` GameObject at label-local x about +0.026, y 0.0015, z -0.007, size 0.1 x 0.057 x factor, label bit cleared).
-
+By the user's decision these are never modified. For reference (measured with UnityPy and the dumps): the painted label is part of
+the furniture model (`SM_Shelf_Single` has a 0.1 x 0.057 plate per label and per price tag at its front face) drawn by
+`Furniture_Shader`, switched per slot by bits of `_LabelMask`/`_LabelMask2` (bit 2i = price tag, 2i+1 = label); the prefab's `Label`
+object is only a collider (about 0.024 behind the plate) with an inactive `Visuals/Optimized` cube. Only the hover text is added there.

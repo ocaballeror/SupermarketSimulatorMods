@@ -29,9 +29,8 @@ namespace ClearTags;
 /// (instance id), and the applied value is always base * factor, set only when the factor changed. Disabling
 /// the mod or setting the multiplier to 1 restores the remembered scale.
 ///
-/// Shelf slot labels and rack slot labels are NOT scaled: their icons aren't objects, the shelf shader paints
-/// them from a texture atlas (LabelMaskController / RackLabelMaskController set the material's
-/// _AtlasIndexMatrix / _IDMatrix), see ClearTags/CLAUDE.md.
+/// Shelf, rack and vending label graphics are intentionally never changed (the user's decision; the shelf
+/// shader paints them, see ClearTags/CLAUDE.md). Only boxes and furniture boxes are touched here.
 /// </summary>
 internal static class TagScaler
 {

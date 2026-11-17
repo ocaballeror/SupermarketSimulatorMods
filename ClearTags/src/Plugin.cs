@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.cleartags";
     public const string Name = "Clear Tags";
-    public const string Version = "0.2.0";
+    public const string Version = "0.2.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

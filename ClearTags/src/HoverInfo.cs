@@ -62,14 +62,14 @@ internal static class HoverInfo
         var held = HeldBox(p);
         if (held != null && TagHit(TagScaler.UiOf(held), ray, range + 1f))
         {
-            text = BoxText(held);
             target = held.Pointer;
+            text = Cached(target, () => BoxText(held));
             LastKind = "held box";
         }
         else if (HeldFurnitureBox(p) is FurnitureBox heldFb && TagHit(TagScaler.UiOf(heldFb), ray, range + 1f))
         {
-            text = FurnitureBoxText(heldFb);
             target = heldFb.Pointer;
+            text = Cached(target, () => FurnitureBoxText(heldFb));
             LastKind = "held furniture box";
         }
         else if (Physics.Raycast(origin, dir, out var hit, range, pi.m_InteractableLayer.value))
@@ -81,8 +81,8 @@ internal static class HoverInfo
                 var label = go.GetComponent<Label>();
                 if (label != null)
                 {
-                    text = LabelText(label, out LastKind);
                     target = label.Pointer;
+                    text = Cached(target, () => { var t = LabelText(label, out var k); LastKind = k; return t; });
                 }
                 else
                 {
@@ -91,8 +91,8 @@ internal static class HoverInfo
                     {
                         if (TagHit(TagScaler.UiOf(box), ray, range))
                         {
-                            text = BoxText(box);
                             target = box.Pointer;
+                            text = Cached(target, () => BoxText(box));
                             LastKind = box.m_Racked ? "racked box" : "box";
                         }
                     }
@@ -101,8 +101,8 @@ internal static class HoverInfo
                         var fb = go.GetComponent<FurnitureBox>();
                         if (fb != null && TagHit(TagScaler.UiOf(fb), ray, range))
                         {
-                            text = FurnitureBoxText(fb);
                             target = fb.Pointer;
+                            text = Cached(target, () => FurnitureBoxText(fb));
                             LastKind = "furniture box";
                         }
                     }
@@ -116,6 +116,24 @@ internal static class HoverInfo
             if (text != null) Plugin.Info($"hover ({LastKind}): {text.Replace("\n", " | ")}");
         }
         return text;
+    }
+
+    private static IntPtr s_cTarget;
+    private static string s_cText;
+    private static float s_cAt;
+
+    /// <summary>
+    /// The text is built (game lookups, string formatting) only when the target changes, and then at most twice a
+    /// second so quantities stay current; not 60 times a second.
+    /// </summary>
+    private static string Cached(IntPtr target, Func<string> build)
+    {
+        float now = Time.unscaledTime;
+        if (target == s_cTarget && now - s_cAt < 0.5f) return s_cText;
+        s_cTarget = target;
+        s_cAt = now;
+        s_cText = build();
+        return s_cText;
     }
 
     private static Box HeldBox(PlayerInstance p)
@@ -244,17 +262,25 @@ internal static class HoverInfo
         if (data == null) return null;
         string name = null;
         string price = null;
-        var so = data.Furniture;
-        if (so != null)
+        // Same test as NetworkFurnitureBox.OnPhotonInstantiate: bucketData set (and its first field not -1) = paint can box.
+        // FurnitureBoxData.Furniture and .Bucket both read the same id field, and Furniture logs an error and scans every
+        // FurnitureSO when the id isn't a furniture id, so only touch the one that applies.
+        var bd = data.bucketData;
+        bool isBucket = bd != null && bd.ProductID != -1;
+        if (!isBucket)
         {
-            try
+            var so = data.Furniture;
+            if (so != null)
             {
-                if (NoktaSingleton<LocalizationManager>.HasInstance)
-                    name = NoktaSingleton<LocalizationManager>.Instance.LocalizedFurnitureName(so.ID);
+                try
+                {
+                    if (NoktaSingleton<LocalizationManager>.HasInstance)
+                        name = NoktaSingleton<LocalizationManager>.Instance.LocalizedFurnitureName(so.ID);
+                }
+                catch (Exception) { }
+                if (string.IsNullOrEmpty(name)) name = so.FurnitureName;
+                try { price = "$" + so.Cost.ToString("0.00", CultureInfo.InvariantCulture); } catch (Exception) { }
             }
-            catch (Exception) { }
-            if (string.IsNullOrEmpty(name)) name = so.FurnitureName;
-            try { price = "$" + so.Cost.ToString("0.00", CultureInfo.InvariantCulture); } catch (Exception) { }
         }
         else
         {

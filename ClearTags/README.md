@@ -11,7 +11,7 @@ Makes the product tags easier to read.
   - **Furniture box tag**: the name of the furniture inside and its price (what the furniture shop charges); no quantity.
   - **Box price** is what one full box of that product costs to buy at today's market price (the wholesale price), shown for every kind of tag.
 
-Only the tags on boxes and furniture boxes get bigger. The label icons on shelves, racks and vending machines are painted into the furniture's own model by the game, so they can't be resized from a mod without risking a broken look; they only get the hover text.
+Only the tags on boxes and furniture boxes get bigger. The label icons on shelves, racks and vending machines are left exactly as the game draws them; they only get the hover text.
 
 ## Settings
 
