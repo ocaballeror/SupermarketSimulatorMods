@@ -1,17 +1,17 @@
 # Employee Clothes
 
-Choose the colour of your employees' clothes. A new **Employee Clothes** card appears in the computer's **Customization** tab, next to the store name and entrance options. It costs **$500** each time you open it (applying and changing colours inside the screen is free).
+Choose the colour of your employees' clothes. A new **Employee Clothes** card appears in the computer's **Customization** tab, next to the store name and entrance options. Opening it is free; like the store name, you pay **$500 each time you press Apply** (one Apply is one charge, even with Apply to all).
 
 The employees keep their models, hair, faces and outfits. Only their clothes (shirts, trousers, shoes, jackets, dresses, hats...) change colour, with the folds and seams of the original outfit still showing.
 
 ## How to use it
 
-1. At the computer, open the **Customization** tab and press **Open** on the Employee Clothes card. You pay the fee.
+1. At the computer, open the **Customization** tab and press **Open** on the Employee Clothes card. This is free.
 2. The screen shows a **preview** of all the models of one employee type (for example the six restockers). Use the **< >** arrows to switch between the eight types: Restocker, Cashier, Customer helper, Ice cream helper, Baker, Janitor, Security guard, Courier.
-3. Pick a colour with the colour picker (the same one used for the store name) or one of the swatches under it. The preview changes while you pick.
-4. Press **Apply**. Every employee of that type changes colour straight away, including employees you hire later, and the choice is remembered when you save and reload.
-5. Tick **Apply to all** to give every type the colour you picked. You can still switch to another type afterwards and apply a different colour to just that one.
-6. **Reset this type** brings back the original clothes (for all types if Apply to all is ticked). **Done** closes the screen.
+3. Pick a colour with the colour picker (the same one used for the store name) or one of the swatches under it. The preview changes while you pick, and picking and switching types cost nothing.
+4. Press **Apply** (the button shows the price and is greyed out when you can't afford it). The money is taken, and every employee of that type changes colour straight away, including employees you hire later, and the choice is remembered when you save and reload.
+5. Switch on **Apply to all** to give every type the colour you picked in one Apply. The switch turns itself off after Apply and when you change type, so you can then pick another type and apply a different colour to just that one (another Apply, another charge).
+6. **Reset this type** brings back the original clothes (for all types if Apply to all is on). Reset is free. **Done** closes the screen.
 
 ## Settings
 
@@ -20,7 +20,7 @@ The employees keep their models, hair, faces and outfits. Only their clothes (sh
 | Section | Setting | Default | What it does |
 |---|---|---|---|
 | General | `Enabled` | `true` | Master switch. Off puts the original clothes back and hides the card, right away. |
-| Customization | `Price` | `500` | What the card costs each time you open it. Type a number; 0 is free. |
+| Customization | `Price` | `500` | What each Apply costs. Type a number; 0 is free. |
 | Appearance | `ShadedGarments` | `true` | Trousers, shoes and waistcoats are a darker shade of the chosen colour (70%, 50%, 80%) so an outfit isn't one flat colour. Off: every garment is exactly the chosen colour. |
 | Appearance | `PreviewLight` | `30` | Brightness of the lights in the model preview (1 to 300). Change it if the preview is too dark or washed out. |
 | Multiplayer | `SyncToGuests` | `true` | Host only: share the colours with guests who also have this mod. |
@@ -34,7 +34,7 @@ The employees keep their models, hair, faces and outfits. Only their clothes (sh
 
 ## Where the colours are kept
 
-The host's colours are saved per save slot in `BepInEx/config/oscar.employeeclothes.saves.txt` (one line per save file) every time you press Apply, not with the game's own save. So if you quit without saving the game, the $500 comes back with the old save but the colours stay. If you start a new game in a slot that already had colours, press Reset for each type (or delete that line).
+The host's colours are saved per save slot in `BepInEx/config/oscar.employeeclothes.saves.txt` (one line per save file) every time you press Apply (together with the charge), not with the game's own save. So if you quit without saving the game afterwards, the game goes back to the money it had at its last save but the colours stay. If you start a new game in a slot that already had colours, press Reset for each type (or delete that line).
 
 ## Good to know
 

@@ -50,6 +50,11 @@ internal static class TabUi
     private static bool _warnedMissing;
     private static bool _buildFailed;     // Build threw once: log it once and stop retrying (until a new scene)
     private static ComputerT _comp;       // the store computer (to notice the player leaving it)
+    private static Transform _toggleTpl;   // the game's own ToggleSwitch (HR tab), cloned for "Apply to all"
+    private static ToggleSwitch _toggleSwitch;
+    private static Button _applyButton;
+    private static TMP_Text _applyLabel;
+    private static string _message;       // a one-off line for the info text (cleared when the colour or type changes)
     private static Image _toggleImage;
     private static Color _toggleBase = Color.white;
     private static bool _hooked;          // the picker's onColorChanged is hooked (otherwise PerFrame polls its colour)
@@ -111,14 +116,15 @@ internal static class TabUi
 
         // The colour picker template (cloned from the store-name colour picker when it exists).
         _pickerTpl = FindPickerSource();
+        _toggleTpl = MakeToggleTemplate();
 
         // The card in the grid.
         _card = Object.Instantiate(template.gameObject, _holder.transform);
         _card.name = CardName;
         Strip(_card);
         SetText(_card.transform.Find("Title"), "Employee Clothes");
-        SetText(_card.transform.Find("Title/Description"), "Choose the colour of your employees' clothes.");
-        SetText(_card.transform.Find("Cost Info/Cost"), "Cost:");
+        SetText(_card.transform.Find("Title/Description"), "Choose the colour of your employees' clothes. Opening is free; each change costs the price shown.");
+        SetText(_card.transform.Find("Cost Info/Cost"), "Per change:");
         _cardCost = _card.transform.Find("Cost Info/Cost Text")?.GetComponent<TMP_Text>();
         var buttonTr = _card.transform.Find("Purcase Button");
         _cardButton = buttonTr != null ? buttonTr.GetComponent<Button>() : null;
@@ -157,7 +163,7 @@ internal static class TabUi
         }
         catch (Exception) { }
         _card = null; _panel = null; _holder = null; _btnTpl = null; _textTpl = null; _pickerTpl = null;
-        _cardButton = null; _cardCost = null; _kindText = null; _infoText = null; _toggleText = null; _toggleImage = null; _raw = null; _picker = null;
+        _cardButton = null; _cardCost = null; _kindText = null; _infoText = null; _toggleText = null; _toggleImage = null; _toggleTpl = null; _toggleSwitch = null; _applyButton = null; _applyLabel = null; _raw = null; _picker = null;
         _open = false;
         _warnedMissing = false;
         _buildFailed = false;
@@ -227,18 +233,104 @@ internal static class TabUi
         _raw.raycastTarget = false;
 
         _infoText = MakeText(_panel.transform, "Info", "", 0.02f, 0.135f, 0.61f, 0.21f, TextAlignmentOptions.Left, 16f);
-        var toggle = MakeButton(_panel.transform, "Apply to all", "[ ] Apply to all", 0.02f, 0.03f, 0.31f, 0.125f, OnToggleAll);
-        _toggleText = toggle.GetComponentInChildren<TMP_Text>(true);
-        _toggleImage = toggle.image;
-        if (_toggleImage != null) _toggleBase = _toggleImage.color;
+        if (!BuildToggle())
+        {
+            // No game toggle to copy: a text button that looks like a checkbox (tinted green while on).
+            var toggle = MakeButton(_panel.transform, "Apply to all", "[ ] Apply to all", 0.02f, 0.03f, 0.31f, 0.125f, OnToggleAll);
+            _toggleText = toggle.GetComponentInChildren<TMP_Text>(true);
+            _toggleImage = toggle.image;
+            if (_toggleImage != null) _toggleBase = _toggleImage.color;
+        }
         MakeButton(_panel.transform, "Reset", "Reset this type", 0.33f, 0.03f, 0.61f, 0.125f, OnReset);
 
         // Right column: picker, swatches, apply.
         if (_pickerTpl != null) BuildPicker(tw, th);
         for (int i = 0; i < Swatches.Length; i++) MakeSwatch(_panel.transform, i);
-        MakeButton(_panel.transform, "Apply", "Apply", 0.64f, 0.03f, 0.98f, 0.125f, OnApply);
+        _applyButton = MakeButton(_panel.transform, "Apply", "Apply", 0.64f, 0.03f, 0.98f, 0.125f, OnApply);
+        _applyLabel = _applyButton.GetComponentInChildren<TMP_Text>(true);
+        RefreshApply();
 
         _panel.SetActive(false);
+    }
+
+    /// <summary>
+    /// Finds one of the game's own switches (ToggleSwitch: a Slider with a handle button and on/off colours, used for the
+    /// working / not-working switch of the HR employee cards and in the licence items) and keeps a stripped copy as a
+    /// template. The HR one (51x18) is preferred over the big licence one. Prefab assets referenced by loaded objects
+    /// are found by FindObjectsOfTypeAll even when no HR card is on screen; if none is loaded the text button is used.
+    /// </summary>
+    private static Transform MakeToggleTemplate()
+    {
+        try
+        {
+            var all = Resources.FindObjectsOfTypeAll(Il2CppType.Of<ToggleSwitch>());
+            ToggleSwitch best = null;
+            for (int i = 0; i < all.Length; i++)
+            {
+                var ts = all[i]?.TryCast<ToggleSwitch>();
+                if (ts == null || ts.m_toggleSlider == null || ts.m_handle == null) continue;
+                var rt = ts.transform as RectTransform;
+                float w = rt != null ? rt.rect.width : 0f;
+                if (w > 20f && w < 80f) { best = ts; break; }
+                best ??= ts;
+            }
+            if (best == null) { Plugin.Warn("No game ToggleSwitch is loaded; \"Apply to all\" is a text button."); return null; }
+            var copy = Object.Instantiate(best.gameObject, _holder.transform);
+            copy.name = "Toggle template";
+            // No gamepad glyph and no caption (the HR card's "XP" label); nothing on the copy may act on an employee.
+            var gp = copy.GetComponentsInChildren<GamepadSwitch>(true);
+            for (int i = 0; i < gp.Length; i++) if (gp[i] != null) Object.DestroyImmediate(gp[i].gameObject);
+            var tmps = copy.GetComponentsInChildren<TMP_Text>(true);
+            for (int i = 0; i < tmps.Length; i++) if (tmps[i] != null) Object.DestroyImmediate(tmps[i].gameObject);
+            var cts = copy.GetComponent<ToggleSwitch>();
+            if (cts == null) { Object.DestroyImmediate(copy); return null; }
+            cts.onValueChanged = null; // a runtime delegate set by the HR card code; Instantiate doesn't copy it, but be sure
+            DisablePersistent(cts.m_handle != null ? cts.m_handle.onClick : null);
+            Plugin.Debug($"Using the game's ToggleSwitch '{best.gameObject.name}' (under '{(best.transform.parent != null ? best.transform.parent.name : "-")}') for Apply to all");
+            return copy.transform;
+        }
+        catch (Exception e)
+        {
+            Plugin.Warn("Cloning the game's toggle failed (" + e.Message + "); \"Apply to all\" is a text button.");
+            return null;
+        }
+    }
+
+    private static void DisablePersistent(UnityEvent ev)
+    {
+        if (ev == null) return;
+        int n = ev.GetPersistentEventCount();
+        for (int i = 0; i < n; i++) ev.SetPersistentListenerState(i, UnityEventCallState.Off);
+    }
+
+    /// <summary>Puts the cloned game switch and its label in the bottom-left slot. False if there is no template.</summary>
+    private static bool BuildToggle()
+    {
+        if (_toggleTpl == null) return false;
+        try
+        {
+            var go = Object.Instantiate(_toggleTpl.gameObject, _panel.transform);
+            go.name = "Apply to all toggle";
+            var ts2 = go.GetComponentsInChildren<Transform>(true);
+            for (int i = 0; i < ts2.Length; i++) ts2[i].gameObject.layer = _panel.layer;
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = rt.anchorMax = new Vector2(0.06f, 0.0775f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.localScale = new Vector3(1.25f, 1.25f, 1f);
+            _toggleSwitch = go.GetComponent<ToggleSwitch>();
+            _toggleSwitch.onValueChanged = (Il2CppSystem.Action<bool>)OnToggled;
+            MakeText(_panel.transform, "Apply to all label", "Apply to all", 0.11f, 0.03f, 0.31f, 0.125f, TextAlignmentOptions.Left, 18f);
+            go.SetActive(true);
+            _toggleSwitch.SetSlider(false);
+            return true;
+        }
+        catch (Exception e)
+        {
+            Plugin.Warn("Placing the game's toggle failed (" + e.Message + "); \"Apply to all\" is a text button.");
+            _toggleSwitch = null;
+            return false;
+        }
     }
 
     private static void BuildPicker(float tw, float th)
@@ -427,14 +519,7 @@ internal static class TabUi
     {
         if (_cardButton == null) return;
         bool guest = ClothesStore.IsGuest;
-        bool money = true;
-        try
-        {
-            float p = Plugin.Price.Value;
-            money = p <= 0f || (NoktaSingleton<MoneyManager>.HasInstance && NoktaSingleton<MoneyManager>.Instance.HasMoney(p));
-        }
-        catch (Exception) { }
-        _cardButton.interactable = !guest && money;
+        _cardButton.interactable = !guest;   // opening is free; the price is charged by Apply
         if (_cardCost != null)
         {
             var s = guest ? "Host only" : PriceText();
@@ -444,32 +529,47 @@ internal static class TabUi
 
     private static void OnCardClicked()
     {
-        bool opened = false;
         try
         {
             if (ClothesStore.IsGuest || _panel == null || _open) return;
-            float price = Plugin.Price.Value;
-            MoneyManager mm = null;
-            if (price > 0f)
-            {
-                mm = NoktaSingleton<MoneyManager>.Instance;
-                if (!mm.HasMoney(price)) { Plugin.Info("Not enough money for the Employee Clothes card"); return; }
-            }
-            // Open first and charge second, so a failure while opening never costs money; a failed charge closes it again.
             Open();
-            opened = true;
-            if (mm != null)
-            {
-                // Same charge the game makes for the store name (ChangeNameOverlay.ApproveStoreName): UPGRADE_COSTS.
-                mm.MoneyTransition(-price, MoneyManager.TransitionType.UPGRADE_COSTS, true);
-                Plugin.Info($"Charged {PriceText()} for opening Employee Clothes");
-            }
         }
         catch (Exception e)
         {
             Plugin.Error("Opening Employee Clothes failed: " + e);
-            if (opened) { try { CloseInternal(); } catch (Exception) { } }
+            try { CloseInternal(); } catch (Exception) { }
         }
+    }
+
+    // ------------------------------------------------------------------ the charge (per Apply)
+
+    private static bool Affordable(float price)
+    {
+        if (price <= 0f) return true;
+        try { return NoktaSingleton<MoneyManager>.HasInstance && NoktaSingleton<MoneyManager>.Instance.HasMoney(price); }
+        catch (Exception) { return false; }
+    }
+
+    /// <summary>
+    /// Takes the money the way the game does when the store name is approved (ChangeNameOverlay.ApproveStoreName):
+    /// offline or host MoneyTransition(-price, UPGRADE_COSTS, true); a guest asks the master. Guests can't open this
+    /// panel's Apply (host only), the branch just mirrors the game.
+    /// </summary>
+    private static void Charge(float price)
+    {
+        var mm = NoktaSingleton<MoneyManager>.Instance;
+        if (ClothesStore.IsGuest) mm.NetworkMoneyManager.OnMoneyTransition_MasterRequest(-price, MoneyManager.TransitionType.UPGRADE_COSTS, true);
+        else mm.MoneyTransition(-price, MoneyManager.TransitionType.UPGRADE_COSTS, true);
+    }
+
+    /// <summary>The Apply button shows the price and, like the store-name confirm button, is disabled when money is short.</summary>
+    private static void RefreshApply()
+    {
+        if (_applyButton == null) return;
+        float price = Plugin.Price.Value;
+        SetIfChanged(_applyLabel, price > 0f ? $"Apply ({PriceText()})" : "Apply");
+        bool ok = !ClothesStore.IsGuest && Affordable(price);
+        if (_applyButton.interactable != ok) _applyButton.interactable = ok;
     }
 
     // ------------------------------------------------------------------ opening, switching, applying
@@ -480,6 +580,8 @@ internal static class TabUi
         _applyAll = false;
         RefreshToggle();
         _open = true;
+        _message = null;
+        RefreshApply();
         _polled = default;
         _panel.SetActive(true);
         _panel.transform.SetAsLastSibling();
@@ -499,6 +601,7 @@ internal static class TabUi
     {
         int n = ClothesStore.Kinds.Length;
         _kindIdx = ((idx % n) + n) % n;
+        _message = null;
         _applyAll = false; // "Apply to all" is for one Apply; switching type untick it so a single type can be overridden
         RefreshToggle();
         var kind = CurrentKind;
@@ -525,7 +628,8 @@ internal static class TabUi
             var pend = Pending[(int)kind];
             var stored = ClothesStore.Get(kind);
             string s;
-            if (!pend.HasValue) s = "Original clothes. Pick a colour, then press Apply.";
+            if (_message != null) s = _message;
+            else if (!pend.HasValue) s = "Original clothes. Pick a colour, then press Apply.";
             else
             {
                 string hex = "#" + ClothesStore.Hex(pend.Value);
@@ -541,8 +645,21 @@ internal static class TabUi
         if (t != null && t.text != s) t.text = s;
     }
 
+    private static void OnToggled(bool on)
+    {
+        _applyAll = on;
+        _message = null;
+        RefreshTexts();
+    }
+
     private static void RefreshToggle()
     {
+        if (_toggleSwitch != null)
+        {
+            try { if (_toggleSwitch.isOn != _applyAll) _toggleSwitch.SetSlider(_applyAll); }
+            catch (Exception) { }
+            return;
+        }
         if (_toggleText != null) _toggleText.text = _applyAll ? "[x] Apply to all" : "[ ] Apply to all";
         // Looks like a checkbox: the button is tinted green while it is on.
         if (_toggleImage != null) _toggleImage.color = _applyAll ? new Color(0.35f, 0.85f, 0.45f, 1f) : _toggleBase;
@@ -552,6 +669,7 @@ internal static class TabUi
     {
         c.a = 1f;
         Pending[(int)CurrentKind] = c;
+        _message = null;
         Preview.SetColor(c);
         RefreshTexts();
     }
@@ -587,20 +705,57 @@ internal static class TabUi
     {
         try
         {
-            var pend = Pending[(int)CurrentKind];
-            if (!pend.HasValue) { if (_infoText != null) _infoText.text = "Pick a colour first."; return; }
+            var kind = CurrentKind;
+            var pend = Pending[(int)kind];
+            if (!pend.HasValue) { _message = "Pick a colour first."; RefreshTexts(); return; }
+
+            // What would change? Nothing to pay for when every targeted type already has this colour.
+            string hex = ClothesStore.Hex(pend.Value);
+            bool changes = false;
+            foreach (var k in ClothesStore.Kinds)
+            {
+                if (!_applyAll && k != kind) continue;
+                var cur = ClothesStore.Get(k);
+                if (!cur.HasValue || ClothesStore.Hex(cur.Value) != hex) changes = true;
+            }
+            if (!changes) { _message = "Already applied."; RefreshTexts(); return; }
+
+            float price = Plugin.Price.Value;
+            if (!Affordable(price))
+            {
+                // The game has no "not enough money" popup for this; it disables the confirm button (ChangeNameItem.UpdatePurchaseButton).
+                _message = $"Not enough money ({PriceText()} needed).";
+                Plugin.Info("Not enough money to apply the colour");
+                RefreshApply();
+                RefreshTexts();
+                return;
+            }
+            if (price > 0f)
+            {
+                // Charge first: if it fails, nothing is applied. One Apply is one charge, also for "Apply to all".
+                Charge(price);
+                Plugin.Info($"Charged {PriceText()} for changing the employee clothes");
+            }
+
             if (_applyAll)
                 foreach (var k in ClothesStore.Kinds) { ClothesStore.Set(k, pend); Pending[(int)k] = pend; }
             else
-                ClothesStore.Set(CurrentKind, pend);
-            ClothesStore.Save();
-            Plugin.Info($"Applied #{ClothesStore.Hex(pend.Value)} to {(_applyAll ? "all employee types" : ClothesStore.NameOf(CurrentKind))}");
+                ClothesStore.Set(kind, pend);
+            ClothesStore.Save();   // the colours are saved to the mod's own file together with the charge
+            Plugin.Info($"Applied #{hex} to {(_applyAll ? "all employee types" : ClothesStore.NameOf(kind))}");
             Employees.Sweep();
             _applyAll = false;
             RefreshToggle();
+            _message = price > 0f ? $"Applied. Charged {PriceText()}." : "Applied.";
+            RefreshApply();
             RefreshTexts();
         }
-        catch (Exception e) { Plugin.Error("Applying the colour failed: " + e); }
+        catch (Exception e)
+        {
+            Plugin.Error("Applying the colour failed (nothing was applied if the charge failed): " + e);
+            _message = "Applying failed, see the log.";
+            RefreshTexts();
+        }
     }
 
     private static void OnReset()
@@ -616,7 +771,8 @@ internal static class TabUi
             }
             ClothesStore.Save();
             Preview.SetColor(null);
-            Plugin.Info($"Reset to the original clothes: {(_applyAll ? "all employee types" : ClothesStore.NameOf(CurrentKind))}");
+            _message = "Reset to the original clothes (free).";
+            Plugin.Info($"Reset to the original clothes (free): {(_applyAll ? "all employee types" : ClothesStore.NameOf(CurrentKind))}");
             Employees.Sweep();
             _applyAll = false;
             RefreshToggle();
@@ -678,6 +834,6 @@ internal static class TabUi
         // The tab or the screen was hidden while the panel was open: close it (it costs again next time).
         if (_open && (_panel == null || !_panel.activeInHierarchy || ScreenClosed())) CloseInternal();
         if (_card.activeInHierarchy) UpdateCard();
-        if (_open && _infoText != null) RefreshTexts();
+        if (_open) { RefreshApply(); if (_infoText != null) RefreshTexts(); }
     }
 }

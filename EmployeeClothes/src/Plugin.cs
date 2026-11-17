@@ -45,13 +45,21 @@
  *    made by instantiating the Store Name card under an inactive holder (no Awake runs), destroying its ChangeNameItem,
  *    the Localize components and the button's listeners, and then re-parenting it. It is injected by a postfix on
  *    CustomizationTab.OnEnable (fallback: a poll in the driver).
- *  - The $500 is charged the way the game charges the store-name change (ChangeNameOverlay.ApproveStoreName):
- *    MoneyManager.MoneyTransition(-price, UPGRADE_COSTS, true) on the host / solo player; MoneyManager already broadcasts
- *    to guests. It is charged each time the card is used, not when applying.
+ *  - Opening the card is free. The price (default $500) is charged each time colours are APPLIED, the way the game
+ *    charges the store-name change when it is approved (ChangeNameOverlay.ApproveStoreName): offline / host
+ *    MoneyManager.MoneyTransition(-price, UPGRADE_COSTS, true) (MoneyManager already broadcasts to guests); a guest would
+ *    use NetworkMoneyManager.OnMoneyTransition_MasterRequest (guests can't apply, the branch mirrors the game). The game
+ *    has no "not enough money" popup there: ChangeNameItem.UpdatePurchaseButton just disables the button while
+ *    !HasMoney(price), so the Apply button does the same and shows the price. The charge comes first: if it throws,
+ *    nothing is applied; if every targeted type already has the colour, nothing is charged. "Apply to all" is one Apply
+ *    and one charge. Reset (back to the original clothes) is free. Picking, swatches and switching type are free.
+ *    The colours are written to the mod's own file in the same Apply (not with the game save).
  *  - The panel (a child of the tab, over a clone of the tab background) has: a RenderTexture preview, arrows to switch
  *    between the 8 employee types (HrEmployeeKind), the game's own ColorPicker widget (cloned from the store-name colour
  *    picker in the NameChangeCanvas; its Image material is reset so it makes its own), 12 swatches (a fallback if the
- *    picker's shader doesn't work), an "Apply to all" toggle, Apply, Reset and Done.
+ *    picker's shader doesn't work), an "Apply to all" switch (a clone of the game's own ToggleSwitch from the HR tab:
+ *    a Slider + handle Button + on/off colours; its gamepad glyph and caption are removed and onValueChanged is ours),
+ *    Apply (with the price), Reset and Done.
  *  - The preview: a camera far below the map (y = -5000, an unnamed layer) renders to a 1024x512 RenderTexture. It sees
  *    clones of the model sub-tree ("Animated Model", found as the top Animator) of every prefab of the selected type, in a
  *    row, rotating slowly, lit by two point lights (limited range, so the store isn't lit; URP ignores light layer masks).
@@ -87,7 +95,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.employeeclothes";
     public const string Name = "Employee Clothes";
-    public const string Version = "1.0.1";
+    public const string Version = "1.0.2";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -112,8 +120,9 @@ public class Plugin : BasePlugin
             "computer's Customization tab right away (no restart); turning it back on restores everything.");
         Price = Config.Bind("Customization", "Price", 500f,
             new ConfigDescription(
-                "What the Employee Clothes card in the computer's Customization tab costs each time you open it " +
-                "(applying and changing colours inside the screen is free). Type a number; 0 makes it free.",
+                "What it costs each time you press Apply in the Employee Clothes screen of the computer's " +
+                "Customization tab (like the store name, you pay when you confirm). Opening the screen, moving the " +
+                "picker, switching types and Reset are free; \"Apply to all\" is one Apply. Type a number; 0 makes it free.",
                 new ClampedFloat(0f, 1000000f)));
         ShadedGarments = Config.Bind("Appearance", "ShadedGarments", true,
             "When on, trousers, shoes and waistcoats are a darker shade of the chosen colour (trousers 70%, " +
