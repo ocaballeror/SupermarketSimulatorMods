@@ -429,7 +429,9 @@ the wrong box type, so make sure to spawn the right one.
 
 ## Improvement #15: Employee clothes
 
-**Status:** open
+**Status:** in-progress  
+**Code:** `EmployeeClothes/`  
+**Waiting on:** Code review, then in-game test (steps in the mod's `CLAUDE.md`); send the `[EmployeeClothes]` lines and a screenshot of the panel.
 
 Create a new entry in the customization menu from the game's computer that allows the
 player to pick the color scheme of the clothes of the employees. It costs $500 to access

@@ -149,6 +149,7 @@ tools/callers.sh decompiled/native-all RackSlot.AddBox              # every meth
 tools/modhash.sh SupermarketFixes/src/Patches/X.cs   # short hash of a mod's code (dir: src/**.cs + csproj), for stale-review checks (the `Review` hash in TODO.md)
 tools/readconst.py 0x1838CEBA8 [--type f|d|i|q]                     # value of a literal ISIL shows only as [0x18...] (default float)
 tools/bindings.py escape                                            # default input bindings: map/action -> key (filter optional)
+<venv>/bin/python -I tools/unity_tree.py "<game>/Supermarket Simulator_Data" level3 --component CustomizationTab [--depth N]   # sub-tree of every object with that component (UI scene objects), or --root <PrefabName> with sharedassets2.assets for prefab roots; shows components, RectTransform anchors/sizes, layers and renderer materials (shader, base texture, base colour)
 <venv>/bin/python tools/unity_components.py "<game>/Supermarket Simulator_Data" [--raw] "<GameObject name>" ...   # components (with script names) of scene objects and prefabs, e.g. "does X have a PhotonView?"; needs UnityPy, ~1 min
 ```
 
@@ -222,6 +223,7 @@ Game systems that only one mod touches are documented next to that mod, not in s
 | Janitor (cleaning lady): state machine, stains, mop, movement | `SupermarketFixes/CLAUDE.md` (Game reference: janitor) |
 | Online orders: pending list, notebooks, unread badge, courier claims | `SupermarketFixes/CLAUDE.md` (Game reference: online orders and the courier) |
 | Courier: state machine, hand-over (`ReceiveBag`), dispatch (E), bag carrying, order deadlines | `AutoCourierLoad/CLAUDE.md` (Game reference: courier) |
+| Employee prefabs, models and materials (which material is clothes, textures not readable), the Customization tab UI, the store-name `ColorPicker`, the `MoneyManager.MoneyTransition` charge pattern | `EmployeeClothes/CLAUDE.md` (Game reference) |
 
 Boxes, holding objects, interactions, input and networking are used by several mods, so they stay in section 8.
 
@@ -324,4 +326,5 @@ Verified in the dumps unless marked otherwise. Addresses and offsets are specifi
   - `X_Order` / `X_Response`: applies the result.
 - Placing moved furniture: the place RPCs of Furniture, Rack, Checkout, CategorySign, Scale, IceCream stand and Computer carry **no position**. Other clients place their copy at whatever transform the Photon transform view has streamed so far. Display, Vending, StorageLight and StoreLight send pos/rot. Anything that teleports furniture should push the exact pose first: `PhotonTransformViewOptimized.BroadcastCurrentTransform()` sends the game's reliable `SyncTransform` RPC. Receivers `SetPositionAndRotation` and reset their interpolation target. It only sends if `photonView.IsMine`. Reliable RPCs are ordered, so it lands before a place RPC sent right after. Not yet confirmed in multiplayer.
 - **Per-player synced data:** Photon player custom properties. The game itself sets `sid` and `png` on `PhotonNetwork.LocalPlayer`. A mod can add its own key with `SetCustomProperties(new ExitGames.Client.Photon.Hashtable { [key] = value })`; `Il2CppSystem.Object` converts implicitly from string and bool. Unmodded clients just store the key, the value persists for late joiners, and others read it from `owner.CustomProperties`. Used by PlayerCrouch; not yet confirmed in-game.
+- **Per-room synced data:** Photon room custom properties. The game itself keeps `Money`, `roomStartTime` and `RackCount` there, and every room-property listener only reads its own key, so a mod can add one (`PhotonNetwork.CurrentRoom.SetCustomProperties` from the master; guests and late joiners read `CurrentRoom.CustomProperties`). Used by EmployeeClothes for a string (`oscar.employeeclothes`); not yet confirmed in-game.
 - Networked objects (boxes, furniture boxes, paint cans) are spawned by the master client (`BoxGenerator.SpawnBox` branches on `IsMasterClient`). Their data reaches guests through Photon instantiation data, so changing spawn data on the host affects everyone.

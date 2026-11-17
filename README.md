@@ -26,6 +26,7 @@ Each mod folder has its own `README.md` (what it does, its settings, who needs i
 | [Player Double Carry](PlayerDoubleCarry) | Improvement #10 | Carry two boxes; neither can be opened until one is put down |
 | [Clear Tags](ClearTags) | Improvement #11 | Box tags are 2x bigger (configurable); a hover text on box, shelf and rack tags shows product, quantity and box price (local only) |
 | [Auto Courier Load](AutoCourierLoad) | Improvement #12 | The returning courier picks up closed, name-tagged delivery bags near his parking space and leaves when his trunk covers every active order or a deadline is close (host only) |
+| [Employee Clothes](EmployeeClothes) | Improvement #15 | Pick the colour of each employee type's clothes from the computer's Customization tab ($500 each time; the host chooses, guests with the mod see it) |
 
 ## Game and platform
 
