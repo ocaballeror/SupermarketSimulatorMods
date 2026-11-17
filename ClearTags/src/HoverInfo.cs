@@ -90,13 +90,15 @@ internal static class HoverInfo
         if (held != null && TagHit(TagScaler.UiOf(held), ray, range + 1f))
         {
             target = held.Pointer;
-            text = Cached(target, () => BoxData(held));
+            s_pBox = held;
+            text = Cached(target, KBox);
             LastKind = "held box";
         }
         else if (HeldFurnitureBox(p) is FurnitureBox heldFb && TagHit(TagScaler.UiOf(heldFb), ray, range + 1f))
         {
             target = heldFb.Pointer;
-            text = Cached(target, () => FurnitureBoxData(heldFb));
+            s_pFb = heldFb;
+            text = Cached(target, KFurn);
             LastKind = "held furniture box";
         }
         else if (Physics.Raycast(origin, dir, out var hit, range, pi.m_InteractableLayer.value))
@@ -109,7 +111,8 @@ internal static class HoverInfo
                 if (label != null)
                 {
                     target = label.Pointer;
-                    text = Cached(target, () => { var t = LabelData(label, out var k); LastKind = k; return t; });
+                    s_pLabel = label;
+                    text = Cached(target, KLabel);
                 }
                 else
                 {
@@ -119,7 +122,8 @@ internal static class HoverInfo
                         if (TagHit(TagScaler.UiOf(box), ray, range))
                         {
                             target = box.Pointer;
-                            text = Cached(target, () => BoxData(box));
+                            s_pBox = box;
+                            text = Cached(target, KBox);
                             LastKind = box.m_Racked ? "racked box" : "box";
                         }
                     }
@@ -129,7 +133,8 @@ internal static class HoverInfo
                         if (fb != null && TagHit(TagScaler.UiOf(fb), ray, range))
                         {
                             target = fb.Pointer;
-                            text = Cached(target, () => FurnitureBoxData(fb));
+                            s_pFb = fb;
+                            text = Cached(target, KFurn);
                             LastKind = "furniture box";
                         }
                     }
@@ -149,18 +154,32 @@ internal static class HoverInfo
     private static HoverData s_cText;
     private static float s_cAt;
 
+    // What to build on a cache miss. Static fields and an int kind instead of a lambda: no closure is allocated per frame.
+    private const int KBox = 0, KFurn = 1, KLabel = 2;
+    private static Box s_pBox;
+    private static FurnitureBox s_pFb;
+    private static Label s_pLabel;
+
     /// <summary>
     /// The text is built (game lookups, string formatting) only when the target changes, and then at most twice a
     /// second so quantities stay current; not 60 times a second.
     /// </summary>
-    private static HoverData Cached(IntPtr target, Func<HoverData> build)
+    private static HoverData Cached(IntPtr target, int kind)
     {
         float now = Time.unscaledTime;
         if (target == s_cTarget && now - s_cAt < 0.5f) return s_cText;
         s_cTarget = target;
         s_cAt = now;
-        s_cText = null;   // if build() throws, don't keep showing the previous target's text
-        try { s_cText = build(); }
+        s_cText = null;   // if the build throws, don't keep showing the previous target's text
+        try
+        {
+            switch (kind)
+            {
+                case KBox: s_cText = BoxData(s_pBox); break;
+                case KFurn: s_cText = FurnitureBoxData(s_pFb); break;
+                default: s_cText = LabelData(s_pLabel, out var k); LastKind = k; break;
+            }
+        }
         catch (Exception) { s_cText = null; }   // cached as "nothing to show" for 0.5 s, then tried again
         return s_cText;
     }
@@ -233,7 +252,7 @@ internal static class HoverInfo
     /// local space: the ray is intersected with the quad's plane (the thinnest axis of its mesh bounds), and the hit
     /// point must lie within the quad's extents in the other two axes (plus 10 %). So the hit area is the quad's real
     /// rectangle at any box rotation and any scale, with no depth slack, and it doesn't matter which local plane the
-    /// mesh lies in. The "Color Point" of a furniture box (a small solid mesh, not flat) is a tiny extra target.
+    /// mesh lies in. The "Color Point" of a furniture box is a small built-in Quad (extents (0.5, 0.5, 0), scale 0.025) and a tiny extra target.
     /// </summary>
     private static bool TagHit(GameObject ui, Ray ray, float maxDistance)
     {
@@ -279,7 +298,8 @@ internal static class HoverInfo
         int max = 0;
         try { max = box.MaxProductCount; } catch (Exception) { }
         d.Add("Quantity:", max > 0 ? $"{count} / {max}" : count.ToString(), positive: true);
-        d.Add("Box price:", Money(() => so.BoxPrice));
+        string price = Money(() => so.BoxPrice);
+        if (price != null) d.Add("Box price:", price);   // a failed price lookup leaves the row out
         return d;
     }
 
@@ -403,8 +423,25 @@ internal static class HoverInfo
 
         string brand = null;
         try { brand = so.ProductBrand?.Trim(); } catch (Exception) { }
-        if (!string.IsNullOrEmpty(brand) && name.IndexOf(brand, StringComparison.OrdinalIgnoreCase) < 0)
+        if (!string.IsNullOrEmpty(brand) && !ContainsWord(name, brand))
             return brand + " " + name;
         return name;
+    }
+
+    /// <summary>Whole-word, case-insensitive containment ("Ice" is not found in "Rice", but is in "Ice Cream" and "Fresh Ice").</summary>
+    private static bool ContainsWord(string text, string word)
+    {
+        int from = 0;
+        while (from <= text.Length - word.Length)
+        {
+            int i = text.IndexOf(word, from, StringComparison.OrdinalIgnoreCase);
+            if (i < 0) return false;
+            bool startOk = i == 0 || !char.IsLetterOrDigit(text[i - 1]);
+            int end = i + word.Length;
+            bool endOk = end >= text.Length || !char.IsLetterOrDigit(text[end]);
+            if (startOk && endOk) return true;
+            from = i + 1;
+        }
+        return false;
     }
 }

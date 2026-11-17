@@ -32,9 +32,10 @@ namespace ClearTags;
 /// Position: the tag sits on the top face of the box, in a corner area (for example (-0.092, 0.484, -0.113) on a
 /// 15x15x15 box whose half width is 0.225), and BG/Icon are rotated 90 degrees about x (the quad faces up). Growing a
 /// tag about its own centre therefore pushes its edge past the box edge (seen in-game at 2x: the frame floated in the
-/// air). So after scaling, all children are shifted together by <see cref="ClampShift"/> until the tag's bounding box lies
-/// inside the box collider's bounds (minus 8 mm); the size is never changed by this. The shift is derived from the base pose
-/// every time, so a factor change at runtime doesn't compound, and factor 1 writes the exact original positions.
+/// air). So <see cref="Plan"/> caps the factor per box so the tag's bounding box fits inside the box collider's bounds (minus
+/// 8 mm; small boxes and large factors therefore get a smaller tag than requested, never smaller than vanilla) and shifts all
+/// children together until it lies inside. It is derived from the base pose every time, so a factor change at runtime doesn't
+/// compound, and factor 1 writes the exact original positions.
 ///
 /// Shelf, rack and vending label graphics are intentionally never changed (the user's decision; the shelf
 /// shader paints them, see ClearTags/CLAUDE.md). Only boxes and furniture boxes are touched here.
@@ -51,12 +52,14 @@ internal static class TagScaler
         public Vector3[] MeshExt;
         public Vector3 Center;   // the "BG" quad's position: children scale about it
         public bool HasFace;     // the box's collider, as an AABB in the "Icon UI" local space (the face the tag must stay on)
+        public bool AppliedFace; // HasFace at the time the current scale was written (a late face means re-apply)
         public Vector3 FaceMin, FaceMax;
     }
 
     /// <summary>Gap kept between the enlarged tag and the box edge (metres, in the tag's parent space): the cardboard is bevelled.</summary>
     private const float EdgeMargin = 0.008f;
-    private static int s_clampLogs;
+    private static readonly HashSet<string> s_capLogged = new();
+    private static bool s_noFaceLogged;
 
     private static readonly Dictionary<int, State> States = new();
 
@@ -84,25 +87,31 @@ internal static class TagScaler
     /// Every box prefab has one on the root (checked: all 18 CardboardBox_* prefabs), and it matches the cardboard model
     /// within 5 mm; the product-box models are not always a plain mesh child (the furniture boxes only have a skinned model),
     /// so the collider is the common reference.
+    /// Computed from the collider's centre/size and "Icon UI"'s own local TRS (its parent is the collider's transform), with
+    /// no world transforms: pooled furniture boxes are tweened to scale 0 (<c>FurnitureBox.OpenBox</c> then Despawn), and a
+    /// world mapping through a zero-scale root would be degenerate.
     /// </summary>
     private static bool TryGetFace(GameObject ui, out Vector3 mn, out Vector3 mx)
     {
         mn = mx = Vector3.zero;
         try
         {
-            var parent = ui.transform.parent;
+            var ut = ui.transform;
+            var parent = ut.parent;
             var col = parent != null ? parent.GetComponent<BoxCollider>() : null;
-            if (col == null) col = ui.GetComponentInParent<BoxCollider>(true);
             if (col == null) return false;
+            var sc = ut.localScale;
+            if (Mathf.Abs(sc.x) < 1e-4f || Mathf.Abs(sc.y) < 1e-4f || Mathf.Abs(sc.z) < 1e-4f) return false;
+            var pos = ut.localPosition;
+            var inv = Quaternion.Inverse(ut.localRotation);
             var c = col.center;
             var h = col.size * 0.5f;
-            var ct = col.transform;
-            var ut = ui.transform;
             bool first = true;
             for (int i = 0; i < 8; i++)
             {
                 var corner = c + new Vector3((i & 1) != 0 ? h.x : -h.x, (i & 2) != 0 ? h.y : -h.y, (i & 4) != 0 ? h.z : -h.z);
-                var p = ut.InverseTransformPoint(ct.TransformPoint(corner));
+                var q = inv * (corner - pos);
+                var p = new Vector3(q.x / sc.x, q.y / sc.y, q.z / sc.z);
                 if (first) { mn = mx = p; first = false; }
                 else { mn = Vector3.Min(mn, p); mx = Vector3.Max(mx, p); }
             }
@@ -112,23 +121,28 @@ internal static class TagScaler
     }
 
     /// <summary>
-    /// Extra offset (in "Icon UI" local space) that keeps the scaled tag inside the face of the box it lies on.
+    /// Works out how the tag is laid out at the requested factor <paramref name="f"/> so that it stays on the face of the box it lies on:
+    /// returns the effective scale factor (never below 1 for f &gt; 1, never above f) and the common shift to add to every
+    /// child's position (in "Icon UI" local space).
     /// The tag is a flat set of quads (BG frame, Icon, and on furniture boxes a Color Point) lying on one face of the box:
-    /// the face is the plane perpendicular to the thinnest axis of the tags' bounding box (in the prefabs that is local y,
-    /// the tag is rotated 90 degrees about x, at y of 0.25 to 0.84 on the top face). On the other two axes the tag's AABB (from the
-    /// children's base pose scaled by <paramref name="f"/> about the frame centre, not from the current transforms, so nothing
-    /// compounds) is moved inside the box collider's AABB minus <see cref="EdgeMargin"/>; a tag bigger than the face is
-    /// centred on it instead. A tag that already fits gets no shift.
+    /// the face is the plane perpendicular to the thinnest axis of the tag's bounding box (local y in the prefabs: the quads are
+    /// rotated 90 degrees about x, so they face up on the top face). The bounding box is the union of every quad's real AABB (its
+    /// mesh bounds with its own rotation and scale, so the Icon's few degrees of in-plane rotation count) from the base pose at
+    /// factor 1. Scaling about the frame centre C scales that box about C, so its extent at factor f is f * ext1. The factor is capped
+    /// to min over the two in-plane axes of (face - 2 * <see cref="EdgeMargin"/>) / ext1, so the tag fits the lid (the smallest boxes
+    /// and anything at 3x or more get a smaller tag than requested); then the tag is shifted inside the face. Everything comes from the base pose,
+    /// so nothing compounds. If the face is smaller than the base tag the factor stays 1 and the tag is left where vanilla has it.
     /// </summary>
-    private static Vector3 ClampShift(State st, float f, string uiName)
+    private static float Plan(State st, float f, out Vector3 shift)
     {
-        if (!st.HasFace || st.BasePos.Length == 0) return Vector3.zero;
+        shift = Vector3.zero;
+        if (!st.HasFace || st.BasePos.Length == 0 || f <= 1.0001f) return f;
         var tmin = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
         var tmax = new Vector3(float.MinValue, float.MinValue, float.MinValue);
         for (int i = 0; i < st.BasePos.Length; i++)
         {
-            var pos = st.Center + (st.BasePos[i] - st.Center) * f;
-            var sc = st.BaseScale[i] * f;
+            var pos = st.BasePos[i];
+            var sc = st.BaseScale[i];
             var rot = st.BaseRot[i];
             var ctr = pos + rot * Vector3.Scale(st.MeshCenter[i], sc);
             var e = st.MeshExt[i];
@@ -142,31 +156,43 @@ internal static class TagScaler
             tmin = Vector3.Min(tmin, ctr - half);
             tmax = Vector3.Max(tmax, ctr + half);
         }
-        // Plain float arrays: no Vector3 indexer calls (the interop struct's indexer is a native call; setting through it is unproven).
+        // Plain float arrays: no Vector3 indexer calls (the interop struct's indexer is a native call).
         float[] mn = { tmin.x, tmin.y, tmin.z }, mx = { tmax.x, tmax.y, tmax.z };
         float[] fmin = { st.FaceMin.x, st.FaceMin.y, st.FaceMin.z }, fmax = { st.FaceMax.x, st.FaceMax.y, st.FaceMax.z };
+        float[] cen = { st.Center.x, st.Center.y, st.Center.z };
         float[] ext = { mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2] };
         int n = 0;                                    // the tag's normal axis = its thinnest extent
         if (ext[1] < ext[n]) n = 1;
         if (ext[2] < ext[n]) n = 2;
+
+        float cap = f;
+        for (int a = 0; a < 3; a++)
+        {
+            if (a == n || ext[a] < 1e-5f) continue;
+            float avail = fmax[a] - fmin[a] - 2f * EdgeMargin;
+            if (avail <= 0f) { cap = 1f; continue; }
+            cap = Mathf.Min(cap, avail / ext[a]);
+        }
+        float fEff = Mathf.Max(1f, Mathf.Min(f, cap));
+        if (fEff <= 1.0001f) return 1f;
+
         float[] sh = new float[3];
         for (int a = 0; a < 3; a++)
         {
             if (a == n) continue;
             float lo = fmin[a] + EdgeMargin, hi = fmax[a] - EdgeMargin;
-            if (hi <= lo) continue;
-            if (ext[a] >= hi - lo) sh[a] = (lo + hi) * 0.5f - (mn[a] + mx[a]) * 0.5f;   // can't fit: centre it
-            else if (mn[a] < lo) sh[a] = lo - mn[a];
-            else if (mx[a] > hi) sh[a] = hi - mx[a];
+            float smin = cen[a] + (mn[a] - cen[a]) * fEff, smax = cen[a] + (mx[a] - cen[a]) * fEff;
+            if (smin < lo) sh[a] = lo - smin;
+            else if (smax > hi) sh[a] = hi - smax;
         }
-        var shift = new Vector3(sh[0], sh[1], sh[2]);
-        if ((sh[0] != 0f || sh[1] != 0f || sh[2] != 0f) && s_clampLogs < 4)
+        shift = new Vector3(sh[0], sh[1], sh[2]);
+        if (fEff < f - 1e-4f)
         {
-            s_clampLogs++;
-            Plugin.Info($"tag kept on its box face (x{f}, normal axis {"xyz"[n]}): shift ({sh[0]:0.000}, {sh[1]:0.000}, {sh[2]:0.000}), " +
-                        $"tag extent ({ext[0]:0.000}, {ext[1]:0.000}, {ext[2]:0.000}), face ({fmin[0]:0.000}, {fmin[1]:0.000}, {fmin[2]:0.000}) .. ({fmax[0]:0.000}, {fmax[1]:0.000}, {fmax[2]:0.000})");
+            string key = $"{fmax[0] - fmin[0]:0.00}x{fmax[2] - fmin[2]:0.00}@{f:0.0}";
+            if (s_capLogged.Add(key))
+                Plugin.Info($"tag capped to x{fEff:0.00} (requested x{f:0.0}) so it fits a lid {fmax[0] - fmin[0]:0.000} x {fmax[2] - fmin[2]:0.000} (normal axis {"xyz"[n]}, base tag extent {ext[0]:0.000}, {ext[1]:0.000}, {ext[2]:0.000}), shift ({sh[0]:0.000}, {sh[1]:0.000}, {sh[2]:0.000})");
         }
-        return shift;
+        return fEff;
     }
 
     /// <summary>Resize one tag to the current factor. Returns true when it actually changed.</summary>
@@ -203,24 +229,33 @@ internal static class TagScaler
                 catch (Exception) { }
             }
             if (n > 0) st.Center = st.BasePos[centre];
-            st.HasFace = TryGetFace(ui, out st.FaceMin, out st.FaceMax);
             States[id] = st;
         }
         if (st.BaseScale.Length != n) return false;         // not the layout we know: leave it alone
-        if (Mathf.Approximately(st.Applied, f)) return false;
+        if (!st.HasFace)
+        {
+            st.HasFace = TryGetFace(ui, out st.FaceMin, out st.FaceMax);   // retried until it works (e.g. a collider-less moment)
+            if (!st.HasFace && !s_noFaceLogged)
+            {
+                s_noFaceLogged = true;
+                Plugin.Info($"no box collider face found for a tag ('{ui.name}', parent '{(tr.parent != null ? tr.parent.name : "none")}'); the tag is scaled without the keep-on-lid clamp until one is found");
+            }
+        }
+        if (Mathf.Approximately(st.Applied, f) && st.AppliedFace == st.HasFace) return false;
 
-        // Keep the bigger tag on the face it lies on: shift all children by one common vector (never changes the size).
-        var shift = Mathf.Approximately(f, 1f) ? Vector3.zero : ClampShift(st, f, ui.name);
+        // Effective factor and a common shift keep the bigger tag on the face it lies on (see Plan).
+        float fEff = Plan(st, f, out var shift);
         for (int i = 0; i < n; i++)
         {
             var c = tr.GetChild(i);
             // All three axes: a flat quad's thickness is invisible, and this is right whichever plane the mesh lies in.
-            c.localScale = st.BaseScale[i] * f;
+            c.localScale = st.BaseScale[i] * fEff;
             // Scale the layout about the frame's centre too (the furniture box's little "Color Point" sits inside the
             // frame; BG and Icon are within a few millimetres of the centre, so they hardly move).
-            c.localPosition = st.Center + (st.BasePos[i] - st.Center) * f + shift;
+            c.localPosition = st.Center + (st.BasePos[i] - st.Center) * fEff + shift;
         }
         st.Applied = f;
+        st.AppliedFace = st.HasFace;
         try
         {
             // The LODGroup caches the object size it culls by; keep it in step with the bigger renderers.

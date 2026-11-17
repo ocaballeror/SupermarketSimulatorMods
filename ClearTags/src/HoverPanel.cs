@@ -26,8 +26,8 @@ namespace ClearTags;
 /// used (<see cref="UseFallback"/>).
 ///
 /// Built lazily from the behaviour's Update (never from Plugin.Load), as one screen-space overlay Canvas with a panel
-/// that is moved/resized only when the content (<see cref="HoverData.Signature"/>), the text size or the screen height
-/// changes; nothing is allocated per frame. The product icon is a RawImage filled by
+/// that is laid out only when the content (<see cref="HoverData.Signature"/>) or the text size changes (sizes are in 1080p
+/// reference units; a CanvasScaler scales them to the real screen); nothing is allocated per frame. The product icon is a RawImage filled by
 /// <c>ProductAtlasManager.GetProductIcon</c>, again only when the icon key changes. Furniture boxes use the furniture's
 /// sprite (texture + rect) in the same RawImage.
 /// </summary>
@@ -57,6 +57,7 @@ internal static class HoverPanel
     private static string _lastIconKey;
     private static float _lastFs;
     private static string _fallbackText;
+    private static string _fallbackSig;
 
     /// <summary>True when the uGUI panel could not be built; the behaviour then draws <see cref="FallbackText"/> with IMGUI.</summary>
     internal static bool UseFallback { get; private set; }
@@ -68,17 +69,18 @@ internal static class HoverPanel
     {
         try
         {
-            if (d == null) { Hide(); _fallbackText = null; return; }
+            if (d == null) { Hide(); _fallbackText = null; _fallbackSig = null; return; }
             if (!_built && !UseFallback) TryBuild();
             if (UseFallback)
             {
-                _fallbackText = Plain(d);
+                string fsig = d.Signature;
+                if (fsig != _fallbackSig) { _fallbackSig = fsig; _fallbackText = Plain(d); }   // rebuilt only when the content changes
                 return;
             }
             if (!_built) return;   // waiting for the next attempt
             if (_root == null) { _built = false; return; }   // destroyed (scene change): build again next frame
 
-            float fs = Mathf.Max(8f, Mathf.Round(Plugin.HoverTextSize.Value * Screen.height / 1080f));
+            float fs = Mathf.Max(8f, Mathf.Round(Plugin.HoverTextSize.Value));   // reference units (1080p); the CanvasScaler does the rest
             string sig = d.Signature;
             if (!_shown || sig != _lastSig || !Mathf.Approximately(fs, _lastFs))
             {
@@ -88,6 +90,7 @@ internal static class HoverPanel
                 _lastFs = fs;
             }
             _shown = true;
+            _errors = 0;   // only consecutive failures count
         }
         catch (Exception e)
         {
@@ -101,7 +104,7 @@ internal static class HoverPanel
                 UseFallback = true;
                 try { if (_root != null) Object.Destroy(_root); } catch (Exception) { }
                 _root = null; _built = false; _shown = false;
-                _fallbackText = d != null ? Plain(d) : null;
+                _fallbackText = null; _fallbackSig = null;   // filled by the next Update
                 Plugin.Logger.LogWarning("[ClearTags] hover panel disabled, using the plain IMGUI text");
             }
         }
@@ -134,6 +137,7 @@ internal static class HoverPanel
         {
             Build();
             _built = true;
+            _attempts = 0;   // only consecutive failures count
         }
         catch (Exception e)
         {
@@ -249,6 +253,8 @@ internal static class HoverPanel
         var font = FindFont(out var fontSource);
         if (font == null) throw new InvalidOperationException("no TMP font asset found (hint prefab, statistics screen)");
 
+        _shown = false; _lastSig = null; _lastIconKey = null; _lastFs = 0f;   // a rebuilt panel starts empty and hidden
+
         // Everything is built under an inactive root so TMP's Awake only runs once the font is set.
         _root = new GameObject("ClearTags.HoverCanvas");
         _root.SetActive(false);
@@ -257,6 +263,13 @@ internal static class HoverPanel
         var canvas = _root.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 120;
+        // Reference resolution 1920x1080, matched on height: sprite border, outline and everything else scale with the screen like
+        // the game's own UI, so all sizes below are in 1080p units.
+        var scaler = _root.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        scaler.matchWidthOrHeight = 1f;
 
         var panelGo = NewUi("Panel", _root.transform);
         _panel = panelGo.GetComponent<RectTransform>();
@@ -390,7 +403,7 @@ internal static class HoverPanel
         float w = x0 + textW + pad;
         float h = pad * 2f + contentH;
 
-        Place(_panel, 0f, Mathf.Round(40f * Screen.height / 1080f), w, h);   // top centre, 40 px (at 1080p) below the crosshair
+        Place(_panel, 0f, 40f, w, h);   // top centre, 40 units (px at 1080p) below the crosshair
         if (hasIcon) Place(_iconRt, pad, pad + (contentH - iconSize) * 0.5f, iconSize, iconSize);
         _icon.enabled = hasIcon;
 
@@ -411,7 +424,6 @@ internal static class HoverPanel
     {
         if (string.IsNullOrEmpty(d.IconKey)) { _lastIconKey = null; return false; }
         if (d.IconKey == _lastIconKey) return _icon.texture != null;
-        _lastIconKey = d.IconKey;
         _icon.texture = null;
         try
         {
@@ -432,6 +444,8 @@ internal static class HoverPanel
             }
         }
         catch (Exception e) { Plugin.Info("icon failed: " + e.Message); _icon.texture = null; }
-        return _icon.texture != null;
+        bool ok = _icon.texture != null;
+        _lastIconKey = ok ? d.IconKey : null;   // a failure is retried at the next layout, not remembered
+        return ok;
     }
 }

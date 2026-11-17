@@ -5,8 +5,12 @@ style (icon, brand + name; on a box also quantity and box price) when the crossh
 
 ## Status
 
+- v0.3.1 (review round 1 of 0.3.0): the tag size is now capped per box so it really fits the lid (0.3.0 only shifted/centred it, so the 8x8x8, 20x10x7 and anything at 3x+ still hung over);
+  the face is computed from local transforms (zero-scale pooled furniture boxes) and retried; panel canvas has a `CanvasScaler` (1920x1080, match height; sizes in reference units);
+  rebuilt panel state reset; icon failure not cached; error counters count consecutive failures; fallback text and Resolve closures no longer allocate per frame;
+  null box price skips the row; brand check is whole-word ("Ice" is not found in "Rice"). **Not yet tested in-game.**
 - v0.3.0 (rework after the first in-game test of 0.2.2; **not yet tested in-game**): (1) the 2x tag is shifted (all children by one
-  vector, size unchanged) so its bounding box stays inside the box collider's bounds minus 8 mm (`TagScaler.ClampShift`);
+  vector) so its bounding box stays inside the box collider's bounds minus 8 mm (`TagScaler.ClampShift`, since replaced by `Plan`);
   (2) the hover text is a uGUI panel (`HoverPanel`) in the game's hint-window style instead of IMGUI, with the IMGUI text kept as a
   fallback; (3) quantity and box price are only shown for product boxes, shelf/rack/vending tags show icon + name only;
   (4) the name is "brand name"; (5) product icon via `ProductAtlasManager.GetProductIcon`, furniture icon via the sprite.
@@ -62,13 +66,13 @@ So scale the **children**, never "Icon UI" (that would scale about the box origi
   5 mm bigger on the 8x8x8). The furniture boxes' models are only a skinned "Animated Model" (the 15x15x15 and 40x26x26) or a mesh child (8x8x8), so the collider is
   the common reference.
 - **Why 2x floated in the air (user's screenshot, 0.2.2):** scaling about the tag centre pushes the edge over the lid edge (15x15x15: tag x -0.253..0.069, lid
-  starts at -0.225; z -0.274..0.048 vs -0.226). `TagScaler.ClampShift` fixes that, see Mechanism.
+  starts at -0.225; z -0.274..0.048 vs -0.226). `TagScaler.Plan` fixes that, see Mechanism.
 - Boxes are pooled (`OnSpawn`/`OnDespawn`) and rendered instanced when static (`ToggleInstanced`, the box mesh only;
   the tag objects stay normal renderers).
 
 **Furniture box tag** (verified in `resources.assets`): same "Icon UI" layout as the product box, but no `m_IconUI` field and no
 `LODGroup`: `FurnitureBox.m_ProductIconImage` (0x28) is the "Icon" child, its parent is "Icon UI" (`TagScaler.UiOf(FurnitureBox)`). Children:
-"BG", "Icon" and "Color Point" (a small solid mesh, scale 0.025, near the frame's corner). Scaling also moves each child's position about
+"BG", "Icon" and "Color Point" (a small built-in Quad like the others (mesh extents (0.5, 0.5, 0)), scale 0.025, near the frame's corner). Scaling also moves each child's position about
 BG's position by the factor, so the Color Point stays in the same spot of the (bigger) frame. `FurnitureBox.Data` (`FurnitureBoxData`):
 `Furniture` (`FurnitureSO`: `ID`, `FurnitureName`, `Cost`) or `Bucket` (paint). Hooks: `OnEnable`, `Initialize` (unique RVAs).
 
@@ -95,14 +99,18 @@ compounds; factor 1 restores the base. `LODGroup.RecalculateBounds()` after a ch
 `sweep: N of M boxes had not been resized by the hooks`: if N > 0 shows up in tests, a spawn path isn't covered by
 the five hooks. Stale ids are pruned during `ResizeAll`.
 
-**Keeping the tag on the lid** (`TagScaler.ClampShift`, since 0.3.0): at state creation the box's `BoxCollider` is turned into an AABB in the "Icon UI"
-local space (`FaceMin/FaceMax`), and each child's base rotation and mesh bounds are cached. For factor f != 1 the AABB of all children (positions
-scaled about BG's centre, scales * f, from the *base* pose, not from the current transforms) is computed; the thinnest axis is the tag's normal (y in
-the prefabs); on the other two axes the tag is moved inside `FaceMin/Max` -/+ 8 mm (`EdgeMargin`), or centred when it is larger than the face. The
-same shift is added to every child's position. f == 1 writes the exact base positions (no shift). Hand-checked numbers: 15x15x15 at 2x shifts by
-(+0.034, +0.057) and ends at x -0.219..0.103, z -0.217..0.105; 8x8x8 at 2x fills the lid (centred); 40x26x26 only shifts z. The first four non-zero shifts are
-logged (`tag kept on its box face ...`). The hover hit test follows the quads, so it needs no change; its old limitation (ray missing the box collider
-but hitting a tag that pokes out) no longer applies for the same reason.
+**Keeping the tag on the lid** (`TagScaler.Plan`, since 0.3.0, capping since 0.3.1): the box's `BoxCollider` is turned into an AABB in the "Icon UI" local space
+(`FaceMin/FaceMax`) from the collider's centre/size and "Icon UI"'s own local TRS (no world transforms: pooled furniture boxes are tweened to scale 0 by
+`FurnitureBox.OpenBox` and then despawned, so a world mapping at that moment would be degenerate; `Apply` retries `TryGetFace` until it works and logs once
+if no collider is found). Each child's base rotation and mesh bounds are cached. For f > 1 the union AABB of all children's *real* (rotated, scaled) quads at the base
+pose is computed; this includes the Icon quad, which is a few degrees rotated and bigger than BG, so the true tag extent is a bit bigger than BG's scale (15x15x15: 0.169 x 0.187, not 0.161).
+Scaling about BG's centre scales that AABB about the same point, so its extent at factor f is f * ext1. The thinnest axis is the tag's normal (y in the prefabs). The effective
+factor is `fEff = max(1, min(f, min over the two in-plane axes of (face - 2 * 8 mm) / ext1))`: the tag is **shrunk below the requested factor** when it wouldn't fit the lid, never
+below vanilla; then all children get one common shift so the AABB lies inside the face. f == 1 (or fEff == 1) writes the exact base positions. `Applied` remembers the requested
+f, and a late-found face re-applies. Hand-checked with the prefab numbers (Icon rotation included): 8x8x8 at 2x or 3x -> fEff 1.68 (lid 0.25); 20x10x7 -> 1.67 (lid 0.6 x 0.3);
+15x15x15 at 2x -> 2.0 with shift (+0.040, +0.083) ending at x -0.219..0.120, z -0.217..0.157, at 3x -> 2.31; 30x20x20 at 3x -> 2.57; 40x26x26 at 2x -> 2.0 (z shift +0.134). The cap
+is logged once per lid size (`tag capped to x... (requested x...)`). The hover hit test follows the quads, so it needs no change; its old limitation (ray missing the box collider but hitting
+a tag that pokes out) no longer applies for the same reason.
 
 **Hover** (`HoverInfo.Resolve`, every frame from `Update`): local player, cursor locked, not paused. Same ray as
 `PlayerInteraction.Raycast` (camera position + forward, `m_InteractionDistance`, `m_InteractableLayer`). First the held box
@@ -114,10 +122,10 @@ turns a racked box hit into its RackSlot interactable, but the hit collider is s
 Since 0.3.0 the enlarged tag stays within the box's collider bounds (see above), so a ray that misses the collider can no longer hit it (apart from the 8 mm margin).
 
 **Panel** (`HoverPanel`, built lazily from `ClearTagsBehaviour.Update` on the first hover, never from `Load`): one screen-space overlay `Canvas`
-(`ClearTags.HoverCanvas`, sorting order 120, `DontDestroyOnLoad`, built under an inactive root so TMP's Awake runs after the font is set) with a panel
+(`ClearTags.HoverCanvas`, sorting order 120, `CanvasScaler` 1920x1080 match height, `DontDestroyOnLoad`, built under an inactive root so TMP's Awake runs after the font is set) with a panel
 (`Image`), a product `RawImage`, a title `TMP_Text`, a 1 px-ish separator `Image` and two `TMP_Text` columns (labels, coloured values). It is re-laid out
-only when `HoverData.Signature`, the text size or the screen height changes (text measured with `preferredWidth/Height`, sizes in pixels derived from
-`TextSize * Screen.height / 1080`); hidden with `SetActive(false)`. The panel is anchored 40 px (at 1080p) below the screen centre. The icon is
+only when `HoverData.Signature` or the text size changes (text measured with `preferredWidth/Height`, sizes in pixels derived from
+`TextSize` (1080p reference units; a `CanvasScaler` scales to the screen)); hidden with `SetActive(false)`. The panel is anchored 40 units (px at 1080p) below the screen centre. The icon is
 refreshed only when `HoverData.IconKey` changes. Any exception is caught; after 3 errors (or 3 failed builds, 3 s apart) the panel is torn down
 and `ClearTagsBehaviour.OnGUI` draws the old IMGUI text from `HoverPanel.FallbackText` (also used when no TMP font is found). IMGUI details of that fallback:
 `new GUIStyle(GUIStyle)` isn't exposed by the interop, so the style starts from `new GUIStyle()`; the first draw logs a line.
@@ -172,9 +180,9 @@ live in `RackSlotData`, which is what the rack tag reads).
 ## In-game test
 
 1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.3.0 loaded` and `Patches applied (5/5)`.
-2. Load a save with boxes (storage room, racks). **Tag position:** a 15x15x15, an 8x8x8, a 30x20x20 and a 40x26x26 furniture box, loose, racked and in your hands: the
-   tag is twice as big and lies completely on the lid (nothing hangs over an edge). `[ClearTags] tag kept on its box face ...` lines show the shifts (first four only). On the 8x8x8
-   the 2x tag fills the whole lid; that is expected. A `[ClearTags] sweep: N of M ...` line (only while `VerboseLogging` is on) would mean a spawn path isn't hooked;
+2. Load a save with boxes (storage room, racks). **Tag position:** a 15x15x15, an 8x8x8, a 20x10x7, a 30x20x20 and a 40x26x26 furniture box, loose, racked and in your hands: the
+   tag lies completely on the lid (nothing hangs over an edge); on big boxes it is 2x, on the smallest (8x8x8, 20x10x7) about 1.7x. `[ClearTags] tag capped to x... (requested x2.0) ...`
+   lines (once per lid size) show where it was reduced. A `[ClearTags] sweep: N of M ...` line (only while `VerboseLogging` is on) would mean a spawn path isn't hooked;
    no sweep line is the good case.
 3. Order a delivery / pick up and put down a box / open and close it: the tag stays big and in place.
 4. Change `ScaleMultiplier` (3, then 1, then 2): all boxes follow, no drift; at 1 the tag is exactly where vanilla puts it. Toggle `Enabled` off and on.

@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.cleartags";
     public const string Name = "Clear Tags";
-    public const string Version = "0.3.0";
+    public const string Version = "0.3.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -39,8 +39,9 @@ public class Plugin : BasePlugin
         TagScale = Config.Bind("Tags", "ScaleMultiplier", 2f,
             new ConfigDescription(
                 "How much bigger the product icon tag on every box is drawn. Type a number: 1 = normal size, " +
-                "2 = twice as big, 1.5 = one and a half times, from 0.5 to 5. Applies at once, also to boxes already in the store. " +
-                "Only affects what you see.",
+                "2 = twice as big, 1.5 = one and a half times, from 0.5 to 5. The tag is kept on the box lid: on small boxes " +
+                "(or with a big number) it ends up smaller than requested, never smaller than the original. Applies at once, " +
+                "also to boxes already in the store. Only affects what you see.",
                 new ClampedFloat(0.5f, 5f)));
         HoverText = Config.Bind("Hover", "ShowHoverText", true,
             "Show a small panel (product icon and name; on a box also the quantity and the box price) while your crosshair is on a box tag, " +
