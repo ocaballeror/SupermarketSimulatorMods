@@ -41,8 +41,14 @@ internal static class TabUi
     private static RawImage _raw;
     private static ColorPicker _picker;
 
-    private static int _kindIdx;
-    private static bool _applyAll;
+    private static int _kindIdx;                 // index into _kinds
+    private static HrEmployeeKind[] _kinds = ClothesStore.Kinds;   // the unlocked types, refreshed at every Open
+    private static HrEmployeeKind _lastKind = HrEmployeeKind.Restocker;
+    private static bool _applyAll;               // mirrors the config entry [Customization] ApplyToAll
+    private static TabComponent _tab;            // the tab the panel lives in (its Unlocked content is hidden while open)
+    private static bool _hidUnlocked, _unlockedWasActive;
+    private static GameObject _prevBtn, _nextBtn;
+    private static TMP_Text _resetLabel, _applyLabel;
     private static bool _suppress;
     private static bool _open;
     private static readonly Color?[] Pending = new Color?[8];
@@ -166,6 +172,8 @@ internal static class TabUi
         catch (Exception) { }
         _card = null; _panel = null; _holder = null; _btnTpl = null; _textTpl = null; _pickerTpl = null;
         _cardButton = null; _cardCost = null; _kindText = null; _infoText = null; _toggleText = null; _toggleImage = null; _toggleTpl = null; _toggleSwitch = null; _raw = null; _picker = null;
+        _prevBtn = null; _nextBtn = null; _resetLabel = null; _applyLabel = null; _tab = null;
+        _hidUnlocked = false;
         _open = false;
         _warnedMissing = false;
         _buildFailed = false;
@@ -204,26 +212,32 @@ internal static class TabUi
         float tw = 695f, th = 367f;
         if (tabRt != null && tabRt.rect.width > 50f && tabRt.rect.height > 50f) { tw = tabRt.rect.width; th = tabRt.rect.height; }
 
+        _tab = tab;
         _panel = new GameObject(PanelName);
         _panel.layer = tab.gameObject.layer;
         var prt = _panel.AddComponent<RectTransform>();
         _panel.transform.SetParent(tab.transform, false);
         Anchors(prt, 0f, 0f, 1f, 1f);
+        // No CanvasGroup on purpose (v1.0.5 review): an own group with ignoreParentGroups would also ignore an ancestor's
+        // interactable / blocksRaycasts, and nothing shows that an ancestor fades; the opaque BG below does the job.
 
-        var bgSrc = tab.transform.Find("BG");
-        if (bgSrc != null)
-        {
-            var bg = Object.Instantiate(bgSrc.gameObject, _panel.transform);
-            bg.name = "BG";
-            Anchors(bg.GetComponent<RectTransform>(), 0f, 0f, 1f, 1f);
-        }
+        // An opaque background (the tab's own BG is translucent: the cards underneath showed through in v1.0.4). The
+        // colour is the tab's cyan as seen on screen; it also swallows clicks meant for what is below.
+        var bg = new GameObject("BG");
+        bg.layer = _panel.layer;
+        var bgRt = bg.AddComponent<RectTransform>();
+        bg.transform.SetParent(_panel.transform, false);
+        Anchors(bgRt, 0f, 0f, 1f, 1f);
+        var bgImg = bg.AddComponent<Image>();
+        bgImg.color = new Color(0.20f, 0.645f, 0.82f, 1f);
+        bgImg.raycastTarget = true;
 
         var title = MakeText(_panel.transform, "Title", "Employee clothes: pick a color", 0.02f, 0.90f, 0.78f, 0.99f, TextAlignmentOptions.Left, 26f);
         MakeButton(_panel.transform, "Done", "Done", 0.80f, 0.915f, 0.98f, 0.985f, () => EndSession("Done"));
 
-        MakeButton(_panel.transform, "Prev", "<", 0.02f, 0.78f, 0.09f, 0.89f, () => ShowKind(_kindIdx - 1));
+        _prevBtn = MakeButton(_panel.transform, "Prev", "<", 0.02f, 0.78f, 0.09f, 0.89f, () => ShowKind(_kindIdx - 1)).gameObject;
         _kindText = MakeText(_panel.transform, "Kind", "", 0.10f, 0.78f, 0.53f, 0.89f, TextAlignmentOptions.Center, 24f);
-        MakeButton(_panel.transform, "Next", ">", 0.54f, 0.78f, 0.61f, 0.89f, () => ShowKind(_kindIdx + 1));
+        _nextBtn = MakeButton(_panel.transform, "Next", ">", 0.54f, 0.78f, 0.61f, 0.89f, () => ShowKind(_kindIdx + 1)).gameObject;
 
         var rawGo = new GameObject("Preview");
         rawGo.layer = _panel.layer;
@@ -243,12 +257,14 @@ internal static class TabUi
             _toggleImage = toggle.image;
             if (_toggleImage != null) _toggleBase = _toggleImage.color;
         }
-        MakeButton(_panel.transform, "Reset", "Reset this type", 0.33f, 0.03f, 0.61f, 0.125f, OnReset);
+        var resetBtn = MakeButton(_panel.transform, "Reset", "Reset this type", 0.33f, 0.03f, 0.61f, 0.125f, OnReset);
+        _resetLabel = resetBtn.GetComponentInChildren<TMP_Text>(true);
 
         // Right column: picker, swatches, apply.
         if (_pickerTpl != null) BuildPicker(tw, th);
         for (int i = 0; i < Swatches.Length; i++) MakeSwatch(_panel.transform, i);
-        MakeButton(_panel.transform, "Apply", "Apply", 0.64f, 0.03f, 0.98f, 0.125f, OnApply);
+        var applyBtn = MakeButton(_panel.transform, "Apply", "Apply", 0.64f, 0.03f, 0.98f, 0.125f, OnApply);
+        _applyLabel = applyBtn.GetComponentInChildren<TMP_Text>(true);
 
         _panel.AddComponent<PanelWatcher>();   // ends the session at once when the panel gets deactivated (tab switch)
         _panel.SetActive(false);
@@ -437,6 +453,7 @@ internal static class TabUi
         t.fontSizeMin = 6f;
         t.fontSizeMax = maxSize;
         t.raycastTarget = false;
+        t.color = Color.white;   // opaque white whatever the card's title colour/alpha is
         return t;
     }
 
@@ -617,14 +634,102 @@ internal static class TabUi
     private static void Open()
     {
         for (int i = 0; i < Pending.Length; i++) Pending[i] = ClothesStore.Get((HrEmployeeKind)i);
-        _applyAll = false;
-        RefreshToggle();
+        RefreshKinds();
+        _applyAll = Plugin.ApplyToAll.Value;   // remembered between sessions and game starts
         _open = true;
         _message = null;
         _polled = default;
+        HideUnlocked();
         _panel.SetActive(true);
         _panel.transform.SetAsLastSibling();
+        RefreshToggle(true);
         ShowKind(_kindIdx);
+    }
+
+    /// <summary>Works out which employee types are unlocked (see ClothesStore.IsUnlocked) and keeps the current one if it still is.</summary>
+    private static void RefreshKinds()
+    {
+        _kinds = ClothesStore.UnlockedKinds(out var report);
+        int at = Array.IndexOf(_kinds, _lastKind);
+        _kindIdx = at >= 0 ? at : 0;
+        _lastKind = _kinds[_kindIdx];
+        string hr = null;
+        if (Plugin.Verbose != null && Plugin.Verbose.Value)   // diagnostic only; it searches all loaded HiringTab objects
+        {
+            try { hr = HiringTabAvailability(); } catch (Exception) { }
+        }
+        Plugin.Debug($"Employee types in the panel ({_kinds.Length}/{ClothesStore.Kinds.Length}): {report}" + (hr != null ? $"; the Hiring tab's own list says: {hr}" : ""));
+        bool several = _kinds.Length > 1;
+        if (_prevBtn != null) _prevBtn.SetActive(several);
+        if (_nextBtn != null) _nextBtn.SetActive(several);
+    }
+
+    /// <summary>Diagnostic only: the live Hiring tab's kind/availability arrays (they are filled when that tab is enabled).</summary>
+    private static string HiringTabAvailability()
+    {
+        var all = Resources.FindObjectsOfTypeAll(Il2CppType.Of<__Project__.Scripts.Computer.Management.Hiring_Tab.HiringTab>());
+        for (int i = 0; i < all.Length; i++)
+        {
+            var ht = all[i]?.TryCast<__Project__.Scripts.Computer.Management.Hiring_Tab.HiringTab>();
+            if (ht == null || !ht.gameObject.scene.IsValid() || ht.m_Kinds == null || ht.m_Available == null) continue;
+            var sb = new System.Text.StringBuilder();
+            int n = Math.Min(ht.m_Kinds.Length, ht.m_Available.Length);
+            for (int k = 0; k < n; k++)
+            {
+                if (k > 0) sb.Append(", ");
+                sb.Append(ClothesStore.NameOf(ht.m_Kinds[k])).Append('=').Append(ht.m_Available[k] ? "yes" : "no");
+            }
+            return sb.ToString();
+        }
+        return null;
+    }
+
+    /// <summary>The tab's own content (the cards) is switched off while the panel is open, so nothing of it can show through.</summary>
+    private static void HideUnlocked()
+    {
+        try
+        {
+            var u = _tab != null ? _tab.m_UnlockedUI : null;
+            if (u == null) return;
+            _unlockedWasActive = u.activeSelf;
+            _hidUnlocked = true;
+            if (_unlockedWasActive) u.SetActive(false);
+        }
+        catch (Exception e) { Plugin.Warn("Hiding the tab's cards failed: " + e.Message); }
+    }
+
+    /// <summary>
+    /// Safety net, called from the CustomizationTab.OnEnable patch: the vanilla cards must never stay hidden. With no
+    /// session open, a leftover hide is undone; and if neither Locked nor Unlocked is active (only possible if something
+    /// hid them without us restoring), the game's own UpdateUI decides again (it shows Unlocked or Locked from the store
+    /// upgrade level), with Unlocked forced on as a last resort when m_UpgradedStore says the store is upgraded.
+    /// </summary>
+    internal static void EnsureCardsVisible(TabComponent tab)
+    {
+        if (_open || tab == null) return;
+        try
+        {
+            if (_hidUnlocked) RestoreUnlocked();
+            var u = tab.m_UnlockedUI;
+            var l = tab.m_LockedUI;
+            if (u == null || u.activeSelf || (l != null && l.activeSelf)) return;
+            Plugin.Debug("Customization tab: neither Locked nor Unlocked is active; asking the tab to refresh");
+            try { tab.UpdateUI(); } catch (Exception e) { Plugin.Debug("UpdateUI failed: " + e.Message); }
+            if (!u.activeSelf && !(l != null && l.activeSelf) && tab.m_UpgradedStore) u.SetActive(true);
+        }
+        catch (Exception e) { Plugin.Warn("Checking the Customization tab's cards failed: " + e.Message); }
+    }
+
+    private static void RestoreUnlocked()
+    {
+        if (!_hidUnlocked) return;
+        _hidUnlocked = false;
+        try
+        {
+            var u = _tab != null ? _tab.m_UnlockedUI : null;
+            if (u != null && _unlockedWasActive && !u.activeSelf) u.SetActive(true);
+        }
+        catch (Exception e) { Plugin.Warn("Showing the tab's cards again failed: " + e.Message); }
     }
 
     /// <summary>
@@ -638,20 +743,20 @@ internal static class TabUi
         bool was = _open;
         _open = false;
         try { if (_panel != null && _panel.activeSelf) _panel.SetActive(false); } catch (Exception) { }
+        RestoreUnlocked();
         Preview.Hide();
         if (was) Plugin.Debug("Employee Clothes session ended" + (reason != null ? " (" + reason + ")" : ""));
     }
 
-    private static HrEmployeeKind CurrentKind => ClothesStore.Kinds[_kindIdx];
+    private static HrEmployeeKind CurrentKind => _kinds[Math.Max(0, Math.Min(_kindIdx, _kinds.Length - 1))];
 
     private static void ShowKind(int idx)
     {
-        int n = ClothesStore.Kinds.Length;
+        int n = _kinds.Length;
         _kindIdx = ((idx % n) + n) % n;
         _message = null;
-        _applyAll = false; // "Apply to all" is for one Apply; switching type untick it so a single type can be overridden
-        RefreshToggle();
         var kind = CurrentKind;
+        _lastKind = kind;
         var pend = Pending[(int)kind];
         bool ok = Preview.Show(kind, pend);
         if (_raw != null) _raw.texture = ok ? Preview.Texture : null;
@@ -669,7 +774,7 @@ internal static class TabUi
     private static void RefreshTexts()
     {
         var kind = CurrentKind;
-        SetIfChanged(_kindText, $"{ClothesStore.NameOf(kind)}  ({_kindIdx + 1}/{ClothesStore.Kinds.Length})  - {Preview.ModelCount} model(s)");
+        SetIfChanged(_kindText, $"{ClothesStore.NameOf(kind)}  ({_kindIdx + 1}/{_kinds.Length})  - {Preview.ModelCount} model(s)");
         if (_infoText != null)
         {
             var pend = Pending[(int)kind];
@@ -683,6 +788,7 @@ internal static class TabUi
                 bool applied = stored.HasValue && ClothesStore.Hex(stored.Value) == ClothesStore.Hex(pend.Value);
                 s = applied ? $"Color {hex} (applied)" : $"Color {hex} (press Apply)";
             }
+            if (_message == null && _applyAll) s += "  [Apply to all: every type]";
             _infoText.text = s;
         }
     }
@@ -694,16 +800,43 @@ internal static class TabUi
 
     private static void OnToggled(bool on)
     {
-        _applyAll = on;
-        _message = null;
-        RefreshTexts();
+        try
+        {
+            _applyAll = on;
+            _message = null;
+            SaveApplyAll();
+            RefreshToggle();
+            RefreshTexts();
+        }
+        catch (Exception e) { Plugin.Warn("Apply to all switch failed: " + e.Message); }
     }
 
-    private static void RefreshToggle()
+    /// <summary>The player flipped the switch: remember it (config entry [Customization] ApplyToAll).</summary>
+    private static void SaveApplyAll()
     {
+        try { if (Plugin.ApplyToAll != null && Plugin.ApplyToAll.Value != _applyAll) Plugin.ApplyToAll.Value = _applyAll; }
+        catch (Exception e) { Plugin.Warn("Saving the Apply to all setting failed: " + e.Message); }
+    }
+
+    /// <summary>The config entry was changed from outside (a config manager): follow it.</summary>
+    internal static void OnApplyAllConfigChanged()
+    {
+        try
+        {
+            if (Plugin.ApplyToAll == null || _applyAll == Plugin.ApplyToAll.Value) return;
+            _applyAll = Plugin.ApplyToAll.Value;
+            if (_open) { RefreshToggle(true); RefreshTexts(); }
+        }
+        catch (Exception e) { Plugin.Warn("Following the Apply to all setting failed: " + e.Message); }
+    }
+
+    private static void RefreshToggle(bool force = false)
+    {
+        if (_resetLabel != null) SetIfChanged(_resetLabel, _applyAll ? "Reset all types" : "Reset this type");
+        if (_applyLabel != null) SetIfChanged(_applyLabel, _applyAll ? "Apply to all types" : "Apply");
         if (_toggleSwitch != null)
         {
-            try { if (_toggleSwitch.isOn != _applyAll) _toggleSwitch.SetSlider(_applyAll); }
+            try { if (force || _toggleSwitch.isOn != _applyAll) _toggleSwitch.SetSlider(_applyAll); }
             catch (Exception) { }
             return;
         }
@@ -745,7 +878,10 @@ internal static class TabUi
     private static void OnToggleAll()
     {
         _applyAll = !_applyAll;
+        SaveApplyAll();
         RefreshToggle();
+        _message = null;
+        RefreshTexts();
     }
 
     private static void OnApply()
@@ -774,9 +910,7 @@ internal static class TabUi
             ClothesStore.Save();   // saved to the mod's own file at every Apply (and Reset), so closing needs no extra step
             Plugin.Info($"Applied #{hex} to {(_applyAll ? "all employee types" : ClothesStore.NameOf(kind))}");
             Employees.Sweep();
-            _applyAll = false;
-            RefreshToggle();
-            _message = "Applied.";
+            _message = _applyAll ? "Applied to all types." : "Applied.";
             RefreshTexts();
         }
         catch (Exception e)
@@ -800,11 +934,9 @@ internal static class TabUi
             }
             ClothesStore.Save();
             Preview.SetColor(null);
-            _message = "Reset to the original clothes.";
+            _message = _applyAll ? "Reset all types to the original clothes." : "Reset to the original clothes.";
             Plugin.Info($"Reset to the original clothes: {(_applyAll ? "all employee types" : ClothesStore.NameOf(CurrentKind))}");
             Employees.Sweep();
-            _applyAll = false;
-            RefreshToggle();
             RefreshTexts();
         }
         catch (Exception e) { Plugin.Error("Resetting the color failed: " + e); }

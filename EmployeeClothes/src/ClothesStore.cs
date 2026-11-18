@@ -56,6 +56,88 @@ internal static class ClothesStore
         _ => k.ToString(),
     };
 
+    // ------------------------------------------------------------------ which types are unlocked
+
+    /// <summary>
+    /// "Unlocked" = the DLC check passes AND the player has a use for the type: at least one employee of it is already
+    /// hired, or at least one of its hire slots currently has no unmet requirement. Verified in the ISIL (2026-11-18):
+    ///  - DLC: HiringTab.RefreshAvailability lists the ice cream helper tab only if DLCTestController.IceCreamDLC and the
+    ///    baker tab only if DLCTestController.BakeryDLC (all other kinds always).
+    ///  - HrHiring.SlotIds(kind) = the employee ids (ScriptableObjects) of that kind; HrHiring.MissingCount(kind, id) =
+    ///    the number of unmet entries (HrRequirement.Met == false) that HrHiring.Gates(kind, id) collects: the SO's store
+    ///    level for every kind plus per-kind objectives (restocker: racks; customer helper: self checkouts and scales;
+    ///    cashier: checkouts; baker: ovens and bakery displays; courier: its park area). It does not look at money
+    ///    (HrHiring.CanHire = enough money AND MissingCount == 0), so this is "could be hired if the player had the money".
+    ///  - EmployeeManager.IsEmployeeHired(kind, id) is the game's own "is hired" (a List&lt;int&gt;.Contains on the hired ids).
+    /// Fails open: an exception, a missing singleton or a kind without any slot counts as unlocked (detail says why).
+    /// </summary>
+    internal static bool IsUnlocked(HrEmployeeKind k, out string detail)
+    {
+        detail = null;
+        try
+        {
+            if (k == HrEmployeeKind.IceCreamHelper && !DLCTestController.IceCreamDLC) { detail = "no Ice Cream DLC (IceCreamDLC=False)"; return false; }
+            if (k == HrEmployeeKind.Baker && !DLCTestController.BakeryDLC) { detail = "no Bakery DLC (BakeryDLC=False)"; return false; }
+        }
+        catch (Exception e)
+        {
+            detail = "DLC check failed: " + e.Message;
+            Plugin.Warn($"Checking the DLC of {NameOf(k)} failed (treated as unlocked): {e.Message}");
+            return true;
+        }
+        try
+        {
+            if (!NoktaSingleton<EmployeeManager>.HasInstance) { detail = "no EmployeeManager yet, shown"; return true; }
+            var ro = HrHiring.SlotIds(k);
+            // The interop interface only exposes the indexer; the object behind it is a List<int> (SlotIds fills one).
+            var ids = ro != null ? ro.TryCast<Il2CppSystem.Collections.Generic.List<int>>() : null;
+            if (ids == null) { detail = "slot list unreadable, shown"; return true; }
+            int n = ids.Count;
+            if (n == 0) { detail = "no hire slots, shown"; return true; }
+            var slots = new int[n];                  // SlotIds returns a shared list: copy it first
+            for (int i = 0; i < n; i++) slots[i] = ids[i];
+            var em = NoktaSingleton<EmployeeManager>.Instance;
+            int minMissing = int.MaxValue;
+            for (int i = 0; i < n; i++)
+            {
+                if (em.IsEmployeeHired(k, slots[i])) { detail = "an employee is hired"; return true; }
+                int miss = HrHiring.MissingCount(k, slots[i]);
+                if (miss == 0) { detail = "can be hired (requirements met)"; return true; }
+                minMissing = Math.Min(minMissing, miss);
+            }
+            detail = $"hiring requirements unmet in all {n} slot(s) (fewest unmet: {minMissing}), none hired";
+            return false;
+        }
+        catch (Exception e)
+        {
+            detail = "requirement check failed: " + e.Message;
+            Plugin.Warn($"Checking the hiring requirements of {NameOf(k)} failed (treated as unlocked): {e.Message}");
+            return true;
+        }
+    }
+
+    /// <summary>The employee types the panel offers (in UI order). Never empty: if no type passes, all are offered.</summary>
+    internal static HrEmployeeKind[] UnlockedKinds(out string report)
+    {
+        var list = new List<HrEmployeeKind>();
+        var sb = new StringBuilder();
+        foreach (var k in Kinds)
+        {
+            bool ok = IsUnlocked(k, out var detail);
+            if (ok) list.Add(k);
+            if (sb.Length > 0) sb.Append(", ");
+            sb.Append(NameOf(k)).Append(ok ? ": shown" : ": hidden");
+            if (detail != null) sb.Append(" (").Append(detail).Append(')');
+        }
+        report = sb.ToString();
+        if (list.Count == 0)
+        {
+            Plugin.Warn("No employee type passed the unlock check; showing all of them.");
+            return (HrEmployeeKind[])Kinds.Clone();
+        }
+        return list.ToArray();
+    }
+
     internal static Color? Get(HrEmployeeKind k)
     {
         int i = (int)k;
@@ -240,7 +322,7 @@ internal static class ClothesStore
 
     // ------------------------------------------------------------------ driver hooks
 
-    /// <summary>Called about every 0.4 s while the mod is active.</summary>
+    /// <summary>Called by the driver once a second while the mod is active.</summary>
     internal static void Tick()
     {
         if (IsGuest)

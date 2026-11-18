@@ -7,9 +7,17 @@ namespace EmployeeClothes;
 
 /// <summary>
 /// Renders the models of one employee type into a RenderTexture for the panel. A camera and two point lights sit far
-/// below the map (y = -5000) on an unnamed layer; the models are clones of the prefabs' model sub-trees (the top
-/// Animator's GameObject), standing in a row and turning slowly. URP ignores a light's culling mask, which is why the
-/// lights are point lights with a limited range instead of a directional light: they can't light the store.
+/// below the map (y = -5000); the models are clones of the prefabs' model sub-trees (the top Animator's GameObject),
+/// standing in a row and turning slowly. URP ignores a light's culling mask, which is why the lights are point lights
+/// with a limited range instead of a directional light: they can't light the store.
+///
+/// THE LAYER (root cause of the empty preview in v1.0.4, found 2026-11-18): the stage must be on a layer the game's URP
+/// renderers draw. All 32 layers of this game are named (TagManager), so the "free layer" search of v1.0.0..1.0.4 fell
+/// back to 31 = "FPSHand", and the URP renderers behind the quality levels (URP-Balanced / -Performant / -HighFidelity
+/// -Renderer, UniversalRendererData in globalgamemanagers.assets) have an opaque and a transparent layer mask of
+/// 0x7FFFFFFF (HighFidelity also drops layer 11): bit 31 is excluded, so nothing on layer 31 is ever drawn and the camera
+/// only cleared the texture. The stage now uses layer 4 ("Water", unused, in every renderer's mask). The models sit 5000 m
+/// below the store, so other cameras never see them even though they share the layer.
 /// </summary>
 internal static class Preview
 {
@@ -26,7 +34,14 @@ internal static class Preview
     private static Camera _cam;
     private static Light _light1, _light2;
     private static RenderTexture _rt;
-    private static int _layer = 31;
+    // Layer 4 = "Water": unused by the game, drawn by every URP renderer of the quality levels (layer 31 "FPSHand" is not).
+    private const int StageLayer = 4;
+    private static int _layer = StageLayer;
+    // A mid-light slate blue: dark and light models and clothes all stand out from it.
+    private static readonly Color ClearColor = new Color(0.58f, 0.66f, 0.75f, 1f);
+    private static float _diagAt;
+    private static bool _diagPending;
+    private static int _diagCount;
     private static readonly List<Entry> Models = new();
     private static Color? _color;
     private static bool _needApply;
@@ -39,20 +54,13 @@ internal static class Preview
 
     // ------------------------------------------------------------------ the stage
 
-    private static int FreeLayer()
-    {
-        for (int i = 31; i >= 8; i--)
-            if (string.IsNullOrEmpty(LayerMask.LayerToName(i))) return i;
-        return 31;
-    }
-
     private static bool EnsureStage()
     {
         if (_root != null && _cam != null && _rt != null) return true;
         DestroyStage();
         try
         {
-            _layer = FreeLayer();
+            _layer = StageLayer;
             _root = new GameObject("EmployeeClothes.PreviewStage");
             _root.transform.position = new Vector3(0f, -5000f, 0f);
 
@@ -67,7 +75,7 @@ internal static class Preview
             _cam.targetTexture = _rt;
             _cam.cullingMask = 1 << _layer;
             _cam.clearFlags = CameraClearFlags.SolidColor;
-            _cam.backgroundColor = new Color(0.10f, 0.12f, 0.16f, 1f);
+            _cam.backgroundColor = ClearColor;
             _cam.orthographic = true;
             _cam.nearClipPlane = 0.1f;
             _cam.farClipPlane = 40f;
@@ -79,7 +87,7 @@ internal static class Preview
             _light1 = MakeLight("EmployeeClothes.PreviewLight1", new Vector3(-1.8f, 3.2f, 3.5f));
             _light2 = MakeLight("EmployeeClothes.PreviewLight2", new Vector3(2.2f, 2.0f, 3.0f));
             ApplyLightSetting();
-            Plugin.Debug($"Preview stage built (layer {_layer}, render texture {Width}x{Height})");
+            Plugin.Debug($"Preview stage built (layer {_layer} '{LayerMask.LayerToName(_layer)}', render texture {Width}x{Height})");
             return true;
         }
         catch (Exception e)
@@ -193,6 +201,8 @@ internal static class Preview
                     animators[i].applyRootMotion = false;
                     animators[i].cullingMode = AnimatorCullingMode.AlwaysAnimate;
                 }
+                var skins = clone.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                for (int i = 0; i < skins.Length; i++) if (skins[i] != null) skins[i].updateWhenOffscreen = true;
                 var lods = clone.GetComponentsInChildren<LODGroup>(true);
                 for (int i = 0; i < lods.Length; i++) lods[i].ForceLOD(0);
 
@@ -208,6 +218,11 @@ internal static class Preview
             _shown = true;
             _cam.enabled = true;
             _needApply = true;
+            if (_diagCount < 4 && Plugin.Verbose != null && Plugin.Verbose.Value)
+            {
+                _diagPending = true;
+                _diagAt = Time.unscaledTime + 0.7f;
+            }
             Plugin.Debug($"Preview: {n} model(s) for {ClothesStore.NameOf(kind)} ({prefabs.Count} prefab(s))");
             return true;
         }
@@ -281,10 +296,95 @@ internal static class Preview
                 if (Models[i].Model != null && !Recolor.ApplyToObject(Models[i].Model, Recolor.PreviewSlot, _color)) complete = false;
             _needApply = !complete;
         }
+        if (_diagPending && Time.unscaledTime >= _diagAt) Diagnose();
         if (!_loggedFirstFrame && Models.Count > 0)
         {
             _loggedFirstFrame = true;
             Plugin.Info($"Preview is running ({Models.Count} model(s), camera enabled {_cam.enabled}, render texture {(_rt != null ? _rt.width + "x" + _rt.height : "none")})");
+        }
+    }
+
+
+    // ------------------------------------------------------------------ one-shot diagnostics
+
+    private static string C(Color c) => $"({c.r:0.00},{c.g:0.00},{c.b:0.00},{c.a:0.00})";
+
+    /// <summary>
+    /// A moment after the models were shown (the first frames have rendered): reads the render texture back and logs
+    /// what the camera drew, with the facts that explain an empty picture (layer mask, renderers, bounds, shaders).
+    /// At most 4 times per game run.
+    /// </summary>
+    private static void Diagnose()
+    {
+        _diagPending = false;
+        _diagCount++;
+        Texture2D tex = null;
+        var prev = RenderTexture.active;
+        try
+        {
+            if (_cam == null || _rt == null) return;
+            RenderTexture.active = _rt;
+            tex = new Texture2D(Width, Height, TextureFormat.RGBA32, false);
+            tex.ReadPixels(new Rect(0, 0, Width, Height), 0, 0);
+            var corner = tex.GetPixel(2, 2);
+            var center = tex.GetPixel(Width / 2, Height / 2);
+            int differ = 0, total = 0;
+            float sum = 0f;
+            const int gx = 48, gy = 24;
+            for (int y = 0; y < gy; y++)
+                for (int x = 0; x < gx; x++)
+                {
+                    var c = tex.GetPixel((int)((x + 0.5f) * Width / gx), (int)((y + 0.5f) * Height / gy));
+                    total++;
+                    sum += (c.r + c.g + c.b) / 3f;
+                    if (Math.Abs(c.r - corner.r) + Math.Abs(c.g - corner.g) + Math.Abs(c.b - corner.b) > 0.06f) differ++;
+                }
+            // What is in the scene.
+            int rendTotal = 0, rendLive = 0, rendOnLayer = 0, skinned = 0;
+            string firstInfo = "none";
+            Bounds? bounds = null;
+            for (int m = 0; m < Models.Count; m++)
+            {
+                var model = Models[m].Model;
+                if (model == null) continue;
+                var rends = model.GetComponentsInChildren<Renderer>(true);
+                for (int r = 0; r < rends.Length; r++)
+                {
+                    var rd = rends[r];
+                    if (rd == null) continue;
+                    rendTotal++;
+                    if (rd.enabled && rd.gameObject.activeInHierarchy) rendLive++;
+                    if (rd.gameObject.layer == _layer) rendOnLayer++;
+                    if (rd.TryCast<SkinnedMeshRenderer>() != null) skinned++;
+                    if (rd.enabled && rd.gameObject.activeInHierarchy)
+                    {
+                        var b = rd.bounds;
+                        if (bounds.HasValue) { var bb = bounds.Value; bb.Encapsulate(b); bounds = bb; } else bounds = b;
+                        if (firstInfo == "none")
+                        {
+                            var mat = rd.sharedMaterial;
+                            firstInfo = $"'{rd.name}' material '{(mat != null ? mat.name : "null")}' shader '{(mat != null && mat.shader != null ? mat.shader.name : "null")}'";
+                        }
+                    }
+                }
+            }
+            string bnd = bounds.HasValue ? $"center ({bounds.Value.center.x:0.0},{bounds.Value.center.y:0.0},{bounds.Value.center.z:0.0}) size ({bounds.Value.size.x:0.00},{bounds.Value.size.y:0.00},{bounds.Value.size.z:0.00})" : "none";
+            var cp = _cam.transform.position;
+            Plugin.Info($"Preview render check #{_diagCount}: {differ}/{total} samples differ from the background; corner {C(corner)}, center {C(center)}, " +
+                        $"average {sum / Math.Max(total, 1):0.00}, clear color {C(ClearColor)} => " +
+                        (differ == 0 ? "NOTHING DRAWN (only the clear color)" : "something was drawn"));
+            Plugin.Info($"Preview scene: camera enabled {_cam.enabled}, mask 0x{_cam.cullingMask:X}, layer {_layer} '{LayerMask.LayerToName(_layer)}', ortho {_cam.orthographicSize:0.00}, " +
+                        $"pos ({cp.x:0.0},{cp.y:0.0},{cp.z:0.0}); {Models.Count} model(s), renderers {rendTotal} (live {rendLive}, on layer {rendOnLayer}, skinned {skinned}); " +
+                        $"bounds {bnd}; first {firstInfo}");
+        }
+        catch (Exception e)
+        {
+            Plugin.Warn("Preview render check failed: " + e.Message);
+        }
+        finally
+        {
+            RenderTexture.active = prev;
+            if (tex != null) Object.Destroy(tex);
         }
     }
 
@@ -299,6 +399,7 @@ internal static class Preview
     internal static void Hide()
     {
         _shown = false;
+        _diagPending = false;
         if (_cam != null) _cam.enabled = false;
         ClearModels();
     }

@@ -37,17 +37,23 @@
  *  - Masked atlases: for the mixed materials above, a working copy of the texture (at most 512x512, through a RenderTexture)
  *    is made once; the rule picks the garment pixels, and the shade of each garment pixel is computed like the shade map
  *    (relative to the garment pixels' mean). For every (material, employee type) a baked RGBA texture is kept: garment
- *    pixels = color * shade (lookup tables, in linear space like the material tint), every other pixel = the original.
+ *    pixels = ShadeV * color * 1.45 * garment shade in sRGB bytes, clamped (what the shade-map material shows; Material.SetColor
+ *    converts the color to linear itself), every other pixel = the original.
  *    A new color is one pass over the garment pixels plus SetPixels32/Apply (a few ms), skipped when the color is the same
  *    as last time. Recolor.GetMaterial(original, slot, color) is the API (cached copy per (material, slot)); the time budget
  *    postpones a bake to the next pass, so dragging a color picker never stalls a frame. The baked textures belong to the
  *    material copies and are destroyed with them (after the original materials are put back).
- *  - A sweeper (ClothesDriver, every 0.4 s) finds the employees of every colored type (FindObjectsByType including
- *    inactive ones: fired employees are pooled by LeanPool and come back later) and makes the renderers of their model
- *    (the top Animator's sub-tree, cached, re-scanned every 8 s, re-verified every 3 s) match the stored color. That
- *    covers employees that exist already, hired later, loaded from a save, spawned by the network on a guest, and
- *    anything that restores the original materials. A texture budget (25 ms per pass) spreads the one-off shade-map
- *    creation over a few passes.
+ *  - Employees (Employees.cs, driven by ClothesDriver) are found by events, not by searching: a Harmony postfix on the
+ *    Start of every employee class (EmployeeTracker.cs: Cashier, Clerk, CustomerHelper, SecurityGuard, Janitor, Courier,
+ *    Baker, IceCreamHelper) registers a hired or loaded employee when it first becomes active; pooled employees (LeanPool
+ *    deactivates fired ones and brings them back later) stay known. A pass over the known employees runs only when
+ *    something changed (a new employee, a new color, a postponed shade map to retry, or an employee's own 30 s
+ *    verification timer), makes the renderers of the model (the top Animator's sub-tree, cached) match the stored color and
+ *    re-asserts our materials. Safety nets: a slow FindObjectsByType (including inactive) per colored type, a rolling scan
+ *    of all types after a scene start or when the mod is switched on, and a faster scan of any type whose Start hook isn't
+ *    applied. That covers employees that exist already, hired later, loaded from a save, spawned by the network on a
+ *    guest, and anything that restores the original materials. A texture budget (16-25 ms per pass, always at least one
+ *    build) spreads the one-off shade-map creation over a few passes.
  *  - Every swap is recorded in a registry (renderer, slot, original material per index). Restoring (Reset, a type losing
  *    its color, disabling the mod, a new scene) goes through the registry, so it reaches pooled employees too and runs
  *    before any material copy is destroyed; a renderer whose copy was destroyed anyway falls back to the recorded
@@ -71,13 +77,20 @@
  *    the game). The game's feedback for "can't afford" is the card button being disabled while !HasMoney(price)
  *    (ChangeNameItem.UpdatePurchaseButton / CheckRequirements), which the card does too; it shows the price. The colors
  *    are written to the mod's own file at every Apply and Reset (not with the game save).
- *  - The panel (a child of the tab, over a clone of the tab background) has: a RenderTexture preview, arrows to switch
+ *  - The panel (a child of the tab, over its own opaque background Image; the tab's own cards are hidden while it is open
+ *    and shown again when the session ends, with a safety net in the CustomizationTab.OnEnable patch) has: a RenderTexture preview, arrows to switch
  *    between the 8 employee types (HrEmployeeKind), the game's own ColorPicker widget (cloned from the store-name color
  *    picker in the NameChangeCanvas; its Image material is reset so it makes its own), 12 swatches (a fallback if the
  *    picker's shader doesn't work), an "Apply to all" switch (a clone of the game's own ToggleSwitch from the HR tab:
  *    a Slider + handle Button + on/off colors; its gamepad glyph and caption are removed and onValueChanged is ours),
- *    Apply, Reset and Done.
- *  - The preview: a camera far below the map (y = -5000, an unnamed layer) renders to a 1024x512 RenderTexture. It sees
+ *    Apply, Reset and Done. The switch state is the config entry [Customization] ApplyToAll (kept across type switches,
+ *    Apply, Reset and game starts). The type switcher only offers the unlocked types, worked out each time the panel
+ *    opens (ClothesStore.UnlockedKinds): the HR tab hides the ice cream helper unless DLCTestController.IceCreamDLC and the
+ *    baker unless DLCTestController.BakeryDLC (HiringTab.RefreshAvailability); on top of that a type needs a hired employee
+ *    (EmployeeManager.IsEmployeeHired) or a hire slot (HrHiring.SlotIds) with no unmet requirement (HrHiring.MissingCount
+ *    == 0: store level, checkouts, ovens ...). Any failure shows the type. Apply to all still writes all 8 types.
+ *  - The preview: a camera far below the map (y = -5000, layer 4 "Water": every layer of this game is named, and the
+ *    URP renderers don't draw layer 31 "FPSHand", see Preview.cs) renders to a 1024x512 RenderTexture. It sees
  *    clones of the model sub-tree ("Animated Model", found as the top Animator) of every prefab of the selected type, in a
  *    row, rotating slowly, lit by two point lights (limited range, so the store isn't lit; URP ignores light layer masks).
  *    The clones use their own material copies (preview slot) so dragging the picker never changes real employees.
@@ -89,14 +102,17 @@
  *    custom RPC and a way to charge the host). The host publishes the colors as the Photon ROOM property
  *    "oscar.employeeclothes" (a string like "Restocker=ff8800;Cashier=2255aa"). The game itself keeps "Money",
  *    "roomStartTime" and "RackCount" there and every room-property listener only reads its own key, so unmodded clients
- *    ignore ours. Late joiners get it from the room; modded guests poll it every 0.4 s and apply it. Unmodded guests
+ *    ignore ours. Late joiners get it from the room; modded guests poll it once a second and apply it. Unmodded guests
  *    see the original colors (harmless).
  *  - Persistence: the host's colors are saved in BepInEx/config/oscar.employeeclothes.saves.txt, one line per save file
  *    (SaveManager.CurrentSaveFilePath's file name), because the game's own save format can't be extended. A new game in
  *    a used slot inherits that slot's colors (use Reset, or delete the line).
  *
- * Patches are few on purpose: CustomizationTab.OnEnable (inject the card) and IDManager.Awake (a new game scene: forget
- * cached objects). Everything else is polling and public API calls, so a game update breaks little.
+ * Patches (11, each applied on its own and logged if one fails): CustomizationTab.OnEnable (inject the card, keep the
+ * cards visible), IDManager.Awake (a new game scene: forget cached objects), Computer.OpenPC setter (leaving the computer
+ * ends the session) and the eight employee Start postfixes of EmployeeTracker.cs (register new employees). Everything else
+ * is public API calls and a few slow polls (ClothesStore.Tick once a second, TabUi.Tick every 0.5 s), so a game update
+ * breaks little.
  */
 using System;
 using BepInEx;
@@ -113,11 +129,12 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.employeeclothes";
     public const string Name = "Employee Clothes";
-    public const string Version = "1.0.4";
+    public const string Version = "1.0.5";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<float> Price;
+    internal static ConfigEntry<bool> ApplyToAll;
     internal static ConfigEntry<bool> ShadedGarments;
     internal static ConfigEntry<bool> SyncToGuests;
     internal static ConfigEntry<float> PreviewLight;
@@ -143,6 +160,11 @@ public class Plugin : BasePlugin
                 "free) until you close it (Done, another tab, leaving the computer); opening it again costs again. " +
                 "Type a number; 0 makes it free.",
                 new ClampedFloat(0f, 1000000f)));
+        ApplyToAll = Config.Bind("Customization", "ApplyToAll", false,
+            "State of the \"Apply to all\" switch on the Employee Clothes screen. When on, Apply gives the picked color to " +
+            "every employee type (also types you haven't unlocked yet, so they already wear it when you do) and Reset puts " +
+            "the original clothes back on every type. The switch keeps its state when you change employee type, press " +
+            "Apply or Reset, and the next time you open the screen or start the game; flipping it on the screen saves it here.");
         ShadedGarments = Config.Bind("Appearance", "ShadedGarments", true,
             "When on, trousers and waistcoats are a darker shade of the chosen color (trousers 70%, " +
             "waistcoat 80%), so the outfit isn't one flat color. When off, every garment is exactly " +
@@ -161,6 +183,7 @@ public class Plugin : BasePlugin
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
         PreviewLight.SettingChanged += (_, _) => Preview.ApplyLightSetting();
+        ApplyToAll.SettingChanged += (_, _) => TabUi.OnApplyAllConfigChanged();
         ShadedGarments.SettingChanged += (_, _) => Recolor.OnShadeSettingChanged();
 
         ClassInjector.RegisterTypeInIl2Cpp<PanelWatcher>();

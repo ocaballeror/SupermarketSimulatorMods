@@ -5,12 +5,14 @@ using ComputerT = __Project__.Scripts.Computer.Computer;
 
 namespace EmployeeClothes;
 
-/// <summary>The Customization tab was shown: add the Employee Clothes card if it isn't there yet.</summary>
+/// <summary>The Customization tab was shown: make sure its cards aren't left hidden, and add the Employee Clothes card if it isn't there yet.</summary>
 [HarmonyPatch(typeof(TabComponent), nameof(TabComponent.OnEnable))]
 internal static class CustomizationTabEnablePatch
 {
     private static void Postfix(TabComponent __instance)
     {
+        try { TabUi.EnsureCardsVisible(__instance); }
+        catch (Exception e) { Plugin.Error("Customization tab visibility check failed: " + e); }
         try { TabUi.Ensure(__instance); }
         catch (Exception e) { Plugin.Error("Customization tab hook failed: " + e); }
     }

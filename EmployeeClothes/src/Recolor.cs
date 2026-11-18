@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -82,6 +83,7 @@ internal static class Recolor
     private static readonly Dictionary<int, Color> LastTint = new();                        // copy -> color last set (skip no-op SetColor)
     private static readonly Stopwatch Watch = new();
     private static double _budgetMs = 25;
+    private static int _built;   // expensive builds (shade map, atlas, bake) done since BeginBudget
     private static bool _loggedFirstMap;
 
 
@@ -92,8 +94,17 @@ internal static class Recolor
     {
         _budgetMs = ms;
         Postponed = false;
+        _built = 0;
         Watch.Restart();
     }
+
+    /// <summary>
+    /// True when the time budget of this pass is used up. The first build of a pass is always allowed (even if the
+    /// stopwatch already ran past the budget, e.g. because the caller spent time before it), so a pass can never be
+    /// starved of progress: before 1.0.5 the employee scans ate the whole 25 ms and the last types (guard, janitor,
+    /// courier) were postponed forever.
+    /// </summary>
+    private static bool OverBudget => Watch.IsRunning && _built > 0 && Watch.Elapsed.TotalMilliseconds > _budgetMs;
 
     // ------------------------------------------------------------------ classification
 
@@ -166,7 +177,7 @@ internal static class Recolor
         postponed = false;
         int key = src.GetInstanceID();
         if (Neutral.TryGetValue(key, out var n)) return n;
-        if (Watch.IsRunning && Watch.Elapsed.TotalMilliseconds > _budgetMs)
+        if (OverBudget)
         {
             postponed = true;
             Postponed = true;
@@ -178,6 +189,7 @@ internal static class Recolor
             Postponed = true;
             return null;
         }
+        _built++;
         try { n = MakeNeutral(src); }
         catch (Exception e)
         {
@@ -350,33 +362,7 @@ internal static class Recolor
         public uint Key = uint.MaxValue;   // color (8 bit per channel) and garment shade last baked; skip identical bakes
     }
 
-    private static readonly float[] LinLut = MakeLinLut();
-    private const int SrgbLutN = 4096;
-    private static readonly byte[] SrgbLut = MakeSrgbLut();
     private static readonly Dictionary<int, Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Color32>> Scratch = new();
-
-    private static float[] MakeLinLut()
-    {
-        var t = new float[256];
-        for (int i = 0; i < 256; i++)
-        {
-            float c = i / 255f;
-            t[i] = c <= 0.04045f ? c / 12.92f : (float)Math.Pow((c + 0.055f) / 1.055f, 2.4);
-        }
-        return t;
-    }
-
-    private static byte[] MakeSrgbLut()
-    {
-        var t = new byte[SrgbLutN];
-        for (int i = 0; i < SrgbLutN; i++)
-        {
-            float l = i / (float)(SrgbLutN - 1);
-            float c = l <= 0.0031308f ? l * 12.92f : 1.055f * (float)Math.Pow(l, 1.0 / 2.4) - 0.055f;
-            t[i] = (byte)Math.Min(255, (int)(c * 255f + 0.5f));
-        }
-        return t;
-    }
 
     private static void Hsv(byte br, byte bg, byte bb, out float h, out float s, out float v)
     {
@@ -448,7 +434,7 @@ internal static class Recolor
         postponed = false;
         int key = src.GetInstanceID();
         if (Atlases.TryGetValue(key, out var a)) return a;
-        if (Watch.IsRunning && Watch.Elapsed.TotalMilliseconds > _budgetMs)
+        if (OverBudget)
         {
             postponed = true;
             Postponed = true;
@@ -460,6 +446,7 @@ internal static class Recolor
             Postponed = true;
             return null;
         }
+        _built++;
         try { a = MakeAtlas(src, rule); }
         catch (Exception e)
         {
@@ -532,7 +519,13 @@ internal static class Recolor
     /// <summary>
     /// Writes the atlas pixels for this color into the baked texture: garment pixels get color * shade, every other
     /// pixel is the original. Returns false if the time budget ran out (the texture keeps its old color; retry later).
-    /// Cheap: one pass over the garment pixels with lookup tables, then SetPixels32 + Apply on at most 512x512.
+    /// Cheap: one pass over the garment pixels, then SetPixels32 + Apply on at most 512x512.
+    /// The result must look like the shade-map material of the other garments: that material shows
+    /// color * 1.45 * garment * (shade / 1.45) on screen (the color property and the sRGB shade map are both decoded to
+    /// linear, so the product is the same in sRGB terms), i.e. sRGB value = color * garment * shade per channel. The
+    /// baked sRGB texture holds exactly that, so each byte is ShadeV * (color * 1.45 * garment). (Until 1.0.4 this
+    /// multiplied in linear space with the color left as is, which washed dark channels out: a pure blue suit kept a
+    /// grey-ish red/green and a red one came out orange.)
     /// </summary>
     private static bool Bake(Baked bk, Color c, float garment)
     {
@@ -541,25 +534,25 @@ internal static class Recolor
                  | (uint)(Mathf.Clamp01(c.b) * 255f + 0.5f) << 16
                  | (uint)(Mathf.Clamp(garment, 0f, 1f) * 100f + 0.5f) << 24;
         if (bk.Key == key) return true;
-        if (Watch.IsRunning && Watch.Elapsed.TotalMilliseconds > _budgetMs)
+        if (OverBudget)
         {
             Postponed = true;
             return false;
         }
+        _built++;
         var a = bk.A;
         float k = TintScale * garment;
         float kr = c.r * k, kg = c.g * k, kb = c.b * k;
         var buf = bk.Buf;
         Buffer.BlockCopy(a.Src, 0, buf, 0, buf.Length);
         var idx = a.Idx; var sh = a.ShadeV;
-        const int top = SrgbLutN - 1;
         for (int j = 0; j < idx.Length; j++)
         {
-            float l = LinLut[sh[j]];
+            int s = sh[j];
             int o = idx[j] * 4;
-            buf[o] = SrgbLut[(int)(Math.Min(1f, l * kr) * top + 0.5f)];
-            buf[o + 1] = SrgbLut[(int)(Math.Min(1f, l * kg) * top + 0.5f)];
-            buf[o + 2] = SrgbLut[(int)(Math.Min(1f, l * kb) * top + 0.5f)];
+            buf[o] = (byte)Math.Min(255f, s * kr + 0.5f);
+            buf[o + 1] = (byte)Math.Min(255f, s * kg + 0.5f);
+            buf[o + 2] = (byte)Math.Min(255f, s * kb + 0.5f);
         }
         int n = a.W * a.H;
         if (!Scratch.TryGetValue(n, out var arr) || arr == null)
@@ -752,6 +745,39 @@ internal static class Recolor
         if (changed) r.sharedMaterials = mats;
         if (entry != null && !HasOriginals(entry)) Registry.Remove(rid);
         return complete;
+    }
+
+    /// <summary>
+    /// One-line diagnostic of what is on these renderers: per renderer its materials, each marked "-" (not clothes),
+    /// "=EC" (clothes, our copy is shown) or "CLOTHES-NOT-SWAPPED" (clothes, still the original). Allocates; for one-off logging.
+    /// </summary>
+    internal static string Describe(IList<Renderer> rends)
+    {
+        var sb = new StringBuilder();
+        for (int i = 0; i < rends.Count; i++)
+        {
+            var r = rends[i];
+            if (r == null) continue;
+            if (sb.Length > 0) sb.Append("; ");
+            sb.Append(r.name).Append('[');
+            try
+            {
+                var mats = r.sharedMaterials;
+                for (int j = 0; mats != null && j < mats.Length; j++)
+                {
+                    if (j > 0) sb.Append(", ");
+                    var m = mats[j];
+                    if (m == null) { sb.Append("null"); continue; }
+                    bool ours = OriginalOf.TryGetValue(m.GetInstanceID(), out var orig);
+                    if (!ours) orig = m;
+                    sb.Append(orig.name);
+                    sb.Append(Classify(orig).Clothes ? (ours ? " =EC" : " CLOTHES-NOT-SWAPPED") : " -");
+                }
+            }
+            catch (Exception e) { sb.Append("?" + e.Message); }
+            sb.Append(']');
+        }
+        return sb.ToString();
     }
 
     /// <summary>Applies a color to the given renderers. Returns false if it should be retried.</summary>
