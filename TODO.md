@@ -431,8 +431,8 @@ the wrong box type, so make sure to spawn the right one.
 
 **Status:** in-progress  
 **Code:** `EmployeeClothes/`  
-**Review:** 2026-11-17, 1 round (fixes applied, not re-reviewed), hash `818fc36cbcda`  
-**Waiting on:** v1.0.4 (recoloring fixes + card text, not re-reviewed) and the panel/preview UI rework; then an in-game test (steps in the mod's `CLAUDE.md`).
+**Review:** 2026-11-18, round 2 on v1.0.5 (fixes applied, not re-reviewed), hash `b165a0ce956a`  
+**Waiting on:** Review of v1.0.5 (UI, Apply to all, hidden types, guard/janitor, performance), then an in-game test (steps in the mod's `CLAUDE.md`).
 
 Create a new entry in the customization menu from the game's computer that allows the
 player to pick the color scheme of the clothes of the employees. It costs $500 to access

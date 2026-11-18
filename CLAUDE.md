@@ -189,6 +189,7 @@ Typical loop for a task:
   - Iterator fields `<>2__current` and `<>4__this` are exposed as properties `__2__current` and `__4__this`.
   - A coroutine allocates a new `WaitForSeconds` per `yield`. Changing the yielded `WaitForSeconds.m_Seconds` in a `MoveNext` postfix changes that wait.
   - Confirmed working in-game.
+- **Layer 31 is never rendered.** All 32 layers are named (layer 31 is `FPSHand`), and the URP renderers' opaque/transparent layer masks are `0x7FFFFFFF` (HighFidelity also drops layer 11), so anything on layer 31 is invisible to any camera. A "find a free layer" search falls back to 31. A script-made camera/stage (preview renders) must use a layer in the mask: 4 (`Water`) is unused and works. Verified from the raw bytes of `UniversalRendererData` in `globalgamemanagers.assets` (UnityPy); the in-game result is pending (EmployeeClothes 1.0.5).
 - Harmless startup noise: `TypeLoadException` spam in `LogOutput.log` comes from other mods (UniverseLib / HarmonyX type scanning).
 
 ## 6. Plugin conventions
