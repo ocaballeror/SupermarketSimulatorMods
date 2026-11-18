@@ -14,12 +14,13 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.extracomputers";
     public const string Name = "Extra Computers";
-    public const string Version = "1.3.0";
+    public const string Version = "1.4.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<float> Price;
     internal static ConfigEntry<bool> ProtectUnmodded;
+    internal static ConfigEntry<bool> IndependentScreens;
     internal static ConfigEntry<bool> Verbose;
     internal static ConfigEntry<IconStyle> Icon;
 
@@ -39,11 +40,15 @@ public class Plugin : BasePlugin
             "removed), a placed extra computer stops the game from loading the furniture saved after it, and computer " +
             "boxes (unopened, in storage, in a pending delivery or in the cart) can't be loaded and may cause errors or be " +
             "lost. Before doing that, box up EVERY placed computer and sell or throw away the boxes, and empty the cart.");
-        Price = Config.Bind("ExtraComputers", "Price", 500f,
+        Price = Config.Bind("ExtraComputers", "Price", 1000f,
             // ClampedFloat instead of AcceptableValueRange: config managers draw a text field, not a slider.
             new ConfigDescription("Price of one extra computer in the furniture shop (0 to 100000). In multiplayer the " +
                                   "host's price is used by everybody.",
                 new ClampedFloat(0f, 100000f)));
+        IndependentScreens = Config.Bind("ExtraComputers", "IndependentScreens", true,
+            "Every computer remembers which apps and tabs were open on it. What you left open on one computer does not " +
+            "show up on another; a computer you haven't used yet starts on the desktop. Turn this off to share one " +
+            "screen between all computers (the old behaviour, where the last open app follows you).");
         ProtectUnmodded = Config.Bind("Multiplayer", "ProtectUnmoddedPlayers", true,
             "While any other player in the room does not have this mod, the computer is hidden in the shop, buying it is " +
             "refused and computer boxes can't be opened, because a player without the mod gets errors from computer boxes " +
@@ -60,6 +65,7 @@ public class Plugin : BasePlugin
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
         Price.SettingChanged += (_, _) => ComputerFurniture.ApplyPrice();
+        IndependentScreens.SettingChanged += (_, _) => ComputerUiState.Clear();
         Icon.SettingChanged += (_, _) =>
         {
             try { ComputerFurniture.ResetIcon(); }

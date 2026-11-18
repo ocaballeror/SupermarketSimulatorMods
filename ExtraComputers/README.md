@@ -1,7 +1,8 @@
 # Extra Computers
 
-Adds a **Computer** to the furniture shop ($500 by default). Buy as many as you like. Each one arrives in a furniture box with a computer icon on it. Unbox it and place it anywhere, like any other furniture. It works like the store's own computer: shop, pricing, hiring, management, everything.
+Adds a **Computer** to the furniture shop ($1000 by default). Buy as many as you like. Each one arrives in a furniture box with a computer icon on it. Unbox it and place it anywhere, like any other furniture. It works like the store's own computer: shop, pricing, hiring, management, everything.
 
+- **Every computer has its own screen state.** Each computer remembers which apps and tabs you left open on it; a computer you haven't used yet starts on the desktop. (Scroll positions, search text and dropdown choices are shared between computers. The cart, orders and money are shared, as always.)
 - **Every player has their own screen.** Each player sees only what they do on the computer they're using. Two players can use two computers at the same time, or one player can use an extra computer while another uses the store computer.
 - Changes (prices, orders, hires, ...) are shared exactly like changes made on the store computer. If two players have the same page open, one of them may see an older view until they reopen that page (the same as playing with the store computer alone).
 - Hold the use key to move an extra computer. It can be moved and boxed up like other furniture (and an unopened computer box can be sold like other furniture boxes). Placed extra computers are saved with the store like other furniture.
@@ -14,8 +15,9 @@ Adds a **Computer** to the furniture shop ($500 by default). Buy as many as you 
 | Section | Setting | Default | Meaning |
 |---|---|---|---|
 | General | `Enabled` | `true` | Master switch, applied immediately. While it's off, the computer leaves the shop and placed computers stay as furniture but can't be used. **Don't load a store while it's off** (including starting the game with it off) unless you've boxed up every computer first: see "Removing or disabling the mod". |
-| ExtraComputers | `Price` | `500` | Price of one computer in the furniture shop (type a number from 0 to 100000). The **host's** value is used by everybody: a guest with the mod sees and pays the host's price, whatever their own setting says. |
+| ExtraComputers | `Price` | `1000` | Price of one computer in the furniture shop (type a number from 0 to 100000). The **host's** value is used by everybody: a guest with the mod sees and pays the host's price, whatever their own setting says. |
 | ExtraComputers | `Icon` | `Model` | Picture of the computer in the shop and on its box. `Model`: made from the computer's 3D model, like the other furniture pictures. `GameSymbol`: the game's own flat computer symbol. The shop shows a change after the store is loaded again. |
+| ExtraComputers | `IndependentScreens` | `true` | Each computer remembers its own open apps and tabs. Off: all computers share one screen, like the store computer's. |
 | Multiplayer | `ProtectUnmoddedPlayers` | `true` | While any other player in the room doesn't have this mod, the computer is hidden in the shop, and the host refuses to buy it or to open computer boxes. The host's setting is what counts; a guest with the mod also applies its own setting to its own shop and its own box clicks. See below. |
 | Diagnostics | `VerboseLogging` | `true` | Logs how the computer furniture is built and each use (tag `[ExtraComputers]` in `BepInEx/LogOutput.log`). |
 

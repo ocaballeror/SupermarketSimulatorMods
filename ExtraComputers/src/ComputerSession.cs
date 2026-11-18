@@ -32,6 +32,20 @@
  *    InstantInteract unconditionally, so the store computer never looks used because of an extra one.
  *  - The extra computer in use is published as a player property (Presence.SetUse); a second player who tries
  *    to open the same computer gets the game's "in use by another player" warning.
+ *
+ * Leaving (the camera):
+ *  - m_PCCam is a CinemachineVirtualCamera ("Computer VCam"), not a plain camera. Back() deactivates it, and the
+ *    CinemachineBrain then blends from it back to the player's first-person virtual camera. For that blend
+ *    CinemachineBlend keeps updating the OUTGOING virtual camera every frame from its own transform, even though it is
+ *    inactive. If the borrowed parts are put back under the store computer right after Back (as v1.3.0 did), the outgoing
+ *    camera jumps to the store computer and the blend starts there. So after Back the session only becomes "lingering":
+ *    the anchors keep following the extra computer and the parts stay where they are until the brain has finished
+ *    blending (TickLinger, from Computer.LateUpdate), a new session starts, the scene changes or the mod is turned off.
+ *  - Entering is not affected: the camera is moved while inactive and then activated, and the brain blends from the
+ *    player's camera to its current pose.
+ *
+ * Screens: each computer keeps its own open apps and tabs, see ComputerUiState (captured when Back/close runs,
+ * applied just before the vanilla InstantInteract).
  */
 using System;
 using System.Collections.Generic;
@@ -60,11 +74,23 @@ internal static class ComputerSession
     private static Computer _comp;
     private static Transform _compRoot;
     private static Furniture _prop;
+    private static int _screenKey = ComputerUiState.StoreKey;
     private static Transform _model;
 
     /// <summary>True while the local player is on an extra computer (also while it is being opened and closed).</summary>
     internal static bool Active { get; private set; }
     internal static bool InBack;
+
+    /// <summary>The session is over but the borrowed parts stay on the extra computer until the exit blend is finished.</summary>
+    internal static bool Lingering { get; private set; }
+    private static float _lingerStart;
+    private static int _lingerFrames;
+    private const float MinLingerSeconds = 0.2f;
+    private const float MaxLingerSeconds = 4f;
+    private static Cinemachine.CinemachineBrain _brain;
+
+    /// <summary>True between a vanilla (store computer) InstantInteract that opened the PC and its Back.</summary>
+    internal static bool StoreSessionOpen;
 
     internal static bool IsSessionProp(Furniture f) => Active && _prop != null && f != null && f.Pointer == _prop.Pointer;
 
@@ -72,6 +98,7 @@ internal static class ComputerSession
     internal static bool TryStart(Furniture prop)
     {
         if (Active) { Plugin.Warn("A computer session is already open"); return false; }
+        if (Lingering) FinishLinger("new session");
 
         var comp = ComputerFurniture.FindRealComputer();
         if (comp == null) { Plugin.Warn("The store computer wasn't found; can't open this computer"); return false; }
@@ -103,6 +130,7 @@ internal static class ComputerSession
         _comp = comp;
         _prop = prop;
         _model = model;
+        _screenKey = ComputerUiState.KeyOf(prop); // fixed for the whole session (the object may be destroyed meanwhile)
         Active = true;
 
         try
@@ -118,6 +146,13 @@ internal static class ComputerSession
             Plugin.Error("Moving the computer screen failed: " + e);
             End("setup failed");
             return false;
+        }
+
+        // This computer's own screen (apps and tabs it was left with, or the clean desktop).
+        if (Plugin.IndependentScreens.Value)
+        {
+            try { ComputerUiState.Apply(comp, _screenKey); }
+            catch (Exception e) { Plugin.Error("Setting up this computer's screen failed: " + e); }
         }
 
         // Vanilla InstantInteract writes IsOccupied-related state (OccupiedPlayer at +0xD8) for the local player;
@@ -143,8 +178,16 @@ internal static class ComputerSession
 
         if (!result)
         {
+            ComputerUiState.DropPending();
             End("computer didn't open");
             return false;
+        }
+
+        // The windows this computer had open go up now, like a click on the desktop icons with the PC already open.
+        if (Plugin.IndependentScreens.Value)
+        {
+            try { ComputerUiState.Finish(comp); }
+            catch (Exception e) { Plugin.Error("Opening this computer's windows failed: " + e); }
         }
 
         // PlayerInteraction.Interact activates the interaction of m_CurrentInteractable's type right after
@@ -197,7 +240,7 @@ internal static class ComputerSession
     /// <summary>Keeps the borrowed parts on the extra computer if it moves (called every frame).</summary>
     internal static void SyncAnchors()
     {
-        if (!Active) return;
+        if (!Active && !Lingering) return;
         foreach (var m in MovedParts) SyncAnchor(m);
     }
 
@@ -223,13 +266,87 @@ internal static class ComputerSession
         catch (Exception e) { Plugin.Debug("Showing the in-use warning failed: " + e.Message); }
     }
 
-    /// <summary>Puts the store computer's screen, camera and exit point back.</summary>
-    internal static void End(string reason)
+    /// <summary>Called from the Back postfix and the set_OpenPC(false) postfix: saves this computer's screen, then ends.</summary>
+    internal static void AfterClose(Computer comp, string reason)
+    {
+        if (Active)
+        {
+            SaveScreen(_comp != null ? _comp : comp, _screenKey);
+            End(reason, linger: true);
+        }
+        else if (StoreSessionOpen)
+        {
+            StoreSessionOpen = false;
+            SaveScreen(comp, ComputerUiState.StoreKey);
+        }
+    }
+
+    private static void SaveScreen(Computer comp, int key)
+    {
+        if (!Plugin.IndependentScreens.Value || comp == null) return;
+        try { ComputerUiState.Capture(comp, key); }
+        catch (Exception e) { Plugin.Error("Saving this computer's screen failed: " + e.Message); }
+    }
+
+    /// <summary>
+    /// Ends the session. With <paramref name="linger"/> the borrowed parts stay on the extra computer (see the header)
+    /// until the camera blend is done; otherwise they go back at once.
+    /// </summary>
+    internal static void End(string reason, bool linger = false)
     {
         if (!Active) return;
         Active = false;
         InBack = false;
         Presence.SetUse(0);
+        if (linger && MovedParts.Count > 0)
+        {
+            Lingering = true;
+            _lingerStart = Time.unscaledTime;
+            _lingerFrames = 0;
+            Plugin.Debug("Left extra computer (" + reason + "); keeping the camera on it until the exit blend is done");
+            return;
+        }
+        RestoreParts(reason);
+    }
+
+    /// <summary>Called every frame (Computer.LateUpdate): puts the parts back once the exit blend is over.</summary>
+    internal static void TickLinger()
+    {
+        if (!Lingering) return;
+        _lingerFrames++;
+        float t = Time.unscaledTime - _lingerStart;
+        bool done = t >= MaxLingerSeconds;
+        if (!done && _lingerFrames >= 3 && t >= MinLingerSeconds)
+        {
+            try
+            {
+                if (_brain == null)
+                {
+                    var cam = Camera.main;
+                    _brain = cam != null ? cam.GetComponent<Cinemachine.CinemachineBrain>() : null;
+                    if (_brain == null) _brain = Object.FindObjectOfType<Cinemachine.CinemachineBrain>();
+                }
+                done = _brain == null || !_brain.IsBlending;
+            }
+            catch (Exception e)
+            {
+                Plugin.Warn("Checking the camera blend failed: " + e.Message);
+                done = true;
+            }
+        }
+        if (done) FinishLinger($"exit blend done after {t:0.00}s");
+    }
+
+    internal static void FinishLinger(string reason)
+    {
+        if (!Lingering) return;
+        RestoreParts(reason);
+    }
+
+    /// <summary>Puts the store computer's screen, camera and exit point back.</summary>
+    private static void RestoreParts(string reason)
+    {
+        Lingering = false;
         for (int i = MovedParts.Count - 1; i >= 0; i--)
         {
             var m = MovedParts[i];
@@ -265,7 +382,7 @@ internal static class ComputerSession
     /// </summary>
     internal static void ForceEnd(string reason)
     {
-        if (!Active) return;
+        if (!Active) { FinishLinger(reason); return; }
         try
         {
             var player = NoktaSingleton<PlayerManager>.HasInstance ? NoktaSingleton<PlayerManager>.Instance.LocalPlayer : null;
@@ -289,12 +406,18 @@ internal static class ComputerSession
         }
         catch (Exception e) { Plugin.Error("Leaving the computer failed: " + e.Message); }
         End(reason);
+        FinishLinger(reason); // the mod is going away: no waiting for the blend
     }
 
     /// <summary>Forgets the session without touching objects (new scene, or after toggling the mod).</summary>
     internal static void Reset()
     {
         if (Active && _comp != null) { End("reset"); }
+        if (Lingering) RestoreParts("reset");
+        Lingering = false;
+        StoreSessionOpen = false;
+        _brain = null;
+        ComputerUiState.Clear();
         Active = false;
         InBack = false;
         Presence.SetUse(0);

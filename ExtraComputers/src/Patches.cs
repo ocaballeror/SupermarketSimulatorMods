@@ -241,7 +241,10 @@ internal static class ComputerSpawner
         if (!PhotonNetwork.IsConnected)
         {
             Plugin.Debug($"Spawning computer at {pos} (offline)");
-            return LeanPool.Spawn(ComputerFurniture.Template, pos, rot, parent);
+            var spawned = LeanPool.Spawn(ComputerFurniture.Template, pos, rot, parent);
+            // LeanPool re-uses despawned objects: a "new" computer must not inherit an old one's screen.
+            if (spawned != null) ComputerUiState.Forget(spawned.GetInstanceID());
+            return spawned;
         }
         if (!PhotonNetwork.IsMasterClient)
         {
@@ -258,7 +261,9 @@ internal static class ComputerSpawner
             data[0] = new Il2CppSystem.Object(IL2CPP.il2cpp_value_box(Il2CppClassPointerStore<int>.NativeClassPtr, (IntPtr)(&v)));
         }
         Plugin.Debug($"Spawning computer at {pos} (online, box view {boxViewId})");
-        return PhotonNetwork.InstantiateRoomObject(ComputerFurniture.PrefabId, pos, rot, 0, data);
+        var room = PhotonNetwork.InstantiateRoomObject(ComputerFurniture.PrefabId, pos, rot, 0, data);
+        if (room != null) ComputerUiState.Forget(room.GetInstanceID());
+        return room;
     }
 
     /// <summary>
@@ -407,11 +412,50 @@ internal static class ComputerBackPatch
     /// <summary>Runs even if vanilla Back throws, so InBack can't stay stuck (it would block ComputerClosePatch).</summary>
     private static void Finalizer() => ComputerSession.InBack = false;
 
-    private static void Postfix()
+    private static void Postfix(Computer __instance)
     {
         ComputerSession.InBack = false;
-        // Back has put the player at m_PlayerPosition (still on the extra computer); now restore.
-        if (ComputerSession.Active) ComputerSession.End("left the computer");
+        // Back has put the player at m_PlayerPosition (still on the extra computer). Save this computer's screen and
+        // end the session; the borrowed camera stays on the extra computer until the exit blend is done.
+        try { ComputerSession.AfterClose(__instance, "left the computer"); }
+        catch (Exception e) { Plugin.Error("Ending the computer session failed: " + e); }
+    }
+}
+
+/// <summary>
+/// The store computer is just another computer: its apps and tabs are restored right before it opens, so what an extra
+/// computer left open doesn't show up there. Extra computers call this method themselves with a session active, which
+/// is skipped here (ComputerSession.TryStart applies their own state).
+/// </summary>
+[HarmonyPatch(typeof(Computer), nameof(Computer.InstantInteract))]
+internal static class StoreComputerScreenPatch
+{
+    private static void Prefix(Computer __instance)
+    {
+        try
+        {
+            if (ComputerSession.Active) return;
+            ComputerUiState.DropPending();
+            if (ComputerSession.Lingering) ComputerSession.FinishLinger("store computer used"); // it needs its own camera back
+            if (!Plugin.IndependentScreens.Value) return;
+            if (__instance.IsOccupied || __instance.OpenPC || __instance.IsInPlacingMode) return;
+            ComputerUiState.Apply(__instance, ComputerUiState.StoreKey);
+        }
+        catch (Exception e) { Plugin.Error("Setting up the store computer's screen failed: " + e.Message); }
+    }
+
+    private static void Postfix(Computer __instance, bool __result)
+    {
+        if (ComputerSession.Active) return;
+        if (__result)
+        {
+            ComputerSession.StoreSessionOpen = true;
+            if (Plugin.IndependentScreens.Value)
+            {
+                try { ComputerUiState.Finish(__instance); }
+                catch (Exception e) { Plugin.Error("Opening the store computer's windows failed: " + e.Message); }
+            }
+        }
     }
 }
 
@@ -419,10 +463,11 @@ internal static class ComputerBackPatch
 [HarmonyPatch(typeof(Computer), nameof(Computer.OpenPC), MethodType.Setter)]
 internal static class ComputerClosePatch
 {
-    private static void Postfix(bool value)
+    private static void Postfix(Computer __instance, bool value)
     {
-        if (!value && ComputerSession.Active && !ComputerSession.InBack)
-            ComputerSession.End("computer closed");
+        if (value || !ComputerSession.Active || ComputerSession.InBack) return;
+        try { ComputerSession.AfterClose(__instance, "computer closed"); }
+        catch (Exception e) { Plugin.Error("Ending the computer session failed: " + e); }
     }
 }
 
@@ -431,7 +476,11 @@ internal static class ComputerLateUpdatePatch
 {
     private static void Postfix()
     {
-        try { if (ComputerSession.Active) ComputerSession.SyncAnchors(); }
+        try
+        {
+            if (ComputerSession.Active || ComputerSession.Lingering) ComputerSession.SyncAnchors();
+            ComputerSession.TickLinger();
+        }
         catch (Exception e) { LogOnce("Moving the borrowed computer screen failed: " + e.Message); }
         try { Presence.Tick(); }
         catch (Exception e) { LogOnce("Multiplayer check failed: " + e.Message); }
