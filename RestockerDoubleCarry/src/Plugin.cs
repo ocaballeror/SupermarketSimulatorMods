@@ -30,21 +30,11 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off removes the feature immediately (no restart needed). " +
-            "A restocker that is carrying two boxes at that moment puts the second one down on the floor, or takes it in hand if its hands are empty.");
-        MinimumLevel = Config.Bind("Restockers", "MinimumLevel", 10,
-            new ConfigDescription(
-                "Restockers at this level or higher fetch two boxes per trip, for restocking shelves and for taking " +
-                "delivered boxes to storage (or one of each), and handle the closer destination first. They never " +
-                "unpack while holding two: at a shelf they put the other box on the floor, restock, then come back for it. " +
-                "Lower-level restockers work as normal.",
-                new AcceptableValueRange<int>(1, 100)));
-        StackVisuals = Config.Bind("Restockers", "StackSecondBox", true,
-            "Show the second box stacked on top of the box in the restocker's hands. " +
-            "On a guest this also fixes how the host's restockers look (both boxes visible instead of one inside the other).");
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
-            "Log each step of a two-box trip (tag [DoubleCarry] in BepInEx/LogOutput.log).");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
+        MinimumLevel = 10;
+        StackVisuals = true;
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
 

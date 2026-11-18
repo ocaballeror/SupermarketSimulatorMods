@@ -33,35 +33,14 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off removes all patches immediately (no restart needed): the computer leaves the " +
-            "shop, and placed computers stay in the store as furniture but can't be used until it is turned back on. " +
-            "If a store is LOADED while this is off (game started with it off, turned off before loading, or the mod " +
-            "removed), a placed extra computer stops the game from loading the furniture saved after it, and computer " +
-            "boxes (unopened, in storage, in a pending delivery or in the cart) can't be loaded and may cause errors or be " +
-            "lost. Before doing that, box up EVERY placed computer and sell or throw away the boxes, and empty the cart.");
-        Price = Config.Bind("ExtraComputers", "Price", 1000f,
-            // ClampedFloat instead of AcceptableValueRange: config managers draw a text field, not a slider.
-            new ConfigDescription("Price of one extra computer in the furniture shop (0 to 100000). In multiplayer the " +
-                                  "host's price is used by everybody.",
-                new ClampedFloat(0f, 100000f)));
-        IndependentScreens = Config.Bind("ExtraComputers", "IndependentScreens", true,
-            "Every computer remembers which apps and tabs were open on it. What you left open on one computer does not " +
-            "show up on another; a computer you haven't used yet starts on the desktop. Turn this off to share one " +
-            "screen between all computers (the old behaviour, where the last open app follows you).");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
+        Price = 1000f;
+        IndependentScreens = true;
         ProtectUnmodded = Config.Bind("Multiplayer", "ProtectUnmoddedPlayers", true,
-            "While any other player in the room does not have this mod, the computer is hidden in the shop, buying it is " +
-            "refused and computer boxes can't be opened, because a player without the mod gets errors from computer boxes " +
-            "and computers. The host's setting decides for purchases and for boxes opened by anyone; a guest with the mod " +
-            "also hides the shop item and keeps its own computer boxes closed according to its own setting. " +
-            "Turn this off only if everybody has the mod.");
-        Icon = Config.Bind("ExtraComputers", "Icon", IconStyle.Model,
-            "Picture of the computer in the furniture shop and on its box. Model: a picture made from the computer's 3D " +
-            "model, in the style of the other furniture. GameSymbol: the game's flat computer symbol (icon_device_63). " +
-            "The shop picks up a change after the store is loaded again.");
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
-            "Log how the computer furniture is built and every time an extra computer is used " +
-            "(tag [ExtraComputers] in LogOutput.log).");
+            "The game can bug out on multiplayer if not all players have the mod. Turn this off only if everybody has the mod installed.");
+        Icon = IconStyle.GameSymbol;
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
         Price.SettingChanged += (_, _) => ComputerFurniture.ApplyPrice();

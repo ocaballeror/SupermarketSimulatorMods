@@ -31,20 +31,15 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Speeds up self checkouts when you host or play solo. As a guest in multiplayer you always run " +
-            "at the host's speed (so both games stay in step), whatever this and the other settings say.");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
         // ClampedFloat instead of AcceptableValueRange: config managers draw a text field, not a slider.
         SpeedMultiplier = Config.Bind("SelfCheckout", "SpeedMultiplier", 2f,
             new ConfigDescription(
-                "How much faster customers get through self checkout machines (scanning each item and paying). " +
-                "Type a number: 1 = normal speed, 2 = twice as fast, 1.5 = one and a half times, up to 10.",
+                "How much faster customers are at using self checkouts."
                 new ClampedFloat(1f, MaxMultiplier)));
-        SpeedUpEmployeeHelp = Config.Bind("SelfCheckout", "SpeedUpEmployeeHelp", true,
-            "Also speed up scanning when an employee (customer helper) helps a customer at a self checkout, " +
-            "by the same multiplier.");
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", false,
-            "Log every shortened self checkout wait (tag [SelfCheckout] in LogOutput.log). Very chatty.");
+        SpeedUpEmployeeHelp = true;
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => OnSettingsChanged();
         SpeedMultiplier.SettingChanged += (_, _) => OnSettingsChanged();

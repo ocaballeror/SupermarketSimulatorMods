@@ -38,20 +38,12 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off removes all patches immediately (no restart needed).");
-        KeepMarkup = Config.Bind("Pricing", "KeepMarkupOnPriceChanges", true,
-            "When a product's market price goes up or down at the start of a new day, set its selling price again " +
-            "using the markup (% above market price) last applied from the computer's bulk pricing tab.");
-        OnlyFollowingProducts = Config.Bind("Pricing", "OnlyProductsFollowingMarkup", true,
-            "Only reprice products whose price still matched that markup before the change, so prices you typed in " +
-            "by hand are left alone. Turn off to reprice every product whose market price changed.");
-        PriceNewProducts = Config.Bind("Pricing", "PriceNewlyUnlockedProducts", true,
-            "When a product license is bought, give its new products a selling price right away: the markup " +
-            "(% above market price) and discount last applied from the computer's bulk pricing tab. If you never " +
-            "applied a markup, that means exactly market price. Products that already have a price are left alone.");
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", false,
-            "Log every repriced product (tag [Markup] in LogOutput.log).");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
+        KeepMarkup = true;
+        OnlyFollowingProducts = true;
+        PriceNewProducts = true;
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
 

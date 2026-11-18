@@ -57,49 +57,27 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off stands you up and removes the feature right away (no restart needed).");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
 
         CrouchKey = Config.Bind("Controls", "Key", Key.LeftCtrl,
-            "Keyboard key used to crouch. Note: Ctrl is also the game's snap key while placing furniture; " +
-            "crouching ignores the key while you are placing something.");
+            "Key binding used to crouch.");
         PadButton = Config.Bind("Controls", "GamepadButton", CrouchPadButton.None,
-            "Gamepad button used to crouch. None = no gamepad button. Pick one the game doesn't already use " +
-            "(left stick press is sprint, right stick press is ping).");
+            "Gamepad button used to crouch. None = no gamepad button.");
         ToggleMode = Config.Bind("Controls", "ToggleMode", false,
-            "false = hold the key to stay crouched. true = press once to crouch, again to stand up " +
-            "(jump also stands you up).");
+            "false = hold the key to stay crouched. true = press once to crouch, again to stand up.");
 
-        SpeedMultiplier = Config.Bind("Crouch", "SpeedMultiplier", 0.5f,
-            new ConfigDescription("Walking speed while crouched, as a fraction of normal walking speed. " +
-                                  "You can't sprint while crouched.",
-                new AcceptableValueRange<float>(0.1f, 1f)));
-        CameraHeight = Config.Bind("Crouch", "CameraHeight", 0.65f,
-            new ConfigDescription("Eye height while crouched, as a fraction of the standing eye height.",
-                new AcceptableValueRange<float>(0.3f, 0.95f)));
-        TransitionTime = Config.Bind("Crouch", "TransitionSeconds", 0.2f,
-            new ConfigDescription("How long it takes to crouch down or stand up.",
-                new AcceptableValueRange<float>(0.05f, 1f)));
-        ShrinkCollider = Config.Bind("Crouch", "ShrinkCollider", true,
-            "Make your collision shape shorter while crouched, so you fit under low things. " +
-            "You only stand back up when there is room above you.");
+        SpeedMultiplier = 0.5f;
+        CameraHeight = 0.55f;
+        TransitionTime = 0.2f;
+        ShrinkCollider = true;
 
-        BodyDepth = Config.Bind("Animation", "BodyDepth", 0.4f,
-            new ConfigDescription("How far the character's hips drop when crouched, as a fraction of leg length. " +
-                                  "Higher = deeper squat.",
-                new AcceptableValueRange<float>(0.1f, 0.6f)));
-        LeanAngle = Config.Bind("Animation", "LeanAngle", 15f,
-            new ConfigDescription("Forward lean of the upper body when crouched, in degrees.",
-                new AcceptableValueRange<float>(0f, 40f)));
-        ShareWithOthers = Config.Bind("Multiplayer", "ShareCrouchState", true,
-            "Tell other players when you crouch, so their game can show your character crouching " +
-            "(they need this mod too). Players without the mod simply ignore it.");
-        AnimateOthers = Config.Bind("Multiplayer", "AnimateOtherPlayers", true,
-            "Show other players' characters crouching when they crouch (they need this mod too).");
+        BodyDepth = 0.4f
+        LeanAngle = 15f;
+        ShareWithOthers = true;
+        AnimateOthers = true;
 
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", false,
-            "Write [Crouch] lines to BepInEx/LogOutput.log (setup details, crouch state changes, " +
-            "other players' crouch state).");
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
         AddComponent<CrouchBehaviour>();

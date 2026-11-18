@@ -28,15 +28,10 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off removes all patches immediately and restores the game's own " +
-            "grid setting (no restart needed).");
-        RememberToggle = Config.Bind("GridMode", "RememberToggle", true,
-            "true: the grid starts on, and if you turn it off with the grid key (X by default) it stays off " +
-            "until you turn it on again or restart the game (the game's own behaviour). " +
-            "false: every time you pick up or place furniture the grid starts on again.");
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", false,
-            "Log what the mod does when furniture placement starts (tag [GridMode] in LogOutput.log).");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
+        RememberToggle = true;
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
 

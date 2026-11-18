@@ -32,16 +32,14 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off removes all patches immediately and puts paint cans back to the " +
-            "game's normal capacity (no restart needed).");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
         Multiplier = Config.Bind("Paint", "CapacityMultiplier", 2f,
             new ConfigDescription(
                 "How many times longer a paint can lasts. 2 = twice as many walls per can. " +
                 "Applies to cans bought after the change; cans you already own keep the paint they have.",
                 new AcceptableValueRange<float>(1f, 10f)));
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", false,
-            "Log every paint can type and paint can that gets resized (tag [PaintCan] in LogOutput.log).");
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
         Multiplier.SettingChanged += (_, _) => { if (Active) PaintPatches.ApplyToAll(); };

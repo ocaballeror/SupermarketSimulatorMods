@@ -29,18 +29,12 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off removes all patches immediately (no restart needed).");
-        ShowHint = Config.Bind("FurnitureMoveCancel", "ShowHint", true,
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
+        ShowHint = true;
             "Show the Escape key in the list of key hints while moving furniture.");
-        ReturnDelay = Config.Bind("FurnitureMoveCancel", "ReturnDelaySeconds", 0f,
-            new ConfigDescription(
-                "Optional pause at the original spot before the furniture is put down. 0 = put it down immediately. " +
-                "In multiplayer, if a piece can't send its exact position to the other players, it is held " +
-                "at least 0.3 s so they see it in the right place.",
-                new AcceptableValueRange<float>(0f, 2f)));
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", false,
-            "Log what happens when Escape is pressed while moving furniture (tag [MoveCancel] in LogOutput.log).");
+        ReturnDelay = 0f;
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
         AddComponent<MoveCancelBehaviour>();

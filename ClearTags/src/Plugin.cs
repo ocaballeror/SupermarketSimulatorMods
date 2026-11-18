@@ -34,23 +34,18 @@ public class Plugin : BasePlugin
         _harmony = new Harmony(Guid);
 
         Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off takes effect immediately: tags go back to their normal size and the hover text disappears.");
-        // ClampedFloat instead of AcceptableValueRange: config managers draw a text field, not a slider.
+            "Enable the mod.");
         TagScale = Config.Bind("Tags", "ScaleMultiplier", 2f,
             new ConfigDescription(
-                "How much bigger the product icon tag on every box is drawn. Type a number: 1 = normal size, " +
-                "2 = twice as big, 1.5 = one and a half times, from 0.5 to 5. The tag is kept on the box lid: on small boxes " +
-                "(or with a big number) it ends up smaller than requested, never smaller than the original. Applies at once, " +
-                "also to boxes already in the store. Only affects what you see.",
+                "How much bigger the product icon tag on every box is drawn.",
                 new ClampedFloat(0.5f, 5f)));
         HoverText = Config.Bind("Hover", "ShowHoverText", true,
-            "Show a small panel (product icon and name; on a box also the quantity and the box price) while your crosshair is on a box tag, " +
-            "a shelf, rack or vending tag or price tag (also on the box you are holding).");
-        HoverTextSize = Config.Bind("Hover", "TextSize", 22f,
-            new ConfigDescription("Size of the hover panel text (at 1080p; the whole panel scales with it and with the screen height). Type a number from 8 to 48.",
+            "Show a small panel (product icon and name; on a box also the quantity and the box price) while looking at a label");
+        HoverTextSize = Config.Bind("Hover", "TextSize", 30f,
+            new ConfigDescription("Size of the hover panel text."),
                 new ClampedFloat(8f, 48f)));
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
-            "Log what the mod does (tag [ClearTags] in BepInEx/LogOutput.log): boxes it resized, and each new hover target.");
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
         TagScale.SettingChanged += (_, _) => OnScaleChanged();

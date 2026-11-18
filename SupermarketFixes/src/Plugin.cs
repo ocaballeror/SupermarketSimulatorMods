@@ -30,9 +30,7 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off removes all patches immediately (no restart needed); " +
-            "turning it back on re-applies them.");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
         Patches.RackMoveFix.Bind(Config);
         Patches.GhostHeldItemFix.Bind(Config);
         Patches.StuckBoxFix.Bind(Config);

@@ -150,36 +150,14 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off puts the employees' original clothes back and removes the card from the " +
-            "computer's Customization tab right away (no restart); turning it back on restores everything.");
-        Price = Config.Bind("Customization", "Price", 500f,
-            new ConfigDescription(
-                "What it costs to open the Employee Clothes screen in the computer's Customization tab. Once it is " +
-                "open you can change colors as often as you like (Apply, Apply to all, Reset, switching types are " +
-                "free) until you close it (Done, another tab, leaving the computer); opening it again costs again. " +
-                "Type a number; 0 makes it free.",
-                new ClampedFloat(0f, 1000000f)));
-        ApplyToAll = Config.Bind("Customization", "ApplyToAll", false,
-            "State of the \"Apply to all\" switch on the Employee Clothes screen. When on, Apply gives the picked color to " +
-            "every employee type (also types you haven't unlocked yet, so they already wear it when you do) and Reset puts " +
-            "the original clothes back on every type. The switch keeps its state when you change employee type, press " +
-            "Apply or Reset, and the next time you open the screen or start the game; flipping it on the screen saves it here.");
-        ShadedGarments = Config.Bind("Appearance", "ShadedGarments", true,
-            "When on, trousers and waistcoats are a darker shade of the chosen color (trousers 70%, " +
-            "waistcoat 80%), so the outfit isn't one flat color. When off, every garment is exactly " +
-            "the chosen color (still shaded by its folds and seams).");
-        SyncToGuests = Config.Bind("Multiplayer", "SyncToGuests", true,
-            "Host only: share the chosen colors with the guests (as a Photon room property), so guests who also have " +
-            "this mod see the same colors. Guests without the mod simply see the original clothes.");
-        PreviewLight = Config.Bind("Appearance", "PreviewLight", 30f,
-            new ConfigDescription(
-                "Brightness of the two lights in the model preview. If the preview looks too dark or washed out, " +
-                "type a different number (1 to 300).",
-                new ClampedFloat(1f, 300f)));
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
-            "Log what the mod does (tag [EmployeeClothes] in BepInEx/LogOutput.log). On while the mod is new; " +
-            "turn it off once everything works.");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
+        Price = 1000f;
+        ApplyToAll = false;
+        ShadedGarments = true;
+        SyncToGuests = true;
+        PreviewLight = 30f;
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
         PreviewLight.SettingChanged += (_, _) => Preview.ApplyLightSetting();

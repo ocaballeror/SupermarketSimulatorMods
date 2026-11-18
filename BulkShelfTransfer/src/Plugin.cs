@@ -37,35 +37,25 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off removes all patches immediately (no restart needed).");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
 
         ModifierKey = Config.Bind("Keys", "ModifierKey", Key.LeftShift,
-            "Hold this key while clicking to move everything at once. Modifier + Take (right click by default) " +
-            "fills the box / paper bag / crate from the shelf you look at; modifier + Use (left click by default) " +
-            "empties it onto the shelf. The clicks are the game's own Take and Use bindings, so rebinding them in " +
-            "the game's settings also changes them here. Set to None to make every Take/Use click a bulk transfer.");
-        BulkTake = Config.Bind("Keys", "BulkTake", true,
+            "Hold this key while clicking to move everything at once. Modifier + Take (default right click) " +
+            "fills the box / paper bag / crate from the shelf you look at; modifier + Use (default left click) " +
+            "empties it onto the shelf".)
+        BulkTake = true;
             "Modifier + Take moves all matching products from the shelf into the held container.");
-        BulkPlace = Config.Bind("Keys", "BulkPlace", true,
-            "Modifier + Use moves all matching products from the held container onto the shelf.");
+        BulkPlace = true;
 
-        Boxes = Config.Bind("Containers", "Boxes", true, "Bulk transfer with product boxes (crates bought from the computer).");
-        PaperBags = Config.Bind("Containers", "PaperBags", true, "Bulk transfer with online-order paper bags.");
-        Crates = Config.Bind("Containers", "Crates", true, "Bulk transfer with the multi-product crate.");
+        Boxes = true;
+        PaperBags = true;
+        Crates = true;
 
-        SecondsBetweenItems = Config.Bind("Speed", "SecondsBetweenItems", 0.02f,
-            new ConfigDescription("Time between two products during a bulk transfer, in seconds (the game's own " +
-                                  "hold-to-repeat speed is roughly 0.1-0.2 s per product). 0 = one product per frame.",
-                new AcceptableValueRange<float>(0f, 0.5f)));
-        AnimationSpeed = Config.Bind("Speed", "AnimationSpeed", 5f,
-            new ConfigDescription("How much faster the products fly between the shelf and the container during a " +
-                                  "bulk transfer (1 = the game's normal animation). It is the game's own animation, " +
-                                  "only played faster, and only on your screen.",
-                new AcceptableValueRange<float>(1f, 20f)));
+        SecondsBetweenItems = 0.2f;
+        AnimationSpeed = 5f;
 
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
-            "Log each bulk transfer (start, how many products, why it stopped) with the tag [Bulk] in LogOutput.log.");
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
 

@@ -34,19 +34,11 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. While holding a closed box, left-click (Use) another box to pick it up too. " +
-            "Turning it off takes effect immediately (no restart); if you are carrying two boxes at that moment, " +
-            "the second box still comes back to your hands when you put the first one down. Players leaving while carrying two " +
-            "boxes are also handled only while it is on.");
-        BuyAtWholesale = Config.Bind("Carry", "BuySecondBoxAtWholesale", true,
-            "At the wholesale store, while holding a closed box, hold left click (Use) on a product for the usual purchase " +
-            "time to buy a box of it and carry it on top of the one you hold (at most two boxes).");
-        RemoteStackVisuals = Config.Bind("Carry", "ShowOtherPlayersStack", true,
-            "Show the two boxes another player is carrying stacked (one under the other) instead of inside each other. " +
-            "Cosmetic, only affects what you see.");
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
-            "Log each step of a two-box carry (tag [PlayerCarry] in BepInEx/LogOutput.log).");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
+        BuyAtWholesale = true;
+        RemoteStackVisuals = true;
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
 

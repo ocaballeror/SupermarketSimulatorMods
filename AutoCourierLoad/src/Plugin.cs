@@ -34,40 +34,18 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off removes the mod's patches immediately (no restart needed); " +
-            "turning it back on re-applies them. Only the host (or a solo player) does anything.");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
         ScanRadius = Config.Bind("AutoCourierLoad", "ScanRadius", 4f,
             new ConfigDescription(
                 "How far from the courier's parking space (in metres) he looks for closed, name-tagged " +
                 "delivery bags when he comes back from a delivery. Type a number, 0.5 to 20.",
                 new ClampedFloat(0.5f, 20f)));
-        MaxBags = Config.Bind("AutoCourierLoad", "MaxBags", 0,
-            new ConfigDescription(
-                "The most bags he loads in his trunk this way. 0 = as many as his trunk holds (3 at the " +
-                "start, more when he levels up). A number above his trunk size changes nothing. Bags that " +
-                "you hand him yourself count too.",
-                new ClampedInt(0, 20)));
-        LeaveUnderSeconds = Config.Bind("AutoCourierLoad", "LeaveUnderSeconds", 60f,
-            new ConfigDescription(
-                "After he has loaded something, he leaves at once if one of the orders in his trunk has " +
-                "less than this many seconds left (the countdown shown on the order's note, in real " +
-                "seconds). Type a number, 0 to 600. 0 = never leave because of a deadline.",
-                new ClampedFloat(0f, 600f)));
-        LeaveWhenFull = Config.Bind("AutoCourierLoad", "LeaveWhenFull", false,
-            "He also leaves as soon as his trunk is full, even if other orders are still active, instead of " +
-            "waiting for you to press E or for a deadline. Off by default: he then leaves only when his " +
-            "trunk covers every active order or an order is about to run out. \"Full\" follows MaxBags if " +
-            "that is lower than his trunk size.");
-        KeepScanningSeconds = Config.Bind("AutoCourierLoad", "KeepScanningSeconds", 30f,
-            new ConfigDescription(
-                "After he is back at his parking space, bags that you put down there within this many " +
-                "seconds are still picked up. Type a number, 0 to 600. 0 = he looks only once, right " +
-                "when he arrives. Once he has loaded something he keeps looking for as long as he waits.",
-                new ClampedFloat(0f, 600f)));
-        Diagnostics = Config.Bind("Diagnostics", "Diagnostics", true,
-            "Log [AutoCourier] lines to BepInEx/LogOutput.log: arrival, each bag loaded, why he leaves. " +
-            "Turn off once the mod is confirmed to work.");
+        MaxBags = 0;
+        LeaveUnderSeconds = 60f;
+        LeaveWhenFull = true;
+        KeepScanningSeconds = 30f; // this one doesn't make sense. he always loads any bag that is dropped in his search radius
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
         AddComponent<AutoCourierBehaviour>();

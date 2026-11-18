@@ -22,17 +22,11 @@ public class Plugin : BasePlugin
     {
         Logger = Log;
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Master switch. Turning it off takes effect immediately: every outline this mod drew disappears.");
-        ShelvesForBox = Config.Bind("Highlight", "ShelvesForBox", true,
-            "While you hold a box of products, outline every shelf, fridge and freezer that has a label for that product " +
-            "(empty ones too), so you can see where it goes. The same green as the outline of matching boxes in the storage racks.");
-        ProductsForBag = Config.Bind("Highlight", "ProductsForOrderBag", true,
-            "While you hold a paper bag for an online order, outline the groups of products on shelves, fridges and freezers " +
-            "that the order still needs (what the bag doesn't already hold). Only products that are really on a shelf are outlined, never empty shelves.");
-        Verbose = Config.Bind("Diagnostics", "VerboseLogging", true,
-            "Log what the mod does (tag [Highlight] in BepInEx/LogOutput.log): what you hold and how many shelves or product groups are outlined. " +
-            "Only logs when something changes.");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
+        ShelvesForBox true;
+        ProductsForBag = true;
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+            "Enable verbose logging for debugging purposes.");
 
         // The behaviour polls the held item a few times a second and draws/removes the outlines; it re-reads Enabled every tick,
         // so toggling the setting (config manager, Mod Settings Tool) needs no patching or restart.
