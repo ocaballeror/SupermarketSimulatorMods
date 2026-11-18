@@ -28,4 +28,4 @@ Copy `ProductHighlight.dll` into `BepInEx/plugins/` (the folder itself, not a su
 ## Compatibility
 
 - Doesn't patch any game method and draws its own outlines on separate objects, so it doesn't interfere with the game's own highlights (hover, racked boxes) or with other highlight mods such as Whole Truck Highlight.
-- Ice cream stands, crates and trash bins aren't outlined; neither are vending machines.
+- Ice cream stands, crates and trash bins aren't outlined (not even their products for an order); neither are vending machines.

@@ -5,10 +5,11 @@ empty or not). While they hold an online-order paper bag, outline the product gr
 
 ## Status
 
+- v0.1.1 (review round 1): outlines persist while placing (placing mode unparents the held object); the display-type filter also applies in bag mode; failed displays are warned once per hold; submesh loop as the game's; order lines of one product are merged before subtracting the bag; fallback scan for labeled shelves when `DisplayManager.m_Displays` is empty (guest). **Not tested in-game.**
 - v0.1.0: written and builds. **Not tested in-game**; everything below marked "unverified" is untested. No Harmony patches at all.
 - Open questions for the first test (see "In-game test"): (1) does the outline show (an `Outlinable` made with `AddComponent` on a separate child object, targets
   built like the game does); (2) does an outline on a product group show although static shelf products are rendered through the instancing batch
-  (`Renderer.forceRenderingOff` is true for them; the game's own hover/open-box highlights target the same renderers, which is the reason to expect it works);
+  (`Renderer.forceRenderingOff` is true for them). Verified in the dump (review): EPOOutline's `Outlinable.UpdateVisibility` treats a renderer with `forceRenderingOff` as visible when `Renderer.enabled`, and the game's own highlights use the same renderers; still pending in-game;
   (3) is `DisplayManager.DisplayedProducts[pid]` really holding every labeled slot that has products (the game's open-box highlight relies on it).
 
 ## Files
@@ -24,21 +25,22 @@ empty or not). While they hold an online-order paper bag, outline the product gr
 - **Poll, no patches.** `HighlightBehaviour.Update` (injected MonoBehaviour via `BasePlugin.AddComponent`) runs `Tick()` every 0.25 s (`Time.unscaledTime`) or at once after a
   setting change. Nothing is hooked, so "put in rack / trash / throw / drop / hand over / pick up" are all handled by the same check: is `PlayerObjectHolder.m_CurrentObject`
   a child of `m_ObjectHolder`? A `Box` gives the shelf set, an `OrderPaperBag` the product-group set, anything else (or nothing) clears everything.
+- **Held object:** `PlayerObjectHolder.m_CurrentObject` is "held" while it is a child of `m_ObjectHolder`, or in placing mode: `StartPlacingMode` sets `m_PlacingMode` (+0x60) and `PlacingRaycast` unparents the object while the aim hits a surface (`MoveToCarryingPosition` re-parents it). `DropObject` resets `m_PlacingMode`; throw/rack/bin don't (verified in the ISIL), so placing mode alone isn't enough: the object must also be active and have a **kinematic** Rigidbody (`HoldObject` makes it kinematic, drop/throw give physics back).
 - **Shelves for a box:** `pid = Box.Data.ProductID`. Displays = `slot.m_Display` of (a) `DisplayManager.GetLabeledEmptyDisplaySlots(pid, list)` (native, the game's search used by
   customers/restockers: slots with `ProductID == pid` and no products) and (b) `DisplayManager.DisplayedProducts[pid]` (slots that have products; guarded with `slot.ProductID == pid` since
-  `GetDisplaySlots` only prunes that dictionary lazily). Types TRASH, CRATE, ICE_CREAM_STAND are skipped. Carried furniture is removed from both by the game
+  `GetDisplaySlots` only prunes that dictionary lazily). Types TRASH, CRATE, ICE_CREAM_STAND are skipped (in bag mode too). **Guest:** `DisplayManager.m_Displays` is only filled by `LoadDisplayData` (host) and `AddDisplay`, which returns at once on `IsConnectedAndSlave` (ISIL, both); `Awake` just creates the empty list. So on a guest `GetLabeledEmptyDisplaySlots` finds nothing. `m_DisplayedProducts` is filled on guests too (`AddDisplaySlot` isn't gated; `DisplaySlot.Initialize` and `Display.AddBackToDisplayManagerAfterPlaced` register every slot with a label, empty or not), but `GetDisplaySlots` (restock/customer AI, host only) prunes empty ones lazily. When `m_Displays` is empty the mod therefore scans `FindObjectsOfType<Display>` itself (list refreshed every 3 s, slot labels checked every 1 s, log `fallback scan ...`). Carried furniture is removed from both by the game
   (`Display.RemoveFromDisplayManagerWhileCarrying`), so it isn't outlined while moved. Outlined renderers (`BodyRenderers`): enabled mesh/skinned renderers under the display
   that aren't under any `DisplaySlot` (products, price tag, label), aren't the placing-mode hologram (`m_PlacingMode.gameObject`) and aren't under "Sale Signs"; computed once per outline.
 - **Product groups for a bag:** order = `bag.m_OrderData` if `bag.IsTagAttached`, else `OnlineOrderInteraction.m_OrderNotebookContainer.CurrentOrder` (the same rule as
   `BulkShelfTransfer/src/BagBulk.cs`, without the courier/other-player checks: it is only a hint). Needed products = `OrderListData.OrderItems` where
-  `ProductCount - (products of that id in bag.m_SortedProducts) > 0`. Slots = `DisplayedProducts[pid]` with `slot.ProductID == pid` and `ProductCount > 0`; renderers =
+  the order's quantity per product (lines of one product merged) minus the products of that id in `bag.m_SortedProducts`, > 0. Slots = `DisplayedProducts[pid]` with `slot.ProductID == pid` and `ProductCount > 0`; renderers =
   `slot.m_Highlightable.m_RenderersToHighlight` (all product renderers; `DisplaySlot.AddProduct` appends the new product's `GetComponentsInChildren<Renderer>(true)` to it). The outline
   is rebuilt when a hash of that list changes, which is how stock changes show up.
 - **Outline recipe** (`OutlineHandle`): child `GameObject` + `AddComponent<Outlinable>()` (EPOOutline, in `Assembly-CSharp-firstpass`), `outlineParameters.color = HighlightManager.m_OutlineColor`,
   `TryAddTarget(new OutlineTarget(renderer, submesh))` for `submesh < GetSubmeshCount(renderer)`; destroy the GameObject to remove it. Own object so the game's `ClearScrollHighlights`,
   hover highlight and other mods (WholeTruckHighlight uses `Highlightable.AddOrRemoveRenderer` on a vehicle's `SortedBoxPlacementArea`; no overlap) never touch it.
 - Cost: a few interop calls per tick while holding something (one native lookup + a short list walk per qualifying product), one `GetComponent` pair when holding something else, nothing
-  when the hands are empty. No `FindObjectsOfType`.
+  when the hands are empty. No `FindObjectsOfType` except the guest fallback below (every 3 s, only while a box is held).
 
 ## Game reference: the game's highlight system (verified in the dumps, not observed in-game)
 
@@ -79,8 +81,9 @@ Purely local: reads the local player's hands and the local `DisplayManager`/slot
 2. Label a shelf (or fridge/freezer) for some product, leave it **empty**; label another shelf for a different product. Pick up a **closed** box of the first product: the whole labeled shelf gets a green outline
    (the other doesn't), plus the game's own outline on racked boxes of that product. Log: `[Highlight] box of product N: 1 shelves, 0 product groups outlined` and `outline created on shelf ...: K target(s) from R renderer(s)`.
    Repeat with a fridge and a freezer, and a shelf that has the product on it (still outlined as a whole).
+2b. **As a guest** (mod on the guest, host any): the same with an EMPTY labeled shelf; it must get the outline. `[Highlight] fallback scan (DisplayManager.m_Displays is empty, as on a guest): N display(s) ...` shows the fallback ran (if it never appears on the guest, `m_Displays` isn't empty there after all, which is fine as long as the shelf is outlined).
 3. Relabel the shelf (or label a second one) while holding the box: outlines follow within about a quarter second. Open the box (the game's own product-group outlines appear too), close it. Put the box down, throw it, rack it,
-   trash it: the outline disappears (`nothing held: 0 shelves, 0 product groups outlined`). Pick up furniture to move it while holding a box: not outlined while carried.
+   trash it: the outline disappears (`nothing held: 0 shelves, 0 product groups outlined`). Pick up furniture to move it while holding a box: not outlined while carried. Press Drop (placing mode) and move the aim across surfaces: the outlines stay on the whole time (no flicker); cancel placing: they stay; place/drop: they go.
 4. Place an online order (several products, some on shelves, one nowhere). Pick up an open paper bag with that order selected in the notebook (or a tagged bag): the **products** on the shelves for the order's items get outlined
    (groups of products, not the shelves); an empty shelf labeled for an ordered product gets nothing; a product not on any shelf: nothing. Log: `paper bag for order #N (M product(s) still needed): 0 shelves, K product groups outlined`.
    Put one ordered product into the bag: when the bag holds the full quantity that product's groups drop out. Take the last product off a shelf group: its outline goes. Put the bag down: all gone.

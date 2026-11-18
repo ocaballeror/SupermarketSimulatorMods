@@ -47,7 +47,7 @@ internal sealed class OutlineHandle
             {
                 var r = renderers[i];
                 if (r == null) continue;
-                int submeshes = Math.Max(1, o.GetSubmeshCount(r));
+                int submeshes = o.GetSubmeshCount(r);   // same loop as the game's HighlightManager
                 for (int s = 0; s < submeshes; s++)
                     if (o.TryAddTarget(new OutlineTarget(r, s))) targets++;
             }

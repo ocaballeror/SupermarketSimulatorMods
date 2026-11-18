@@ -47,6 +47,9 @@ public class HighlightBehaviour : MonoBehaviour
     private readonly Dictionary<int, Display> _wantedShelves = new();
     private readonly Dictionary<int, DisplaySlot> _wantedGroups = new();
     private readonly List<int> _stale = new();
+    private readonly HashSet<int> _failedShelves = new();   // displays that failed for the current hold (warned once, not retried)
+    private readonly HashSet<int> _failedGroups = new();
+    private readonly Dictionary<int, int> _need = new();    // product id -> quantity the order wants (lines merged)
     private Il2CppSystem.Collections.Generic.List<DisplaySlot> _labeled;
     private string _lastDescription = "";
     private string _lastError;
@@ -104,6 +107,7 @@ public class HighlightBehaviour : MonoBehaviour
             if (player != null)
             {
                 var held = HeldObject(player, out var box, out var bag);
+                if (held == null) ClearFailures();
                 if (box != null)
                 {
                     int pid = ProductOf(box);
@@ -119,7 +123,9 @@ public class HighlightBehaviour : MonoBehaviour
                 }
                 else if (held != null) description = "something else";
             }
+            else ClearFailures();
         }
+        else ClearFailures();
 
         SyncShelves();
         SyncGroups();
@@ -149,7 +155,16 @@ public class HighlightBehaviour : MonoBehaviour
         var hold = holder.m_ObjectHolder;
         var obj = holder.m_CurrentObject;
         if (hold == null || obj == null) return null;
-        if (obj.transform.parent != hold) return null;   // m_CurrentObject is stale after a drop
+        if (obj.transform.parent != hold)
+        {
+            // m_CurrentObject is stale after a drop (the game never clears it), so a loose object doesn't count. Exception: placing mode
+            // (Drop pressed). PlacingRaycast unparents the object while the aim hits a surface and re-parents it when it doesn't, and
+            // DropObject resets m_PlacingMode, so "placing mode + still active + still kinematic (HoldObject's doing; a drop or throw
+            // gives the physics back)" means it is still in the player's possession.
+            if (!holder.m_PlacingMode || !obj.activeInHierarchy) return null;
+            var rb = obj.GetComponent<Rigidbody>();
+            if (rb == null || !rb.isKinematic) return null;
+        }
         box = obj.GetComponent<Box>();
         if (box == null) bag = obj.GetComponent<OrderPaperBag>();
         return obj;
@@ -191,6 +206,54 @@ public class HighlightBehaviour : MonoBehaviour
         var dict = dm.DisplayedProducts;
         if (dict != null && dict.TryGetValue(pid, out var slots) && slots != null)
             for (int i = 0; i < slots.Count; i++) AddShelf(slots[i], pid);
+
+        // A guest's DisplayManager.m_Displays stays empty (AddDisplay and LoadDisplayData skip it on IsConnectedAndSlave), so the native
+        // lookup above finds nothing there, and the dictionary lacks labeled slots the host's restocker/customer queries pruned. Scan the
+        // displays ourselves, at most once a second.
+        var all = dm.m_Displays;
+        if (all == null || all.Count == 0) GuestScan(pid);
+    }
+
+    private string _lastScanMsg;
+    private int _scanPid;
+    private float _scanAt = -100f;
+    private readonly List<Display> _scanFound = new();
+    private Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<UnityEngine.Object> _scanDisplays;
+    private float _scanDisplaysAt = -100f;
+
+    private void GuestScan(int pid)
+    {
+        float now = Time.unscaledTime;
+        if (pid != _scanPid || now - _scanAt >= 1f)
+        {
+            _scanPid = pid;
+            _scanAt = now;
+            _scanFound.Clear();
+            if (_scanDisplays == null || now - _scanDisplaysAt >= 3f)
+            {
+                _scanDisplays = UnityEngine.Object.FindObjectsOfType(Il2CppInterop.Runtime.Il2CppType.Of<Display>());
+                _scanDisplaysAt = now;
+            }
+            for (int i = 0; i < _scanDisplays.Length; i++)
+            {
+                var d = _scanDisplays[i] != null ? _scanDisplays[i].TryCast<Display>() : null;
+                if (d == null || d.IsPlacingMode) continue;
+                var slots = d.m_DisplaySlots;
+                if (slots == null) continue;
+                for (int k = 0; k < slots.Length; k++)
+                {
+                    var sl = slots[k];
+                    if (sl != null && sl.ProductID == pid) { _scanFound.Add(d); break; }
+                }
+            }
+            string msg = $"fallback scan (DisplayManager.m_Displays is empty, as on a guest): {_scanFound.Count} display(s) labeled with product {pid}";
+            if (msg != _lastScanMsg) { _lastScanMsg = msg; Plugin.Info(msg); }
+        }
+        for (int i = 0; i < _scanFound.Count; i++)
+        {
+            var d = _scanFound[i];
+            if (d != null && IsShelfLike(d) && d.gameObject.activeInHierarchy) _wantedShelves[d.GetInstanceID()] = d;
+        }
     }
 
     private void AddShelf(DisplaySlot slot, int pid)
@@ -211,14 +274,21 @@ public class HighlightBehaviour : MonoBehaviour
         var dict = dm != null ? dm.DisplayedProducts : null;
         if (dict == null) return "";
 
+        // Merge lines of the same product first, so each one isn't reduced by the full bag count.
+        _need.Clear();
         var items = order.OrderItems;
-        int needed = 0;
         for (int k = 0; items != null && k < items.Count; k++)
         {
             var it = items[k];
-            if (it == null) continue;
-            int pid = it.ProductID;
-            if (pid <= 0 || it.ProductCount - CountInBag(bag, pid) <= 0) continue;
+            if (it == null || it.ProductID <= 0) continue;
+            _need.TryGetValue(it.ProductID, out int have);
+            _need[it.ProductID] = have + it.ProductCount;
+        }
+        int needed = 0;
+        foreach (var kv in _need)
+        {
+            int pid = kv.Key;
+            if (kv.Value - CountInBag(bag, pid) <= 0) continue;
             needed++;
             if (!dict.TryGetValue(pid, out var slots) || slots == null) continue;
             for (int i = 0; i < slots.Count; i++)
@@ -226,7 +296,7 @@ public class HighlightBehaviour : MonoBehaviour
                 var s = slots[i];
                 if (s == null || s.ProductID != pid || s.ProductCount <= 0) continue;
                 var d = s.m_Display;
-                if (d == null || !d.gameObject.activeInHierarchy) continue;
+                if (d == null || !IsShelfLike(d) || !d.gameObject.activeInHierarchy) continue;
                 _wantedGroups[s.GetInstanceID()] = s;
             }
         }
@@ -287,16 +357,16 @@ public class HighlightBehaviour : MonoBehaviour
 
         foreach (var kv in _wantedShelves)
         {
-            if (current.ContainsKey(kv.Key)) continue;
+            if (current.ContainsKey(kv.Key) || _failedShelves.Contains(kv.Key)) continue;
             try
             {
                 var renderers = BodyRenderers(kv.Value);
-                if (renderers.Count == 0) { Plugin.Warn($"no body renderers found on display {kv.Value.name}"); continue; }
+                if (renderers.Count == 0) { _failedShelves.Add(kv.Key); Plugin.Warn($"no body renderers found on display {kv.Value.name}"); continue; }
                 var made = OutlineHandle.Create(kv.Value.transform, "ProductHighlight Outline", renderers, renderers.Count, OutlineColor());
                 current[kv.Key] = made;
                 LogFirstOutlines($"shelf {kv.Value.name}", renderers.Count, made);
             }
-            catch (Exception e) { Plugin.Warn($"outline for display {kv.Value.name} failed: {e.Message}"); }
+            catch (Exception e) { _failedShelves.Add(kv.Key); Plugin.Warn($"outline for display {kv.Value.name} failed: {e.Message}"); }
         }
     }
 
@@ -311,6 +381,7 @@ public class HighlightBehaviour : MonoBehaviour
 
         foreach (var kv in _wantedGroups)
         {
+            if (_failedGroups.Contains(kv.Key)) continue;
             try
             {
                 var renderers = ProductRenderers(kv.Value, out int sig);
@@ -325,7 +396,7 @@ public class HighlightBehaviour : MonoBehaviour
                 current[kv.Key] = made;
                 LogFirstOutlines($"product group {kv.Value.name} (display {(kv.Value.m_Display != null ? kv.Value.m_Display.name : "?")})", renderers.Count, made);
             }
-            catch (Exception e) { Plugin.Warn($"outline for slot {kv.Value.name} failed: {e.Message}"); }
+            catch (Exception e) { _failedGroups.Add(kv.Key); Plugin.Warn($"outline for slot {kv.Value.name} failed: {e.Message}"); }
         }
     }
 
@@ -339,8 +410,15 @@ public class HighlightBehaviour : MonoBehaviour
         Plugin.Info($"outline created on {what}: {h.TargetCount} target(s) from {renderers} renderer(s), colour ({c.r:0.##}, {c.g:0.##}, {c.b:0.##}, {c.a:0.##})");
     }
 
+    private void ClearFailures()
+    {
+        if (_failedShelves.Count > 0) _failedShelves.Clear();
+        if (_failedGroups.Count > 0) _failedGroups.Clear();
+    }
+
     private void ClearAll()
     {
+        ClearFailures();
         foreach (var h in _shelves.Values) h.Destroy();
         foreach (var h in _groups.Values) h.Destroy();
         _shelves.Clear();
