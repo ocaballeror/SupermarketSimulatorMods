@@ -44,7 +44,7 @@ internal static class Recolor
         None,
         Blue,     // pixels with a blue hue (denim, a blue knit hat, a blue top): hair, skin, badges and boots are not blue
         Jeans,    // the BritneyBodyMAT atlas of Restocker_05/06: jeans islands (fixed UV layout), skin-colored outline kept
-        Guard,    // BouncerBody_MAT: the dark suit panels, not the grey/brown strip with the shoes, the belt or the buckle
+        Guard,    // BouncerBody_MAT: black torso (jacket/shirt) + dark trouser panels, not the shoes, soles, belt or buckle
     }
 
     private sealed class Rule
@@ -421,8 +421,17 @@ internal static class Recolor
                 return jeans[yTop * w + x] && val > 0.06f && !(hue < 50f && sat > 0.2f && val > 0.35f);
             case RuleKind.Guard:
             {
+                // 1.0.6: the atlas holds the TROUSERS (four leg panels, V ~0.09, top 2/3 of the texture) and the TORSO
+                // (two pieces in the bottom third, pure black), plus the grey soles strip, brown shoes, a brown belt and a
+                // white buckle. Suit = desaturated and dark (V < 0.14), or pure black (the torso). The shoe/sole box (v from
+                // top 0.36..0.80, u from 0.43 to 0.60, widening to 0.645 below v 0.53; trouser panel 3's slanted left edge
+                // reaches u 0.61..0.64 above v 0.52, so the box must stay narrow there) only takes pure black, which there
+                // is unused background.
+                if (sat >= 0.30f) return false;
+                if (val < 0.03f) return true;
+                if (val >= 0.14f) return false;
                 float u = (x + 0.5f) / w, v = (yTop + 0.5f) / h;
-                return !(u > 0.405f && u < 0.655f) && v < 0.64f && sat < 0.30f && val < 0.55f;
+                return !(v > 0.36f && v < 0.80f && u > 0.43f && u < (v > 0.53f ? 0.645f : 0.60f));
             }
         }
         return false;
@@ -508,6 +517,9 @@ internal static class Recolor
         {
             int o = idx[j] * 4;
             float l = (0.299f * buf[o] + 0.587f * buf[o + 1] + 0.114f * buf[o + 2]) / 255f;
+            // The guard's torso is pure black while his trousers are a very dark grey: both are "the black suit", so
+            // pure black gets the average shade (1.0) instead of being darkened relative to the trousers.
+            if (rule.Kind == RuleKind.Guard && l < 0.03f) l = mean;
             float sh = Mathf.Clamp(1f + (l - mean) * Contrast, ShadeMin, TintScale);
             shade[j] = (byte)(sh / TintScale * 255f + 0.5f);
         }

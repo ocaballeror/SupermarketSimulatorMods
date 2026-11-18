@@ -19,8 +19,8 @@
  *    (checked by drawing their UV islands over the textures), not a T-shirt. A few clothes materials also hold things
  *    that aren't clothes: BritneyBodyMAT (Restocker_05/06: jeans + hands + face + hair + ears), Low_Dress_Mat (Restocker_03/05:
  *    a blue knit hat + a dark hair blob + the badge), Man_02_Down_Dress_Diff (Baker: jeans + boots + belts), BouncerBody_MAT
- *    (guard: suit + shoes + belt), Female_Scientist_TOP (a red emblem). For these only the garment pixels are recolored (per
- *    texture rule: blue hue, jeans islands, suit panels), see "Masked atlases" below. The full verified table of every
+ *    (guard: black torso + trousers + shoes + soles + belt), Female_Scientist_TOP (a red emblem). For these only the garment pixels are recolored (per
+ *    texture rule: blue hue, jeans islands, the guard's dark suit pixels), see "Masked atlases" below. The full verified table of every
  *    renderer of every employee prefab is in EmployeeClothes/CLAUDE.md.
  *
  * HOW THE CLOTHES ARE RECOLORED (no model, no mesh and no animation is touched)
@@ -92,7 +92,7 @@
  *  - The preview: a camera far below the map (y = -5000, layer 4 "Water": every layer of this game is named, and the
  *    URP renderers don't draw layer 31 "FPSHand", see Preview.cs) renders to a 1024x512 RenderTexture. It sees
  *    clones of the model sub-tree ("Animated Model", found as the top Animator) of every prefab of the selected type, in a
- *    row, rotating slowly, lit by two point lights (limited range, so the store isn't lit; URP ignores light layer masks).
+ *    row, standing still facing the camera, lit by two point lights (limited range, so the store isn't lit; URP ignores light layer masks).
  *    The clones use their own material copies (preview slot) so dragging the picker never changes real employees.
  *
  * MULTIPLAYER
@@ -129,7 +129,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.employeeclothes";
     public const string Name = "Employee Clothes";
-    public const string Version = "1.0.5";
+    public const string Version = "1.0.6";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

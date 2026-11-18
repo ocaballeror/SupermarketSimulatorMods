@@ -382,7 +382,7 @@ public class ClothesDriver : MonoBehaviour
     private void Update()
     {
         if (!Plugin.Active) return;
-        try { Preview.Update(Time.unscaledDeltaTime); }
+        try { Preview.Update(); }
         catch (Exception e) { Employees.LogOnce("Preview update", e); }
         try { TabUi.PerFrame(); }
         catch (Exception e) { Employees.LogOnce("Picker poll", e); }

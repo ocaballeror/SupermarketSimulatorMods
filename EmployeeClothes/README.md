@@ -7,7 +7,7 @@ The employees keep their models, hair, faces and outfits. Only their clothes (sh
 ## How to use it
 
 1. At the computer, open the **Customization** tab and press **Open** on the Employee Clothes card. You pay the fee, and the screen opens (the card is greyed out when you can't afford it).
-2. The screen shows a **preview** of all the models of one employee type (for example the six restockers). Use the **< >** arrows to switch between the types: Restocker, Cashier, Customer helper, Ice cream helper, Baker, Janitor, Security guard, Courier. Like the Hiring tab, it only lists the types you can use: the ice cream helper and the baker appear only if you own the Ice Cream / Bakery DLC.
+2. The screen shows a **preview** of all the models of one employee type (for example the six restockers). Use the **< >** arrows to switch between the types: Restocker, Cashier, Customer helper, Ice cream helper, Baker, Janitor, Security guard, Courier. Like the Hiring tab, it only lists the types you can use: the ice cream helper and the baker need the Ice Cream / Bakery DLC, and a type is hidden while you have nobody of that type hired and can't hire any yet (for example the baker without ovens).
 3. Pick a color with the color picker (the same one used for the store name) or one of the swatches under it. The preview changes while you pick.
 4. Press **Apply**. Every employee of that type changes color straight away, including employees you hire later, and the choice is remembered when you save and reload.
 5. Switch on **Apply to all** to give every type the color you picked. The switch stays on while you change type, Apply or Reset, and the game remembers it the next time you open the screen (even after a restart); switch it off to edit one type at a time. Apply, Apply to all and Reset are all free while the screen is open.
@@ -39,7 +39,7 @@ The host's colors are saved per save slot in `BepInEx/config/oscar.employeecloth
 
 ## Good to know
 
-- **Not recolored:** shoes and boots, hair, skin and faces, eyes, glasses and the name badges keep their original colors. On the outfits that share one texture with such parts (the two women restockers' jeans, the baker's jeans, the guard's suit), only the clothes themselves change.
+- **Not recolored:** shoes and boots, hair, skin and faces, eyes, glasses and the name badges keep their original colors. On the outfits that share one texture with such parts (the two women restockers' jeans, the baker's jeans, the guard's trousers and torso), only the clothes themselves change.
 - **Gamepad:** the new card may not be reachable with a gamepad, and the panel is made for the mouse. Use the mouse for now.
 - The preview and the first recoloring of each outfit build their textures once, so the first time you open the screen or apply a color can take a moment.
 - Compatible with the other mods in this collection. A mod that replaces employee materials itself may fight with this one.

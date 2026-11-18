@@ -774,7 +774,7 @@ internal static class TabUi
     private static void RefreshTexts()
     {
         var kind = CurrentKind;
-        SetIfChanged(_kindText, $"{ClothesStore.NameOf(kind)}  ({_kindIdx + 1}/{_kinds.Length})  - {Preview.ModelCount} model(s)");
+        SetIfChanged(_kindText, ClothesStore.PluralOf(kind));
         if (_infoText != null)
         {
             var pend = Pending[(int)kind];
@@ -910,7 +910,7 @@ internal static class TabUi
             ClothesStore.Save();   // saved to the mod's own file at every Apply (and Reset), so closing needs no extra step
             Plugin.Info($"Applied #{hex} to {(_applyAll ? "all employee types" : ClothesStore.NameOf(kind))}");
             Employees.Sweep();
-            _message = _applyAll ? "Applied to all types." : "Applied.";
+            _message = _applyAll ? "Applied to all types." : $"Applied to {ClothesStore.PluralOf(kind).ToLowerInvariant()}.";
             RefreshTexts();
         }
         catch (Exception e)
@@ -934,7 +934,7 @@ internal static class TabUi
             }
             ClothesStore.Save();
             Preview.SetColor(null);
-            _message = _applyAll ? "Reset all types to the original clothes." : "Reset to the original clothes.";
+            _message = _applyAll ? "Reset all types to the original clothes." : $"Reset {ClothesStore.PluralOf(CurrentKind).ToLowerInvariant()} to the original clothes.";
             Plugin.Info($"Reset to the original clothes: {(_applyAll ? "all employee types" : ClothesStore.NameOf(CurrentKind))}");
             Employees.Sweep();
             RefreshTexts();

@@ -8,7 +8,7 @@ namespace EmployeeClothes;
 /// <summary>
 /// Renders the models of one employee type into a RenderTexture for the panel. A camera and two point lights sit far
 /// below the map (y = -5000); the models are clones of the prefabs' model sub-trees (the top Animator's GameObject),
-/// standing in a row and turning slowly. URP ignores a light's culling mask, which is why the lights are point lights
+/// standing still in a row, facing the camera. URP ignores a light's culling mask, which is why the lights are point lights
 /// with a limited range instead of a directional light: they can't light the store.
 ///
 /// THE LAYER (root cause of the empty preview in v1.0.4, found 2026-11-18): the stage must be on a layer the game's URP
@@ -18,6 +18,14 @@ namespace EmployeeClothes;
 /// 0x7FFFFFFF (HighFidelity also drops layer 11): bit 31 is excluded, so nothing on layer 31 is ever drawn and the camera
 /// only cleared the texture. The stage now uses layer 4 ("Water", unused, in every renderer's mask). The models sit 5000 m
 /// below the store, so other cameras never see them even though they share the layer.
+///
+/// THE FRAMING (1.0.6; the guard was shown from the waist down): the camera used <c>Renderer.bounds</c> of the fresh
+/// clones. For a skinned mesh those are the stored <c>m_AABB</c> placed by the root bone (Hips), i.e. they follow the
+/// bones' pose at that moment. The SecurityGuard prefab's skeleton is not in a standing pose until its Animator has
+/// run (prefab bone world y -0.98..+0.81, the mesh stands at y -0.01..1.79; the other prefabs' bones already sit at
+/// 0..1.7), so the measured box was ~1 m too low and its height was the m_AABB's 1.72 x 1.111 = 1.91 m (logged
+/// "height 1.91 m, ortho size 1.11"); the camera looked at the knees. Now the height comes from the shared mesh's own
+/// (bind pose) bounds, which don't depend on any pose, and every Animator is stepped once so the first frame is posed.
 /// </summary>
 internal static class Preview
 {
@@ -46,11 +54,9 @@ internal static class Preview
     private static Color? _color;
     private static bool _needApply;
     private static bool _shown;
-    private static float _yaw;
     private static bool _loggedFirstFrame;
 
     internal static RenderTexture Texture => _rt;
-    internal static int ModelCount => Models.Count;
 
     // ------------------------------------------------------------------ the stage
 
@@ -194,12 +200,14 @@ internal static class Preview
                 clone.transform.localRotation = src.transform.localRotation;
                 clone.transform.localScale = Vector3.Scale(src.transform.localScale, prefab.transform.localScale);
                 SetLayer(pivot, _layer);
+                pivot.transform.localRotation = Quaternion.identity;   // facing +z = towards the camera; they don't turn
 
                 var animators = clone.GetComponentsInChildren<Animator>(true);
                 for (int i = 0; i < animators.Length; i++)
                 {
                     animators[i].applyRootMotion = false;
                     animators[i].cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                    try { animators[i].Update(0f); } catch (Exception) { }   // pose the skeleton now (the guard's prefab pose isn't standing)
                 }
                 var skins = clone.GetComponentsInChildren<SkinnedMeshRenderer>(true);
                 for (int i = 0; i < skins.Length; i++) if (skins[i] != null) skins[i].updateWhenOffscreen = true;
@@ -214,7 +222,6 @@ internal static class Preview
                 Models[i].Pivot.transform.localPosition = new Vector3((i - (n - 1) / 2f) * Spacing, 0f, 0f);
 
             FrameCamera();
-            _yaw = 0f;
             _shown = true;
             _cam.enabled = true;
             _needApply = true;
@@ -234,34 +241,58 @@ internal static class Preview
         }
     }
 
+    /// <summary>
+    /// Vertical extent (world y) of a model from its skinned meshes' own bounds (bind pose, independent of the bones'
+    /// current pose), through the renderer's transform. False if nothing usable was found.
+    /// </summary>
+    private static bool MeshExtent(GameObject model, ref float minY, ref float maxY)
+    {
+        bool any = false;
+        var skins = model.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        for (int i = 0; i < skins.Length; i++)
+        {
+            var sk = skins[i];
+            if (sk == null) continue;
+            var mesh = sk.sharedMesh;
+            if (mesh == null) continue;
+            var b = mesh.bounds;
+            if (b.size.y < 0.05f || b.size.y > 6f) continue;
+            var m = sk.transform.localToWorldMatrix;
+            for (int c = 0; c < 8; c++)
+            {
+                var corner = b.center + new Vector3(((c & 1) == 0 ? -1f : 1f) * b.extents.x, ((c & 2) == 0 ? -1f : 1f) * b.extents.y, ((c & 4) == 0 ? -1f : 1f) * b.extents.z);
+                float y = m.MultiplyPoint3x4(corner).y;
+                minY = Math.Min(minY, y);
+                maxY = Math.Max(maxY, y);
+                any = true;
+            }
+        }
+        return any;
+    }
+
     private static void FrameCamera()
     {
         int n = Math.Max(Models.Count, 1);
         float minY = float.MaxValue, maxY = float.MinValue;
         for (int i = 0; i < Models.Count; i++)
-        {
-            var rends = Models[i].Model.GetComponentsInChildren<Renderer>(true);
-            for (int r = 0; r < rends.Length; r++)
-            {
-                if (rends[r] == null) continue;
-                var b = rends[r].bounds;
-                if (b.size.y <= 0.01f || b.size.y > 6f) continue;
-                minY = Math.Min(minY, b.min.y);
-                maxY = Math.Max(maxY, b.max.y);
-            }
-        }
+            if (Models[i].Model != null) MeshExtent(Models[i].Model, ref minY, ref maxY);
         float baseY = _root.transform.position.y;
-        if (minY > maxY || maxY - minY < 0.6f) { minY = baseY; maxY = baseY + 1.8f; } // bounds not usable: assume a person
+        bool assumed = false;
+        // Not usable (no skinned mesh, or an absurd size): assume a person standing on the stage floor.
+        if (minY > maxY || maxY - minY < 0.8f || maxY - minY > 3.5f || minY < baseY - 1f || minY > baseY + 1f)
+        {
+            minY = baseY; maxY = baseY + 1.8f; assumed = true;
+        }
         float h = maxY - minY;
         float aspect = Width / (float)Height;
-        float halfH = h * 0.58f;
+        float halfH = h * 0.60f;
         float halfW = n * Spacing * 0.54f / aspect;
         _cam.orthographicSize = Math.Max(halfH, halfW);
         var center = new Vector3(_root.transform.position.x, (minY + maxY) * 0.5f, _root.transform.position.z);
         var camPos = center + new Vector3(0f, 0.15f, 8f);
         _cam.transform.position = camPos;
         _cam.transform.rotation = Quaternion.LookRotation(center - camPos);
-        Plugin.Debug($"Preview camera: height {h:0.00} m, ortho size {_cam.orthographicSize:0.00}");
+        Plugin.Debug($"Preview camera: {n} model(s), mesh y {minY - baseY:0.00}..{maxY - baseY:0.00} m above the stage floor{(assumed ? " (ASSUMED, no usable mesh bounds)" : "")}, height {h:0.00} m, ortho size {_cam.orthographicSize:0.00}");
     }
 
     private static void ClearModels()
@@ -279,15 +310,10 @@ internal static class Preview
         _needApply = true;
     }
 
-    internal static void Update(float dt)
+    internal static void Update()
     {
         if (!_shown) return;
         if (_cam == null || _root == null) { _shown = false; return; }
-        _yaw += 24f * dt;
-        for (int i = 0; i < Models.Count; i++)
-            if (Models[i].Pivot != null)
-                Models[i].Pivot.transform.localRotation = Quaternion.Euler(0f, _yaw + i * 37f, 0f);
-
         if (_needApply)
         {
             Recolor.BeginBudget(12);
@@ -368,6 +394,35 @@ internal static class Preview
                     }
                 }
             }
+            // Does the skeleton stand where the (bind pose) mesh bounds say? (The 1.0.5 guard bug was a ~1 m mismatch.)
+            try
+            {
+                float baseY = _root.transform.position.y;
+                for (int m = 0; m < Models.Count && m < 8; m++)
+                {
+                    var model = Models[m].Model;
+                    if (model == null) continue;
+                    float mn = float.MaxValue, mx = float.MinValue;
+                    MeshExtent(model, ref mn, ref mx);
+                    float bmn = float.MaxValue, bmx = float.MinValue;
+                    var sk = model.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                    for (int r = 0; r < sk.Length; r++)
+                    {
+                        var bones = sk[r] != null ? sk[r].bones : null;
+                        if (bones == null) continue;
+                        for (int k = 0; k < bones.Length; k++)
+                        {
+                            if (bones[k] == null) continue;
+                            float y = bones[k].position.y;
+                            bmn = Math.Min(bmn, y); bmx = Math.Max(bmx, y);
+                        }
+                    }
+                    string meshR = mn <= mx ? $"{mn - baseY:0.00}..{mx - baseY:0.00}" : "none";
+                    string boneR = bmn <= bmx ? $"{bmn - baseY:0.00}..{bmx - baseY:0.00}" : "none";
+                    Plugin.Info($"Preview pose check #{_diagCount}: '{model.name}' mesh y {meshR}, bones y {boneR}");
+                }
+            }
+            catch (Exception e) { Plugin.Warn("Preview pose check failed: " + e.Message); }
             string bnd = bounds.HasValue ? $"center ({bounds.Value.center.x:0.0},{bounds.Value.center.y:0.0},{bounds.Value.center.z:0.0}) size ({bounds.Value.size.x:0.00},{bounds.Value.size.y:0.00},{bounds.Value.size.z:0.00})" : "none";
             var cp = _cam.transform.position;
             Plugin.Info($"Preview render check #{_diagCount}: {differ}/{total} samples differ from the background; corner {C(corner)}, center {C(center)}, " +

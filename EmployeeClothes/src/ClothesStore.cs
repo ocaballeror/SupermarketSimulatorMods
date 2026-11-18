@@ -56,6 +56,20 @@ internal static class ClothesStore
         _ => k.ToString(),
     };
 
+    /// <summary>Plural display name for the panel ("Cashiers"); the log keeps the singular <see cref="NameOf"/>.</summary>
+    internal static string PluralOf(HrEmployeeKind k) => k switch
+    {
+        HrEmployeeKind.Restocker => "Restockers",
+        HrEmployeeKind.CustomerHelper => "Customer helpers",
+        HrEmployeeKind.Cashier => "Cashiers",
+        HrEmployeeKind.IceCreamHelper => "Ice cream helpers",
+        HrEmployeeKind.Janitor => "Janitors",
+        HrEmployeeKind.Baker => "Bakers",
+        HrEmployeeKind.SecurityGuard => "Security guards",
+        HrEmployeeKind.Courier => "Couriers",
+        _ => k + "s",
+    };
+
     // ------------------------------------------------------------------ which types are unlocked
 
     /// <summary>
