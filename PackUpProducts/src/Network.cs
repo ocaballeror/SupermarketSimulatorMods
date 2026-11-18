@@ -23,12 +23,18 @@ internal static class Network
     internal const string VerKey = "oscar.packup.ver";
     private const string RegKey = "oscar.packup.reg";
 
+    private const float KeepSeconds = 120f;
+    private const float GiveUpSeconds = 30f;
+    private const int MaxIds = 16;
+
     private static float _nextPresence;
     private static float _nextServe;
-    private static int _seq;
 
-    // host side: what we already handled / are waiting for, per guest actor number
-    private static readonly Dictionary<int, string> Handled = new();
+    // guest side: recent boxes we announced
+    private static readonly List<(int id, float t)> Recent = new();
+
+    // host side: view ids already handled / first time we saw a pending one
+    private static readonly HashSet<int> Done = new();
     private static readonly Dictionary<int, float> FirstSeen = new();
 
     internal static bool InRoom
@@ -51,8 +57,9 @@ internal static class Network
 
     internal static void Reset()
     {
-        Handled.Clear();
+        Done.Clear();
         FirstSeen.Clear();
+        Recent.Clear();
         _nextPresence = _nextServe = 0f;
     }
 
@@ -82,8 +89,9 @@ internal static class Network
     {
         if (!InRoom)
         {
-            Handled.Clear();
+            Done.Clear();
             FirstSeen.Clear();
+            Recent.Clear();
             return;
         }
         float now = Time.unscaledTime;
@@ -117,9 +125,12 @@ internal static class Network
     {
         var me = PhotonNetwork.LocalPlayer;
         if (me == null) return;
-        _seq++;
+        float now = Time.unscaledTime;
+        Recent.RemoveAll(r => now - r.t > KeepSeconds);
+        Recent.Add((viewId, now));
+        while (Recent.Count > MaxIds) Recent.RemoveAt(0);
         var ht = new Hashtable();
-        ht[(Il2CppSystem.Object)RegKey] = (Il2CppSystem.Object)$"{viewId}:{_seq}";
+        ht[(Il2CppSystem.Object)RegKey] = (Il2CppSystem.Object)string.Join(",", Recent.ConvertAll(r => r.id.ToString()));
         me.SetCustomProperties(ht);
     }
 
@@ -134,22 +145,18 @@ internal static class Network
             if (p == null) continue;
             string val = ReadString(p, RegKey);
             if (string.IsNullOrEmpty(val)) continue;
-            int actor = p.ActorNumber;
-            if (Handled.TryGetValue(actor, out var done) && done == val) continue;
-            if (!FirstSeen.ContainsKey(actor)) FirstSeen[actor] = now;
-
-            int colon = val.IndexOf(':');
-            if (colon <= 0 || !int.TryParse(val.Substring(0, colon), out int viewId))
+            foreach (var part in val.Split(','))
             {
-                Handled[actor] = val;
-                continue;
-            }
-            bool ok = TryRegister(viewId, p.NickName ?? ("#" + actor), out string why);
-            if (ok || now - FirstSeen[actor] > 5f)
-            {
-                if (!ok) PackUp.Warn($"Gave up saving the box (view {viewId}) a guest packed: {why}");
-                Handled[actor] = val;
-                FirstSeen.Remove(actor);
+                if (!int.TryParse(part, out int viewId) || Done.Contains(viewId)) continue;
+                if (!FirstSeen.ContainsKey(viewId)) FirstSeen[viewId] = now;
+                bool ok = TryRegister(viewId, p.NickName ?? ("#" + p.ActorNumber), out string why);
+                if (ok || now - FirstSeen[viewId] > GiveUpSeconds)
+                {
+                    if (!ok) PackUp.Warn($"Gave up saving the box (view {viewId}) that {p.NickName} packed: {why}. " +
+                                         "Its products will be lost when the game is reloaded");
+                    Done.Add(viewId);
+                    FirstSeen.Remove(viewId);
+                }
             }
         }
     }
@@ -167,6 +174,18 @@ internal static class Network
             if (box.Racked) { PackUp.Log($"Box of {who} (view {viewId}) is racked now; not adding it"); return true; }
             var data = box.Data;
             if (data == null) { why = "the box has no data yet"; return false; }
+            // NetworkBox.OnPhotonInstantiate builds the instantiation data into NetworkBox.m_BoxData and, on the
+            // master client, does NOT hand it to Box.set_Data: the host's Box still holds the prefab default
+            // BoxData (product -1, closed, no label) until the first TakeProduct_RPC makes Box.AddProduct run
+            // Setup(productId, false). Do that here, so what we save is the real box. newBox:false: no count
+            // reset, no inventory add; IsOpen is left alone (the guest's own OpenBox broadcast sets it).
+            var announced = nb.m_BoxData;
+            if (announced != null && announced.ProductID > 0 && data.ProductID != announced.ProductID)
+            {
+                box.Setup(announced.ProductID, false);
+                PackUp.Log($"Set up the host's copy of the box (view {viewId}) for product {announced.ProductID}");
+            }
+            if (data.ProductID <= 0) { why = "the host's copy of the box has no product yet"; return false; }
             var inv = NoktaSingleton<InventoryManager>.Instance;
             if (inv == null) { why = "no InventoryManager"; return false; }
             if (PackUp.InInventory(inv, data))

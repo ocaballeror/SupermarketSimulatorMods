@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.packupproducts";
     public const string Name = "Pack Up Products";
-    public const string Version = "0.1.0";
+    public const string Version = "0.1.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

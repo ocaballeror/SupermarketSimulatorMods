@@ -34,13 +34,18 @@
  *
  * Guest (needs this mod on the host too): a guest can't spawn a master-owned box (SpawnBox returns null for
  * non-masters). It does what a guest buying at the wholesale store does: NetworkObjectGenerator.
- * SpawnNetworkBoxClient (PhotonNetwork.Instantiate; instantiation data again carries our count 0), then the
+ * SpawnNetworkBoxClient (PhotonNetwork.Instantiate; instantiation data carries count 0, CLOSED), then the
  * same simulated click (AskAvailability -> host grants -> PickUP_RPC), then, once the box is really in its
- * hands, the vanilla take (AskTakeProduct -> host relays TakeProduct_RPC). The one thing vanilla can't do is
- * save the box: its own wholesale route (Setup_Broadcast newBox:true) would reset the count to full. So the
- * guest tells the host to add the box data to InventoryManager.Boxes through a player custom property
- * (Network.cs). A guest packs only if the host has published the mod's presence there; a host without the mod
- * would lose the box and the product at the next load.
+ * hands, the vanilla open (Box.OpenBox -> OpenBox_RPC to All) and the vanilla take (AskTakeProduct -> host
+ * relays TakeProduct_RPC). Closed + vanilla open, because NetworkBox.OnPhotonInstantiate does not call
+ * Box.set_Data on the master client: the host's copy of a client-spawned box keeps the prefab default data
+ * (closed, no product) until Box.AddProduct runs Setup; spawning it open would make the host's
+ * TakeProduct_RPC open it again and replay the open animation on the guest. The box is kinematic until held.
+ * The one thing vanilla can't do is save the box: its own wholesale route (Setup_Broadcast newBox:true)
+ * would reset the count to full. So the guest tells the host to add the box data to InventoryManager.Boxes
+ * through a player custom property (Network.cs), and the host sets its copy up first. A guest packs only if
+ * the host has published the mod's presence there; a host without the mod would lose the box and the
+ * product at the next load.
  *
  * Money: free. The products are already owned and a box from a shelf is not a purchase (wholesale boxes cost
  * money because they bring new products).
@@ -69,6 +74,8 @@ internal static class PackUp
         public DisplaySlot Slot;
         public float Started;
         public int ViewId;
+        public bool Opened;
+        public float OpenedAt;
     }
 
     private static float _nextClick;
@@ -275,6 +282,7 @@ internal static class PackUp
         {
             Warn($"The new box didn't end up in your hands (BoxInteraction.m_Box is {(bi.m_Box != null ? "another box" : "empty")}); " +
                  $"it is lying at {box.transform.position}, pick it up by hand");
+            Release(box);
             return;
         }
         TakeInto(p, box, slot);
@@ -312,7 +320,9 @@ internal static class PackUp
         viewId = 0;
         try
         {
-            var data = new BoxData(size, pos, rot, true, pid, 0);
+            // Closed: the host's copy of a client-spawned box starts closed (see Network.TryRegister), so every
+            // client agrees on closed and the vanilla open (Box.OpenBox -> OpenBox_RPC to All) opens it everywhere.
+            var data = new BoxData(size, pos, rot, false, pid, 0);
             var box = NoktaSingleton<NetworkObjectGenerator>.Instance.SpawnNetworkBoxClient(pos, rot, data, -1);
             if (box == null) { Warn("NetworkObjectGenerator.SpawnNetworkBoxClient returned no box"); return null; }
             var nb = box.NetworkBox;
@@ -320,6 +330,11 @@ internal static class PackUp
             viewId = nb.ViewId;
             if (data.UID <= 0) data.m_UID = viewId;   // what BoxGenerator.SpawnBoxLocalMarket does
             box.Data = data;
+            // It sits at the hold point, often inside the shelf, for one round trip to the host; with live
+            // physics depenetration would shove it (and that is synced). Held boxes are kinematic anyway
+            // (HoldObject) and DropObject turns physics back on; Release() covers the failure paths.
+            var rb = box.m_RigidBody;
+            if (rb != null) rb.isKinematic = true;
             Network.SendRegistration(viewId);
             Log($"Spawned the box as a guest: view {viewId}, size {size}, product {pid}, count {data.ProductCount}; host asked to save it");
             return box;
@@ -329,6 +344,18 @@ internal static class PackUp
             Warn($"Spawning the box failed: {e}");
             return null;
         }
+    }
+
+    /// <summary>Give a box we made kinematic back to physics (it isn't going to be held).</summary>
+    private static void Release(Box box)
+    {
+        try
+        {
+            var rb = box != null ? box.m_RigidBody : null;
+            if (rb != null && (!PhotonNetwork.IsConnected || (box.NetworkBox != null && box.NetworkBox.PhotonView != null && box.NetworkBox.PhotonView.IsMine)))
+                rb.isKinematic = false;
+        }
+        catch (Exception) { }
     }
 
     // ------------------------------------------------------------------ the product
@@ -351,6 +378,7 @@ internal static class PackUp
         if (pd.Box == null || pd.Slot == null)
         {
             Warn("The new box or the shelf slot disappeared while waiting; giving up");
+            Release(pd.Box);
             _pending = null;
             return;
         }
@@ -362,6 +390,18 @@ internal static class PackUp
                     Same(pd.Box.transform.parent, hold);
         if (bound && held && !bi.IsWaitingAvailability)
         {
+            if (!pd.Opened)
+            {
+                // The vanilla open (online Box.OpenBox = NetworkBox.OpenBox_Broadcast, RpcTarget.All, runs here at
+                // once and on the host before the take request below): every client opens its copy the same way.
+                pd.Opened = true;
+                pd.OpenedAt = Time.unscaledTime;
+                if (!pd.Box.IsOpen) pd.Box.OpenBox();
+                Log("Opened the new box (vanilla open, sent to everyone)");
+                return;
+            }
+            if (!pd.Box.IsOpen && Time.unscaledTime - pd.OpenedAt < 1f) return;
+            bi.m_IsBoxOpen = true;   // BoxInteraction's own copy of "open" (normally set after an open click)
             _pending = null;
             TakeInto(p, pd.Box, pd.Slot);
             return;
@@ -369,12 +409,14 @@ internal static class PackUp
         if (age > 1f && !bound && !bi.Enable)
         {
             Warn($"The host didn't give you the new box (view {pd.ViewId}); it lies on the floor in front of you, pick it up by hand");
+            Release(pd.Box);
             _pending = null;
             return;
         }
         if (age > PendingTimeout)
         {
             Warn($"Gave up waiting for the host to hand over the new box (view {pd.ViewId}, bound {bound}, held {held})");
+            Release(pd.Box);
             _pending = null;
         }
     }
