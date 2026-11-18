@@ -403,7 +403,10 @@ When the courier comes back from a delivery, he scans a small area around and in
 
 ## Improvement #13: Highlight same products
 
-**Status:** open
+**Status:** reviewed  
+**Code:** `ProductHighlight/`  
+**Review:** 2026-11-18, 3 rounds, hash `bd7f0b2cb6ff`  
+**Waiting on:** In-game test of v0.1.2 on host and guest (steps in the mod's `CLAUDE.md`); send the `[Highlight]` lines.
 
 Currently, hen holding a box of products, the game highlights boxes of the same type that are in the storage racks, with a green outline. Do the same for shelves/fridges/freezers that are labeled with this type of product, even if they're empty at the moment. Unlike the storage, where the boxes are highlighted, mark the whole shelf/fridge/freezer in this case, since the shelves could all be empty but we still want to find where those products would go, based on their labels.
 
@@ -415,7 +418,10 @@ needs to be updated to match
 
 ## Improvement #14: Pack up products
 
-**Status:** open
+**Status:** reviewed  
+**Code:** `PackUpProducts/`  
+**Review:** 2026-11-18, 3 rounds, hash `c3e406fbf94f`  
+**Waiting on:** In-game test of v0.1.2 on the host, then a modded guest (steps in the mod's `CLAUDE.md`); send the `[PackUp]` lines.
 
 Right clicking on a product that is in a shelf/fridge/freezer currently does nothing, as
 it requires the user to use the crate tool or a paper bag to pack products in a specific
@@ -431,8 +437,8 @@ the wrong box type, so make sure to spawn the right one.
 
 **Status:** in-progress  
 **Code:** `EmployeeClothes/`  
-**Review:** 2026-11-18, round 2 on v1.0.5 (fixes applied, not re-reviewed), hash `b165a0ce956a`  
-**Waiting on:** Review of v1.0.5 (UI, Apply to all, hidden types, guard/janitor, performance), then an in-game test (steps in the mod's `CLAUDE.md`).
+**Review:** 2026-11-18, round 3 on v1.0.6 (fixes applied, not re-reviewed), hash `90fdf44ec44e`  
+**Waiting on:** In-game test of v1.0.6 (guard torso and preview, still preview, plural labels; steps in the mod's `CLAUDE.md`).
 
 Create a new entry in the customization menu from the game's computer that allows the
 player to pick the color scheme of the clothes of the employees. It costs $500 to access

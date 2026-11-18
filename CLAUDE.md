@@ -224,6 +224,8 @@ Game systems that only one mod touches are documented next to that mod, not in s
 | Janitor (cleaning lady): state machine, stains, mop, movement | `SupermarketFixes/CLAUDE.md` (Game reference: janitor) |
 | Online orders: pending list, notebooks, unread badge, courier claims | `SupermarketFixes/CLAUDE.md` (Game reference: online orders and the courier) |
 | Courier: state machine, hand-over (`ReceiveBag`), dispatch (E), bag carrying, order deadlines | `AutoCourierLoad/CLAUDE.md` (Game reference: courier) |
+| Outline highlights: `HighlightManager`, `Highlightable`, EPOOutline `Outlinable` (in `Assembly-CSharp-firstpass`), the held box's rack/display highlight modes, `DisplayManager` labeled-slot lookups (`m_Displays` is null on a guest) | `ProductHighlight/CLAUDE.md` |
+| Spawning a partial box (`BoxGenerator.SpawnBox`, `InventoryManager.AddBox` persistence, guest-instantiated boxes keep default data on the host), putting a new box into the hands | `PackUpProducts/CLAUDE.md` |
 | Employee prefabs, models and materials (which material is clothes, textures not readable), the Customization tab UI, the store-name `ColorPicker`, the `MoneyManager.MoneyTransition` charge pattern | `EmployeeClothes/CLAUDE.md` (Game reference) |
 
 Boxes, holding objects, interactions, input and networking are used by several mods, so they stay in section 8.
