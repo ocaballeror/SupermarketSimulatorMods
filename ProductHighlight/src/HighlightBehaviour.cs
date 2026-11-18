@@ -164,6 +164,7 @@ public class HighlightBehaviour : MonoBehaviour
             if (!holder.m_PlacingMode || !obj.activeInHierarchy) return null;
             var rb = obj.GetComponent<Rigidbody>();
             if (rb == null || !rb.isKinematic) return null;
+            if ((obj.transform.position - hold.position).sqrMagnitude > 25f) return null;   // placing reaches a few metres at most
         }
         box = obj.GetComponent<Box>();
         if (box == null) bag = obj.GetComponent<OrderPaperBag>();
@@ -197,21 +198,27 @@ public class HighlightBehaviour : MonoBehaviour
         var dm = NoktaSingleton<DisplayManager>.Instance;
         if (dm == null) return;
 
+        // m_Displays is only assigned by LoadSaveProgress/LoadDisplayData (host), so on a guest it is null, and the native lookup
+        // dereferences it without a null check (NRE). Only call it when the list exists and has displays.
+        var all = dm.m_Displays;
+        bool haveList = all != null && all.Count > 0;
+
         // Labeled but empty (the game's own search used by customers and restockers).
-        _labeled ??= new Il2CppSystem.Collections.Generic.List<DisplaySlot>();
-        if (dm.GetLabeledEmptyDisplaySlots(pid, _labeled) > 0)
-            for (int i = 0; i < _labeled.Count; i++) AddShelf(_labeled[i], pid);
+        if (haveList)
+        {
+            _labeled ??= new Il2CppSystem.Collections.Generic.List<DisplaySlot>();
+            if (dm.GetLabeledEmptyDisplaySlots(pid, _labeled) > 0)
+                for (int i = 0; i < _labeled.Count; i++) AddShelf(_labeled[i], pid);
+        }
 
         // Labeled with products on them.
         var dict = dm.DisplayedProducts;
         if (dict != null && dict.TryGetValue(pid, out var slots) && slots != null)
             for (int i = 0; i < slots.Count; i++) AddShelf(slots[i], pid);
 
-        // A guest's DisplayManager.m_Displays stays empty (AddDisplay and LoadDisplayData skip it on IsConnectedAndSlave), so the native
-        // lookup above finds nothing there, and the dictionary lacks labeled slots the host's restocker/customer queries pruned. Scan the
-        // displays ourselves, at most once a second.
-        var all = dm.m_Displays;
-        if (all == null || all.Count == 0) GuestScan(pid);
+        // Guest: no list, so scan the displays ourselves (at most once a second); the dictionary above may lack labeled empty slots
+        // that the host's restocker/customer queries pruned.
+        if (!haveList) GuestScan(pid);
     }
 
     private string _lastScanMsg;
@@ -246,13 +253,13 @@ public class HighlightBehaviour : MonoBehaviour
                     if (sl != null && sl.ProductID == pid) { _scanFound.Add(d); break; }
                 }
             }
-            string msg = $"fallback scan (DisplayManager.m_Displays is empty, as on a guest): {_scanFound.Count} display(s) labeled with product {pid}";
+            string msg = $"fallback scan (DisplayManager.m_Displays is null or empty, as on a guest): {_scanFound.Count} display(s) labeled with product {pid}";
             if (msg != _lastScanMsg) { _lastScanMsg = msg; Plugin.Info(msg); }
         }
         for (int i = 0; i < _scanFound.Count; i++)
         {
             var d = _scanFound[i];
-            if (d != null && IsShelfLike(d) && d.gameObject.activeInHierarchy) _wantedShelves[d.GetInstanceID()] = d;
+            if (d != null && !d.IsPlacingMode && IsShelfLike(d) && d.gameObject.activeInHierarchy) _wantedShelves[d.GetInstanceID()] = d;
         }
     }
 
