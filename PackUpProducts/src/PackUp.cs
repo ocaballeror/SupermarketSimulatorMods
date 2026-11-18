@@ -121,10 +121,10 @@ internal static class PackUp
     internal static void Update()
     {
         Network.Tick();
-        if (!Plugin.Enabled.Value) { _pending = null; return; }
+        if (!Plugin.Enabled.Value) { Abandon(); return; }
 
         var p = LocalPlayer();
-        if (p == null) { _pending = null; return; }
+        if (p == null) { Abandon(); return; }
 
         if (_pending != null) { TickPending(p); return; }
         if (Time.unscaledTime < _nextClick) return;
@@ -346,11 +346,23 @@ internal static class PackUp
         }
     }
 
+    private static void Abandon()
+    {
+        if (_pending == null) return;
+        Release(_pending.Box);
+        _pending = null;
+    }
+
     /// <summary>Give a box we made kinematic back to physics (it isn't going to be held).</summary>
     private static void Release(Box box)
     {
         try
         {
+            if (box == null) return;
+            // A box that did reach the hands is the game's now (HoldObject made it kinematic, DropObject restores it).
+            var lp = LocalPlayer();
+            var hold = lp != null && lp.PlayerObjectHolder != null ? lp.PlayerObjectHolder.m_ObjectHolder : null;
+            if (hold != null && Same(box.transform.parent, hold)) return;
             var rb = box != null ? box.m_RigidBody : null;
             if (rb != null && (!PhotonNetwork.IsConnected || (box.NetworkBox != null && box.NetworkBox.PhotonView != null && box.NetworkBox.PhotonView.IsMine)))
                 rb.isKinematic = false;
@@ -402,6 +414,7 @@ internal static class PackUp
             }
             if (!pd.Box.IsOpen && Time.unscaledTime - pd.OpenedAt < 1f) return;
             bi.m_IsBoxOpen = true;   // BoxInteraction's own copy of "open" (normally set after an open click)
+            bi.UpdateOpeningBoxHint(); // swaps the "open" key hint for "close", as the vanilla open click does
             _pending = null;
             TakeInto(p, pd.Box, pd.Slot);
             return;

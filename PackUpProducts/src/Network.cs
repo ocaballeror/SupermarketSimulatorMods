@@ -31,11 +31,14 @@ internal static class Network
     private static float _nextServe;
 
     // guest side: recent boxes we announced
-    private static readonly List<(int id, float t)> Recent = new();
+    private static readonly List<(int id, int seq, float t)> Recent = new();
+    private static int _seq;
 
-    // host side: view ids already handled / first time we saw a pending one
-    private static readonly HashSet<int> Done = new();
-    private static readonly Dictionary<int, float> FirstSeen = new();
+    // host side: tokens ("actor|viewId.seq") already handled / first time we saw a pending one. PUN reuses view
+    // ids, so the guest's sequence number makes a token unique; tokens that left every guest's list are pruned.
+    private static readonly HashSet<string> Done = new();
+    private static readonly Dictionary<string, float> FirstSeen = new();
+    private static readonly HashSet<string> SeenNow = new();
 
     internal static bool InRoom
     {
@@ -127,10 +130,10 @@ internal static class Network
         if (me == null) return;
         float now = Time.unscaledTime;
         Recent.RemoveAll(r => now - r.t > KeepSeconds);
-        Recent.Add((viewId, now));
+        Recent.Add((viewId, ++_seq, now));
         while (Recent.Count > MaxIds) Recent.RemoveAt(0);
         var ht = new Hashtable();
-        ht[(Il2CppSystem.Object)RegKey] = (Il2CppSystem.Object)string.Join(",", Recent.ConvertAll(r => r.id.ToString()));
+        ht[(Il2CppSystem.Object)RegKey] = (Il2CppSystem.Object)string.Join(",", Recent.ConvertAll(r => r.id + "." + r.seq));
         me.SetCustomProperties(ht);
     }
 
@@ -139,6 +142,7 @@ internal static class Network
     {
         var others = PhotonNetwork.PlayerListOthers;
         if (others == null) return;
+        SeenNow.Clear();
         for (int i = 0; i < others.Length; i++)
         {
             var p = others[i];
@@ -147,18 +151,23 @@ internal static class Network
             if (string.IsNullOrEmpty(val)) continue;
             foreach (var part in val.Split(','))
             {
-                if (!int.TryParse(part, out int viewId) || Done.Contains(viewId)) continue;
-                if (!FirstSeen.ContainsKey(viewId)) FirstSeen[viewId] = now;
+                int dot = part.IndexOf('.');
+                if (dot <= 0 || !int.TryParse(part.Substring(0, dot), out int viewId)) continue;
+                string token = p.ActorNumber + "|" + part;
+                SeenNow.Add(token);
+                if (Done.Contains(token)) continue;
+                if (!FirstSeen.ContainsKey(token)) FirstSeen[token] = now;
                 bool ok = TryRegister(viewId, p.NickName ?? ("#" + p.ActorNumber), out string why);
-                if (ok || now - FirstSeen[viewId] > GiveUpSeconds)
+                if (ok || now - FirstSeen[token] > GiveUpSeconds)
                 {
                     if (!ok) PackUp.Warn($"Gave up saving the box (view {viewId}) that {p.NickName} packed: {why}. " +
                                          "Its products will be lost when the game is reloaded");
-                    Done.Add(viewId);
-                    FirstSeen.Remove(viewId);
+                    Done.Add(token);
+                    FirstSeen.Remove(token);
                 }
             }
         }
+        Done.RemoveWhere(t => !SeenNow.Contains(t));
     }
 
     private static bool TryRegister(int viewId, string who, out string why)
@@ -183,6 +192,9 @@ internal static class Network
             if (announced != null && announced.ProductID > 0 && data.ProductID != announced.ProductID)
             {
                 box.Setup(announced.ProductID, false);
+                // Setup always switches the box icon on; an open box shows none (Box.OpenBox switches it off),
+                // and the guest's OpenBox_RPC may have reached us before this first Serve.
+                if (data.IsOpen && box.m_IconUI != null) box.m_IconUI.SetActive(false);
                 PackUp.Log($"Set up the host's copy of the box (view {viewId}) for product {announced.ProductID}");
             }
             if (data.ProductID <= 0) { why = "the host's copy of the box has no product yet"; return false; }
