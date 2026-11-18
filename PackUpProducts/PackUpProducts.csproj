@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>PackUpProducts</AssemblyName>
+    <RootNamespace>PackUpProducts</RootNamespace>
+    <Version>0.1.0</Version>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>embedded</DebugType>
+    <!-- net6.0 is EOL but it's what BepInEx 6 IL2CPP runs on -->
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <NoWarn>$(NoWarn);NU1903;NU1902</NoWarn>
+
+    <GameDir Condition="'$(GameDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Supermarket Simulator</GameDir>
+    <BepInExDir>$(GameDir)/BepInEx</BepInExDir>
+    <!-- only compile src/ (decompiled/ holds reference dumps) -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="src/**/*.cs" />
+  </ItemGroup>
+
+  <!-- Reference the game's local BepInEx + interop assemblies; never copy them to output. -->
+  <ItemGroup>
+    <Reference Include="$(BepInExDir)/core/BepInEx.Core.dll" Private="false" />
+    <Reference Include="$(BepInExDir)/core/BepInEx.Unity.IL2CPP.dll" Private="false" />
+    <Reference Include="$(BepInExDir)/core/BepInEx.Unity.Common.dll" Private="false" />
+    <Reference Include="$(BepInExDir)/core/0Harmony.dll" Private="false" />
+    <Reference Include="$(BepInExDir)/core/Il2CppInterop.Runtime.dll" Private="false" />
+    <Reference Include="$(BepInExDir)/core/Il2CppInterop.Common.dll" Private="false" />
+    <Reference Include="$(BepInExDir)/interop/*.dll" Private="false" />
+  </ItemGroup>
+
+  <!-- After build, drop the plugin into the game's plugins folder. Disable with -p:Deploy=false -->
+  <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(Deploy)' != 'false'">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExDir)/plugins" />
+    <Message Importance="high" Text="Deployed $(TargetFileName) -> $(BepInExDir)/plugins" />
+  </Target>
+
+</Project>

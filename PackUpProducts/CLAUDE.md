@@ -1,0 +1,71 @@
+# PackUpProducts: agent notes
+
+Improvement #14 (`TODO.md`). Empty hands + right click (`Take`) on a stocked `DisplaySlot` spawns an open box of the right size for that product, puts it in the player's hands, and takes one product from the slot into it. Full mechanism: doc comment at the top of `src/PackUp.cs`. This file summarises it and holds the game knowledge dug out for it.
+
+## Status
+
+- v0.1.0 written and builds. **Not tested in-game**; nothing below about runtime behaviour is confirmed. Assumed (from the dumps) rather than seen: every numbered claim under "Open questions".
+
+## Files
+
+| File | What |
+|---|---|
+| `src/Plugin.cs` | Config (`Enabled`, `TriggerAction`, `VerboseLogging`) and the per-frame `PackBehaviour`. No Harmony patches at all (nothing to unpatch; `Enabled` is checked every frame). |
+| `src/PackUp.cs` | Click detection, guards, slot raycast, spawn (host/offline and guest), simulated pickup, the take, the guest's pending state. |
+| `src/Network.cs` | Presence property, the guest-to-host "save this box" property, the host's poll. |
+
+## Game knowledge (verified in the dumps)
+
+**Right click does nothing with empty hands.** `PlayerInteraction.OnTake(context)` only invokes the `onTake` delegate (subscribed by the active `*Interaction`) or, if `m_CurrentInteractable` implements `ITakeInteractable` (only the Courier does), its `TakeInteract`. `DisplaySlot` is a plain MonoBehaviour, not an `IInteractable`: `BoxInteraction.CheckForInteraction` finds it with its own raycast (`Physics.Raycast` from `m_MainCamera` along its forward, distance `m_MaxRaycastDistance` (+0x28), mask `m_BoxInteractionLayer` (+0x30)) and takes the component from the hit collider's own GameObject. We repeat that ray from `Update`, polling `InputActions.m_PlayerInput.actions.FindAction("Take").WasPressedThisFrame()`.
+
+**Box size per product.** `ProductSO.GridLayoutInBox.boxSize` (`GridLayout3D.GridLayout` at ProductSO +0x80; `boxSize` at +0x10, `productCount` = capacity). `BoxInteraction.CheckTakeProductFromSlot` refuses a product unless `box.Size == that boxSize` (warning `BOX_DOESNT_MATCH`) or the box holds another product. `BoxGenerator.GetBoxBySize(BoxSize)` returns the prefab for a size (null if none; we check it before spawning). `BoxSize` values: `_8x8x8, _20x10x7, _20x20x10, _20x20x20, _30x20x20, _15x15x15, _40x26x26, _22x22x8, _8x8x8_Bakery, _20x10x7_Bakery, _15x15x15_IceCreamFlavour`.
+
+**`BoxData`** (fields: `m_UID` +0x10, `Size` +0x14, `Transform` +0x18, `IsOpen` +0x20, `ProductID` +0x24, `ProductCount` +0x28). The constructor `BoxData(size, pos, rot, isOpen, productId, count)` sets `m_UID = -1` and builds the `TransformData`. `Box.CreateBoxData(productId)` makes size + id + `count = ProductSO.ProductAmountOnPurchase` (a full box), which is what the wholesale and delivery spawners use.
+
+**Spawning boxes.**
+- `BoxGenerator.SpawnBox(ProductSO, pos, rot[, parent])`: `CreateBoxData` (full box) + `IDManager.GenerateBoxUniqueID`, then offline `LeanPool.Spawn(GetBoxBySize(size))`, master `NetworkObjectGenerator.SpawnNetworkBox`, non-master nothing (null). `DeliveryManager.Delivery` follows it with `box.Setup(productId, true)` on the master.
+- `BoxGenerator.SpawnBox(pos, rot, BoxData)` (used by `InventoryManager.LoadBoxDatas` for saved boxes): offline generates the UID and lean-spawns; master `SpawnNetworkBox` (**position/rotation come from `data.Transform`**, not the arguments); non-master null. After the spawn: if the UID is still <= 0, it becomes the PhotonView id; then `Box.set_Data(data)`.
+- `NetworkObjectGenerator.SpawnNetworkBox(pos, rot, data, viewId = -1, rackSlot = -1)` is `PhotonNetwork.InstantiateRoomObject` with the data fields as instantiation data. `NetworkBox.OnPhotonInstantiate` on every client rebuilds a `BoxData` from them (`BoxSize, pos, rot, isOpen, productId, count, ...`) and sets `UID = viewId` when it isn't > 0.
+- `NetworkObjectGenerator.SpawnNetworkBoxClient(pos, rot, data, viewId = -1)`: `PhotonNetwork.Instantiate` (owned by the caller, any client, guest included), then `Box.set_Data(data)`. `BoxGenerator.SpawnBoxLocalMarket(product, pos, rot)` = `CreateBoxData` + this (online) or lean-spawn (offline), and `PurchasableProduct.Purchase` then calls `NetworkBox.Setup_Broadcast(productId, true)` (online) or `box.Setup(productId, true)`.
+- `Box.set_Data` stores the data and then calls the virtual `Initialize` (position and rotation from `data.Transform`, label via `ProductAtlasManager.SetLabelData`, open animation sampled to the end when open). Product objects are not instantiated until the box is opened (`Box.OpenBox` runs `SpawnProducts` when `m_SpawnedProducts` is false); `Box.AddProduct` just increments `Data.ProductCount`, adds to `m_Products` and tweens the product in. So a box with `count 0, IsOpen true` is a valid empty open box.
+
+**Persistence.** Loose boxes are saved from `InventoryManager.m_Boxes` (`Boxes`); `RackSlot.RemoveBox` adds a box's data back when it leaves a rack. The only vanilla adder for a freshly spawned box is `Box.Setup(productId, newBox: true)`: sets `data.ProductID`, size, label, `InventoryManager.AddBox(data)`, and (unless productId == -1) **`data.ProductCount = ProductAmountOnPurchase`**. That count reset is why the mod calls `InventoryManager.AddBox(box.Data)` itself instead. `NetworkBox.Setup_RPC(id, newBox)` just calls `Box.Setup` on every client. `NetworkBox.OnPhotonInstantiate` does not add to the inventory (the host's delivery boxes get `Setup` called locally; guests never save).
+
+**Putting a box in the hands.** `PlayerInteraction.Interact(false, false)` with `m_CurrentInteractable` = the box runs `Box.InstantInteract` (offline `Box.PickUp()`; host `NetworkBox.AvailabilityCallback_RPC(own user id)` -> `PickUp_Broadcast` -> `PickUP_RPC` to All + ownership transfer; guest `NetworkBox.AskAvailability`), stores the result in `m_InInteraction` and, if true, `SetCurrentInteraction(type)` which enables `BoxInteraction`. `PurchasableProduct.Purchase` does exactly `SetCurrentInteractable(box)` + `InteractionHintsManager.Clear` + `Interact(false, false)` on its new box (the hints clear is part of `Interact` anyway). We do `SetCurrentInteractable(box.TryCast<IInteractable>())` + `Interact(false, false)`.
+
+**The take.** `BoxInteraction.TryTakeProductFromSlot()` = `CheckTakeProductFromSlot()` (uses `m_CurrentDisplaySlot`; box product null or equal to the slot's, size match, box not `Full`; shows the game's warning otherwise) then offline `TakeProductFromDisplay(box, slot)` / host `NetworkBoxInteraction.TakeProduct_Broadcast` / guest `AskTakeProduct`. It does not check `IsOpen`. `SetCurrentDisplaySlot(slot)` sets the field `BoxInteraction.Update` would set from its next raycast anyway.
+
+## Multiplayer
+
+| Host | Guest | Result |
+|---|---|---|
+| mod | none | host packs; guest sees box instantiate, `PickUP_RPC`, `TakeProduct_RPC` as for any box. Nothing new on the wire. |
+| mod | mod | guest packs: it instantiates the box itself, asks the host for the pickup (vanilla `AskAvailability`), then asks for the take (vanilla `AskTakeProduct`), and tells the host to save the box (`oscar.packup.reg` player property). |
+| none | mod | guest refuses (`oscar.packup.ver` missing on the master client); nothing is spawned. Reason: only the host's `InventoryManager.Boxes` is saved and vanilla offers no safe way to add to it from a guest (see Persistence), so the box and its product would vanish on reload. |
+| none | none | no change. |
+
+- Unmodded peers see only vanilla Photon traffic: an instantiate with the normal `BoxData` fields (count 0, open), the normal pickup and take RPCs. The two custom player properties are ignored by them (stored as extra keys).
+- A modded host reading `oscar.packup.reg` accepts any view id a guest sends, but it only adds the box's own data to the inventory, skips racked boxes and boxes already listed, and ignores ids that are not boxes.
+- `Network.cs` publishes `oscar.packup.ver` (the version, or "" when `Enabled` is off) on every modded client's own player every 2 s check; a guest looks at `PhotonNetwork.MasterClient`.
+- When the master changes, the new master (if modded) has published already, and the poll starts when it becomes master. Boxes a guest packed just before a host switch may not be saved (rare; not handled).
+- Guest-spawned boxes are not room objects, so Photon destroys them if their owner leaves (the same as wholesale boxes a guest buys). The host's saved data survives and the box comes back on the next load. `PlayerInstance.OnPlayerLeftRoom` (host) throws out the leaver's current box first, as for any held box.
+
+## Open questions for the first in-game test
+
+1. Does `Cursor.lockState` read as not `None` during gameplay under Proton? If packing never starts and the verbose log says "cursor is free (a menu is open)", the guard needs another signal (`InputActions.m_CursorLocked`).
+2. Are the hold-point children really empty with empty hands? A log line "hands are not empty (<name>)" would show a permanent child; then the check must ignore it.
+3. Does `Interact(false, false)` after `SetCurrentInteractable` pick the box up for host, offline and guest (the line `The new box didn't end up in your hands` says no)?
+4. Does a box spawned with `count 0, open` look right (open flaps, label) and take the product with its fly animation?
+5. Is the box saved with the right count after a reload (host)? It should come back with the products it held when the game saved.
+6. Guest (both modded): does the box appear in the guest's hands, does the host log `Saving the box ... packed`, and is the count the same on both screens?
+7. Does the `Take` action name exist (`There is no input action called "Take"` would say otherwise)?
+
+## In-game test steps (send back the `[PackUp]` lines of `BepInEx/LogOutput.log`, from both machines online)
+
+1. Alone: stand at a stocked shelf with empty hands, right click a product. Expect `Packing <name> ... into a _XxYxZ box [offline]`, `Spawned the box: ...`, `Took a product from the slot: slot N -> N-1, box 1`. You hold an open box with one product. Right click again: a second product goes in. Also try a fridge/freezer slot, a bottle, a small item and a big item (different box sizes), and a bakery product.
+2. Put the box on the floor, save, reload: the box is still there with its products. Count the shelf plus box products before and after: the sum never changes.
+3. With a box (or crate, or bag) in hands: right click behaves as before (the mod stays silent or logs `a box is already in your hands`).
+4. Host with the mod, guest without: host packs; the guest sees the box in the host's hands, the products leave the shelf on both screens.
+5. Both modded: the guest packs: expect on the guest `Spawned the box as a guest`, `Asked the host`, `Took a product ...`; on the host `Saving the box ... packed`. Reload the host: the box is there.
+6. Guest with the mod, host without: expect `Packing as a guest needs the host to have Pack Up Products too`.
+7. `Enabled = false` in the config manager: right click does nothing again.
