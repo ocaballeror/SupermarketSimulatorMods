@@ -123,10 +123,10 @@ Overlapping with other characters is acceptable, since the game mostly ignores c
 
 ## Bug #9: Delivered Orders Remain in the Other Player's Pending Orders
 
-**Status:** in-progress  
+**Status:** reviewed  
 **Code:** `SupermarketFixes/src/Patches/CourierOrdersFix.cs`  
-**Review:** 2026-11-17, 2 rounds, hash `551de09e87f9` (stale: settings reduced and code changed 2026-11-18; needs re-review)
-**Waiting on:** In-game test of v0.11.0 (host and modded guest); send the `[CourierOrders]` lines from both.
+**Review:** 2026-11-19, 2 rounds, hash `4705f219c088`
+**Waiting on:** In-game test of v0.11.10 (host and modded guest; steps in `SupermarketFixes/CLAUDE.md`, Bug #9); send the `[CourierOrders]` lines from both.
 
 In multiplayer, when a player gives an online order bag to the courier, the order disappears from the active order count on that player's screen, but not on the other player's screen.
 
