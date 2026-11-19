@@ -64,10 +64,10 @@ There is currently no additional information available, as no specific cause or 
 
 ## Bug #5: Unable to Put Products on Shelves Without an Existing Label
 
-**Status:** in-progress  
+**Status:** reviewed  
 **Code:** `SupermarketFixes/src/Patches/BoxPlaceFix.cs`, `SupermarketFixes/src/Patches/CratePlaceFix.cs`  
-**Review:** 2026-11-16, 1 round, hash `226e9b1da17c` (both files) (stale: settings reduced and code changed 2026-11-18; needs re-review)
-**Waiting on:** In-game test of the crate fix (v0.7.2); send the `[CratePlace]` / `[BoxPlace]` log lines.
+**Review:** 2026-11-19, 3 rounds, hash `f10bf778aa0e` (both files)
+**Waiting on:** In-game test (steps in `SupermarketFixes/CLAUDE.md`, "Test (Bug #5)", with VerboseLogging on); send the `[CratePlace]` / `[BoxPlace]` log lines.
 
 Sometimes, players cannot put items from a crate onto a new shelf that does not yet have a label for that product.
 
