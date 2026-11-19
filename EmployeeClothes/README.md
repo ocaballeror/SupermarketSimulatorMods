@@ -15,7 +15,7 @@ The employees keep their models, hair, faces and outfits. Only their clothes (sh
 
 ## Settings
 
-`BepInEx/config/oscar.employeeclothes.cfg`, or in-game in the mod settings:
+`BepInEx/config/flamboyanthopper.employeeclothes.cfg`, or in-game in the mod settings:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
@@ -30,7 +30,7 @@ The employees keep their models, hair, faces and outfits. Only their clothes (sh
 
 ## Where the colors are kept
 
-The host's colors are saved per save slot in `BepInEx/config/oscar.employeeclothes.saves.txt` (one line per save file, plus one line for the Apply to all switch) every time you press Apply or Reset, not with the game's own save. The $1000 is taken when you open the screen and belongs to the game's money, so if you quit without saving the game, the money goes back to the last save but the colors stay. If you start a new game in a slot that already had colors, press Reset for each type (or delete that line).
+The host's colors are saved per save slot in `BepInEx/config/flamboyanthopper.employeeclothes.saves.txt` (one line per save file, plus one line for the Apply to all switch) every time you press Apply or Reset, not with the game's own save. The $1000 is taken when you open the screen and belongs to the game's money, so if you quit without saving the game, the money goes back to the last save but the colors stay. If you start a new game in a slot that already had colors, press Reset for each type (or delete that line).
 
 ## Good to know
 

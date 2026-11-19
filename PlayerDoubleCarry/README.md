@@ -20,7 +20,7 @@ As a guest, the host has to approve the second box like any pickup. If the host 
 
 ## Settings
 
-`BepInEx/config/oscar.playerdoublecarry.cfg`, also editable in-game in the mod settings.
+`BepInEx/config/flamboyanthopper.playerdoublecarry.cfg`, also editable in-game in the mod settings.
 
 | Section | Setting | Default | Description |
 |---|---|---|---|

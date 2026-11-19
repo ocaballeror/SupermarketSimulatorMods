@@ -9,7 +9,7 @@ This speeds up everything a customer waits for at the machine:
 
 ## Settings
 
-`BepInEx/config/oscar.selfcheckoutspeed.cfg`, or in-game in the mod settings:
+`BepInEx/config/flamboyanthopper.selfcheckoutspeed.cfg`, or in-game in the mod settings:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|

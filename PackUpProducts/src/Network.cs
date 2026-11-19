@@ -11,17 +11,17 @@ namespace PackUpProducts;
 /// The two small things packing needs from the network, both carried by Photon player custom properties
 /// (unmodded clients just store them):
 ///
-///  - <c>oscar.packup.ver</c>: every modded client publishes the mod version on its own player. A guest
+///  - <c>flamboyanthopper.packup.ver</c>: every modded client publishes the mod version on its own player. A guest
 ///    only packs when the master client has published it (see PackUp.cs, "Guest").
-///  - <c>oscar.packup.reg</c>: a modded guest that spawned a box writes "viewId:sequence" on its own player.
+///  - <c>flamboyanthopper.packup.reg</c>: a modded guest that spawned a box writes "viewId:sequence" on its own player.
 ///    The modded host sees the change and adds that box's data to its InventoryManager.Boxes (the list the
 ///    game saves loose boxes from). Vanilla does the same for wholesale boxes through Setup_RPC(newBox:true),
 ///    which would also reset the count to a full box, so it can't be used here.
 /// </summary>
 internal static class Network
 {
-    internal const string VerKey = "oscar.packup.ver";
-    private const string RegKey = "oscar.packup.reg";
+    internal const string VerKey = "flamboyanthopper.packup.ver";
+    private const string RegKey = "flamboyanthopper.packup.reg";
 
     private const float KeepSeconds = 120f;
     private const float GiveUpSeconds = 30f;

@@ -6,7 +6,7 @@ The liquid level shown inside the can is scaled too: a new can shows the same fi
 
 ## Settings
 
-`BepInEx/config/oscar.paintcancapacity.cfg`, or in-game with BepInExConfigManager:
+`BepInEx/config/flamboyanthopper.paintcancapacity.cfg`, or in-game with BepInExConfigManager:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|

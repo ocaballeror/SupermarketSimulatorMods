@@ -64,7 +64,7 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes either of
 
 ## Settings
 
-`BepInEx/config/oscar.supermarketfixes.cfg`, or in-game with BepInExConfigManager:
+`BepInEx/config/flamboyanthopper.supermarketfixes.cfg`, or in-game with BepInExConfigManager:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|

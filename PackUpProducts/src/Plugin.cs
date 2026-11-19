@@ -10,9 +10,9 @@ namespace PackUpProducts;
 [BepInPlugin(Guid, Name, Version)]
 public class Plugin : BasePlugin
 {
-    public const string Guid = "oscar.packupproducts";
+    public const string Guid = "flamboyanthopper.packupproducts";
     public const string Name = "Pack Up Products";
-    public const string Version = "0.1.3";
+    public const string Version = "0.1.4";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

@@ -20,8 +20,8 @@ namespace SelfCheckoutSpeed;
 /// </summary>
 internal static class HostSync
 {
-    private const string SelfKey = "oscar.scs.self";
-    private const string HelpKey = "oscar.scs.help";
+    private const string SelfKey = "flamboyanthopper.scs.self";
+    private const string HelpKey = "flamboyanthopper.scs.help";
 
     private static float? _sentSelf;
     private static float? _sentHelp;

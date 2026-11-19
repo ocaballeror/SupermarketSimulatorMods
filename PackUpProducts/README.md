@@ -15,7 +15,7 @@ The box is a normal game box: it is saved with your store, has the correct produ
 
 ## Settings
 
-`BepInEx/config/oscar.packupproducts.cfg`, or in-game in the mod settings:
+`BepInEx/config/flamboyanthopper.packupproducts.cfg`, or in-game in the mod settings:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|

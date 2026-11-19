@@ -11,9 +11,9 @@ namespace BulkShelfTransfer;
 [BepInPlugin(Guid, Name, Version)]
 public class Plugin : BasePlugin
 {
-    public const string Guid = "oscar.bulkshelftransfer";
+    public const string Guid = "flamboyanthopper.bulkshelftransfer";
     public const string Name = "Bulk Shelf Transfer";
-    public const string Version = "0.2.1";
+    public const string Version = "0.2.2";
 
     internal static ManualLogSource Logger;
 

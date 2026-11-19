@@ -23,7 +23,7 @@
  * either leg constraint (and its Rig) has a weight above 0.01 (seated in a vehicle) the legs belong to that IK,
  * so we don't pose that model, to keep the two systems from fighting. Seated players are not crouching anyway.
  *
- * Crouch amount per player: the local player uses Crouch.LocalT; remote players follow the "oscar.crouch"
+ * Crouch amount per player: the local player uses Crouch.LocalT; remote players follow the "flamboyanthopper.crouch"
  * Photon player property of the PlayerInstance's PhotonView owner, smoothed over TransitionTime.
  */
 using System;

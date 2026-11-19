@@ -8,9 +8,9 @@ namespace ProductHighlight;
 [BepInPlugin(Guid, Name, Version)]
 public class Plugin : BasePlugin
 {
-    public const string Guid = "oscar.producthighlight";
+    public const string Guid = "flamboyanthopper.producthighlight";
     public const string Name = "Product Highlight";
-    public const string Version = "0.1.3";
+    public const string Version = "0.1.4";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

@@ -10,9 +10,9 @@ namespace ExtraComputers;
 [BepInPlugin(Guid, Name, Version)]
 public class Plugin : BasePlugin
 {
-    public const string Guid = "oscar.extracomputers";
+    public const string Guid = "flamboyanthopper.extracomputers";
     public const string Name = "Extra Computers";
-    public const string Version = "1.4.2";
+    public const string Version = "1.4.3";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

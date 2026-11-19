@@ -811,7 +811,7 @@ internal static class TabUi
         catch (Exception e) { Plugin.Warn("Apply to all switch failed: " + e.Message); }
     }
 
-    /// <summary>The player flipped the switch: remember it (saved in oscar.employeeclothes.saves.txt).</summary>
+    /// <summary>The player flipped the switch: remember it (saved in flamboyanthopper.employeeclothes.saves.txt).</summary>
     private static void SaveApplyAll() => ClothesStore.ApplyToAll = _applyAll;
 
     private static void RefreshToggle(bool force = false)

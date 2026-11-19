@@ -11,7 +11,7 @@ Picked up a shelf, fridge, freezer, rack, checkout or other furniture by mistake
 
 ## Settings
 
-`BepInEx/config/oscar.furnituremovecancel.cfg`, or in-game with BepInExConfigManager:
+`BepInEx/config/flamboyanthopper.furnituremovecancel.cfg`, or in-game with BepInExConfigManager:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|

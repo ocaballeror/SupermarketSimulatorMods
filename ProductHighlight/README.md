@@ -8,7 +8,7 @@ Shows you where the product in your hands belongs, with the same green outline t
 
 ## Settings
 
-`BepInEx/config/oscar.producthighlight.cfg`, or in-game in the mod settings:
+`BepInEx/config/flamboyanthopper.producthighlight.cfg`, or in-game in the mod settings:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|

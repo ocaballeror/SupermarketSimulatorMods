@@ -29,9 +29,9 @@ public enum CrouchPadButton
 [BepInPlugin(Guid, Name, Version)]
 public class Plugin : BasePlugin
 {
-    public const string Guid = "oscar.playercrouch";
+    public const string Guid = "flamboyanthopper.playercrouch";
     public const string Name = "Player Crouch";
-    public const string Version = "1.0.4";
+    public const string Version = "1.0.5";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

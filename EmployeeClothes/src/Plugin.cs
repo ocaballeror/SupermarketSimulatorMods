@@ -84,7 +84,7 @@
  *    picker's shader doesn't work), an "Apply to all" switch (a clone of the game's own ToggleSwitch from the HR tab:
  *    a Slider + handle Button + on/off colors; its gamepad glyph and caption are removed and onValueChanged is ours),
  *    Apply, Reset and Done. The switch state is ClothesStore.ApplyToAll (kept across type switches,
- *    Apply, Reset and game starts; stored as the line "#applyall<TAB>1" in oscar.employeeclothes.saves.txt, not in the cfg). The type switcher only offers the unlocked types, worked out each time the panel
+ *    Apply, Reset and game starts; stored as the line "#applyall<TAB>1" in flamboyanthopper.employeeclothes.saves.txt, not in the cfg). The type switcher only offers the unlocked types, worked out each time the panel
  *    opens (ClothesStore.UnlockedKinds): the HR tab hides the ice cream helper unless DLCTestController.IceCreamDLC and the
  *    baker unless DLCTestController.BakeryDLC (HiringTab.RefreshAvailability); on top of that a type needs a hired employee
  *    (EmployeeManager.IsEmployeeHired) or a hire slot (HrHiring.SlotIds) with no unmet requirement (HrHiring.MissingCount
@@ -100,11 +100,11 @@
  *    prefab), and materials are local, so the color must be applied on every client that wants to see it.
  *  - Only the host (or the solo player) can change the colors (card disabled for guests: a guest's choice would need a
  *    custom RPC and a way to charge the host). The host publishes the colors as the Photon ROOM property
- *    "oscar.employeeclothes" (a string like "Restocker=ff8800;Cashier=2255aa"). The game itself keeps "Money",
+ *    "flamboyanthopper.employeeclothes" (a string like "Restocker=ff8800;Cashier=2255aa"). The game itself keeps "Money",
  *    "roomStartTime" and "RackCount" there and every room-property listener only reads its own key, so unmodded clients
  *    ignore ours. Late joiners get it from the room; modded guests poll it once a second and apply it. Unmodded guests
  *    see the original colors (harmless).
- *  - Persistence: the host's colors are saved in BepInEx/config/oscar.employeeclothes.saves.txt, one line per save file
+ *  - Persistence: the host's colors are saved in BepInEx/config/flamboyanthopper.employeeclothes.saves.txt, one line per save file
  *    (SaveManager.CurrentSaveFilePath's file name), because the game's own save format can't be extended. A new game in
  *    a used slot inherits that slot's colors (use Reset, or delete the line).
  *
@@ -127,9 +127,9 @@ namespace EmployeeClothes;
 [BepInPlugin(Guid, Name, Version)]
 public class Plugin : BasePlugin
 {
-    public const string Guid = "oscar.employeeclothes";
+    public const string Guid = "flamboyanthopper.employeeclothes";
     public const string Name = "Employee Clothes";
-    public const string Version = "1.0.7";
+    public const string Version = "1.0.8";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

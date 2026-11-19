@@ -11,7 +11,7 @@ Adds a **Computer** to the furniture shop ($1000). Buy as many as you like. Each
 
 ## Settings
 
-`BepInEx/config/oscar.extracomputers.cfg` (also editable in-game with BepInExConfigManager):
+`BepInEx/config/flamboyanthopper.extracomputers.cfg` (also editable in-game with BepInExConfigManager):
 
 | Section | Setting | Default | Meaning |
 |---|---|---|---|

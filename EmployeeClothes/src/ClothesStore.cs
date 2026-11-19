@@ -17,7 +17,7 @@ namespace EmployeeClothes;
 /// </summary>
 internal static class ClothesStore
 {
-    internal const string RoomKey = "oscar.employeeclothes";
+    internal const string RoomKey = "flamboyanthopper.employeeclothes";
 
     /// <summary>All employee types in the order the UI shows them.</summary>
     internal static readonly HrEmployeeKind[] Kinds =
@@ -235,7 +235,26 @@ internal static class ClothesStore
 
     // ------------------------------------------------------------------ persistence (host / solo)
 
-    private static string FilePath => Path.Combine(Paths.ConfigPath, "oscar.employeeclothes.saves.txt");
+    private static string FilePath
+    {
+        get
+        {
+            var path = Path.Combine(Paths.ConfigPath, "flamboyanthopper.employeeclothes.saves.txt");
+            if (!_migrated)
+            {
+                _migrated = true;
+                // One-time migration from the old file name (before the rename); fail open.
+                try
+                {
+                    var old = Path.Combine(Paths.ConfigPath, "oscar.employeeclothes.saves.txt");
+                    if (!File.Exists(path) && File.Exists(old)) File.Copy(old, path);
+                }
+                catch (Exception e) { Plugin.Warn("Migrating the old saves file failed: " + e.Message); }
+            }
+            return path;
+        }
+    }
+    private static bool _migrated;
 
     private static string SaveKey()
     {

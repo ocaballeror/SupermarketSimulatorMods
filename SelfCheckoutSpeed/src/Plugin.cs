@@ -10,9 +10,9 @@ namespace SelfCheckoutSpeed;
 [BepInPlugin(Guid, Name, Version)]
 public class Plugin : BasePlugin
 {
-    public const string Guid = "oscar.selfcheckoutspeed";
+    public const string Guid = "flamboyanthopper.selfcheckoutspeed";
     public const string Name = "Self Checkout Speed";
-    public const string Version = "1.1.2";
+    public const string Version = "1.1.3";
 
     internal const float MaxMultiplier = 10f;
 

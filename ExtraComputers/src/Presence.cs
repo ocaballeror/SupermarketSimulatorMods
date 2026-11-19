@@ -10,9 +10,9 @@
  * How: every modded client publishes Photon player custom properties (same technique as PlayerCrouch; the
  * game's only player-property listener, RoomPlayerPropsListener -> RoomSettingsManager, looks at "png" and
  * "sid" only, so extra keys are ignored by unmodded clients):
- *   oscar.extracomputers        bool   "this client runs Extra Computers (enabled)"
- *   oscar.extracomputers.price  float  the host's price; modded guests show/charge that value
- *   oscar.extracomputers.use    int    PhotonView id of the extra computer this player is using (0 = none)
+ *   flamboyanthopper.extracomputers        bool   "this client runs Extra Computers (enabled)"
+ *   flamboyanthopper.extracomputers.price  float  the host's price; modded guests show/charge that value
+ *   flamboyanthopper.extracomputers.use    int    PhotonView id of the extra computer this player is using (0 = none)
  * A player who never published the first key, or published false, counts as "without the mod".
  *
  * What every modded client does while somebody else in the room lacks the mod (config
@@ -40,9 +40,9 @@ namespace ExtraComputers;
 
 internal static class Presence
 {
-    internal const string KeyMod = "oscar.extracomputers";
-    internal const string KeyPrice = "oscar.extracomputers.price";
-    internal const string KeyUse = "oscar.extracomputers.use";
+    internal const string KeyMod = "flamboyanthopper.extracomputers";
+    internal const string KeyPrice = "flamboyanthopper.extracomputers.price";
+    internal const string KeyUse = "flamboyanthopper.extracomputers.use";
 
     private enum Mod { Absent, Yes, No, Unreadable }
 

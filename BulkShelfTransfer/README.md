@@ -23,7 +23,7 @@ Vending machines, the baker's crate and the security guard's crate are left as t
 
 ## Settings
 
-`BepInEx/config/oscar.bulkshelftransfer.cfg`, or in-game with BepInExConfigManager:
+`BepInEx/config/flamboyanthopper.bulkshelftransfer.cfg`, or in-game with BepInExConfigManager:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|

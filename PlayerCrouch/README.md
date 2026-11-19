@@ -12,7 +12,7 @@ Optional toggle mode: press once to crouch and again to stand. In this mode, jum
 
 ## Settings
 
-`BepInEx/config/oscar.playercrouch.cfg`, or in-game with BepInExConfigManager:
+`BepInEx/config/flamboyanthopper.playercrouch.cfg`, or in-game with BepInExConfigManager:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|

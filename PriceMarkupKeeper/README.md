@@ -10,7 +10,7 @@ Discounts set from the pricing tab are a percentage of the selling price, so the
 
 ## Settings
 
-`BepInEx/config/oscar.pricemarkupkeeper.cfg`, or in-game in the mod settings:
+`BepInEx/config/flamboyanthopper.pricemarkupkeeper.cfg`, or in-game in the mod settings:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|

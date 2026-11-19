@@ -10,9 +10,9 @@ namespace ClearTags;
 [BepInPlugin(Guid, Name, Version)]
 public class Plugin : BasePlugin
 {
-    public const string Guid = "oscar.cleartags";
+    public const string Guid = "flamboyanthopper.cleartags";
     public const string Name = "Clear Tags";
-    public const string Version = "0.3.4";
+    public const string Version = "0.3.5";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

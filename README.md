@@ -48,6 +48,8 @@ Each mod folder has its own `README.md` (what it does, its settings, who needs i
 
 **Multiplayer note:** some mods only work if the machine where the problem happens runs the mod; for example, a bug seen on the guest is fixed on the guest. Each mod's README says whether the host, the guest, or both need it.
 
+**Renamed packages:** the plugin GUIDs changed from the old `oscar.<mod>` prefix to `flamboyanthopper.<mod>`. Settings are stored by GUID, so configs from `BepInEx/config/oscar.*.cfg` must be renamed to `flamboyanthopper.*.cfg` to keep your settings.
+
 ## Building
 
 Requires the .NET SDK (any recent version; projects target `net6.0`) and the game with BepInEx installed and launched at least once.

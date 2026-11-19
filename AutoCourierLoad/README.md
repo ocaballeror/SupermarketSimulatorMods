@@ -18,7 +18,7 @@ If he finds nothing, he simply waits at his spot like before, and you can still 
 
 ## Settings
 
-`BepInEx/config/oscar.autocourierload.cfg`, or in-game in the mod settings. Numbers are typed in, not dragged. If your PC uses a decimal comma, type `0,5`.
+`BepInEx/config/flamboyanthopper.autocourierload.cfg`, or in-game in the mod settings. Numbers are typed in, not dragged. If your PC uses a decimal comma, type `0,5`.
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|

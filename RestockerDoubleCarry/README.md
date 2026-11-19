@@ -30,7 +30,7 @@ All the restocker's own settings (use unlabeled racks, pick up boxes from the gr
 
 ## Settings
 
-`BepInEx/config/oscar.restockerdoublecarry.cfg`, or in-game with BepInExConfigManager:
+`BepInEx/config/flamboyanthopper.restockerdoublecarry.cfg`, or in-game with BepInExConfigManager:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|

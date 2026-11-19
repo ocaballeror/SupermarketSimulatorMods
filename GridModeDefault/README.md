@@ -9,7 +9,7 @@ When you place or move furniture (shelves, fridges, freezers, racks, checkouts, 
 
 ## Settings
 
-`BepInEx/config/oscar.gridmodedefault.cfg`, or in-game with BepInExConfigManager:
+`BepInEx/config/flamboyanthopper.gridmodedefault.cfg`, or in-game with BepInExConfigManager:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|

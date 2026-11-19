@@ -10,9 +10,9 @@ namespace FurnitureMoveCancel;
 [BepInPlugin(Guid, Name, Version)]
 public class Plugin : BasePlugin
 {
-    public const string Guid = "oscar.furnituremovecancel";
+    public const string Guid = "flamboyanthopper.furnituremovecancel";
     public const string Name = "Furniture Move Cancel";
-    public const string Version = "1.0.3";
+    public const string Version = "1.0.4";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

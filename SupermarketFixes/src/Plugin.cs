@@ -10,9 +10,9 @@ namespace SupermarketFixes;
 [BepInPlugin(Guid, Name, Version)]
 public class Plugin : BasePlugin
 {
-    public const string Guid = "oscar.supermarketfixes";
+    public const string Guid = "flamboyanthopper.supermarketfixes";
     public const string Name = "Supermarket Fixes";
-    public const string Version = "0.11.1";
+    public const string Version = "0.11.2";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

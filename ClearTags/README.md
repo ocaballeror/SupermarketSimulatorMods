@@ -13,7 +13,7 @@ Only the tags on boxes and furniture boxes get bigger. The label icons on shelve
 
 ## Settings
 
-`BepInEx/config/oscar.cleartags.cfg`, or in-game in the mod settings:
+`BepInEx/config/flamboyanthopper.cleartags.cfg`, or in-game in the mod settings:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|

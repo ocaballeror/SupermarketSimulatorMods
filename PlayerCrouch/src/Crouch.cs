@@ -23,7 +23,7 @@
  *    where it was. Standing back up waits until an overlap test of the standing capsule finds nothing.
  *
  * Other players (CrouchPose.cs)
- *  - Each player's crouch state is published as the Photon player custom property "oscar.crouch" (bool).
+ *  - Each player's crouch state is published as the Photon player custom property "flamboyanthopper.crouch" (bool).
  *    The game already uses player properties ("sid", "png"); unmodded clients just store the extra key.
  *    Properties persist in the room, so late joiners see the right state.
  *  - Every modded client poses every player's model procedurally (see CrouchPose).
@@ -40,7 +40,7 @@ namespace PlayerCrouch;
 
 internal static class Crouch
 {
-    internal const string PropKey = "oscar.crouch";
+    internal const string PropKey = "flamboyanthopper.crouch";
 
     /// <summary>What the player asked for (key held / toggled on).</summary>
     internal static bool Want;
