@@ -2,6 +2,8 @@
 
 Checkouts scan customers' items faster: 2x by default, up to 10x.
 
+> **MULTIPLAYER: INSTALL IT ON THE HOST AND ON EVERY GUEST.** The host is required. Guests without it will see customers leave before their items are scanned at self checkouts.
+
 ## Features
 
 - Speeds up scanning at self checkout machines.
@@ -12,7 +14,7 @@ Checkouts scan customers' items faster: 2x by default, up to 10x.
 
 ## Multiplayer
 
-The host needs the mod. Guests are strongly recommended to install it too, so self checkouts look right on their screen. A guest follows the host's speed automatically.
+**Host: required. Guests: install it too** (strongly recommended), so self checkouts look right on their screen. A guest follows the host's speed automatically.
 
 ## Settings
 

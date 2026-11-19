@@ -2,6 +2,8 @@
 
 Fixes for bugs in Supermarket Simulator, mostly ones that show up in online co-op. Every fix can be switched on or off separately.
 
+> **MULTIPLAYER: INSTALL IT ON THE HOST AND ON EVERY GUEST.** Most fixes only repair the machine they run on, so every player who has the problem needs it, and the host needs it too.
+
 ## Fixes
 
 - **Ghost and duplicate boxes after moving a rack.** Boxes no longer stay floating at the old spot or get duplicated, especially for guests.

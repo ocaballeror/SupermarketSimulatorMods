@@ -17,7 +17,7 @@ Your hands must be empty. Ice cream slots and vending machines are left to the g
 
 ## Multiplayer
 
-The host needs the mod. A guest can use it too, but only if the host also has it. Guests without the mod simply don't get the feature.
+**The host needs the mod. A guest can only use it if the host ALSO has it installed**, so both must install it. Guests without the mod simply don't get the feature.
 
 ## Settings
 

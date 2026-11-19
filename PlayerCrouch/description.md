@@ -12,7 +12,7 @@ Adds crouching to Supermarket Simulator. **Hold Left Ctrl** to crouch.
 
 ## Multiplayer
 
-You need the mod to crouch, as host or guest. To see another player crouch, both of you need the mod. Players without it just see you standing.
+You need the mod to crouch, as host or guest. **To see another player crouch, BOTH players must have the mod installed.** Players without it just see you standing.
 
 ## Settings
 

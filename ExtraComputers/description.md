@@ -2,6 +2,8 @@
 
 Buy more computers for your store.
 
+> **MULTIPLAYER: THE HOST AND EVERY GUEST MUST INSTALL THIS MOD.** Everyone in the session needs it, otherwise the computers won't work for them and they will get errors.
+
 ## Features
 
 - A new **Computer** in the furniture shop for $1000. Buy as many as you like.
@@ -16,7 +18,7 @@ Buy the computer in the furniture shop, unbox it and place it anywhere. Only one
 
 ## Multiplayer
 
-**Everyone in the session needs the mod**, the host and every guest. By default, the computer is hidden in the shop while a player without the mod is in the room, to protect them from errors.
+**Required on the host AND on every guest.** By default, the computer is hidden in the shop while a player without the mod is in the room, to protect them from errors.
 
 ## Important
 
