@@ -46,13 +46,18 @@ namespace SupermarketFixes.Patches;
 ///  - Watchdog: if the stuck state lasts StuckSeconds (or a pickup wait lasts 6 s, i.e. the game's own
 ///    3 s timeout never ran; so an answer that never arrives is handled after about 6 s + StuckSeconds), end the box
 ///    interaction the way the game does on a rejected pickup, reset the BoxInteraction flags DropBox
-///    would reset, then retry the pickup once through the normal path (same calls Purchase makes).
+///    would reset, then retry the pickup once through the normal path (SetCurrentInteractable + Interact, as Purchase does).
 ///    If it gets stuck again, only free the controls; the box stays where it is. The one-retry guard is
 ///    per box and is cleared once the box is confirmed held (or after RetryAgainSeconds), so a later
 ///    incident, or a LeanPool-reused Box object, gets its retry too. There is no cap on recoveries: a
 ///    recovery only happens after the player clicked the box again, so nothing can loop.
 ///  - F9 on a pickup that is still waiting for the host does nothing until the game's own 3 s timeout has
 ///    passed, so it can't cancel a valid pending pickup.
+///  - Known residual (host stuck): Recover sends nothing to guests. If the host's own buy went through
+///    PickUp_Broadcast (PickUP_RPC to all, so guests show the box in the host's hands) and the host's copy then
+///    isn't held and the retry is skipped or fails, guests keep seeing the box in the host's hands while it sits
+///    on the shelf, marked free on the host. It heals when the host picks the box up again. A networked drop is
+///    not used: DropBox_RPC drops the receiver's CURRENT object for that player, which may be a different item.
 ///  - Host side: if a player asks for a box the host already considers held by that same player
 ///    (what a retry after a lost pickup looks like), grant it again instead of rejecting it forever.
 /// </summary>
@@ -79,7 +84,7 @@ internal static class StuckBoxFix
             "market that stayed on the shelf), free them automatically after a short delay.");
         StuckSeconds = cfg.Bind("StuckBox", "StuckSeconds", 2f,
             new ConfigDescription("How long the stuck state must last before it is fixed.",
-                new AcceptableValueRange<float>(0.5f, 10f)));
+                new ClampedFloat(0.5f, 10f)));
         RetryPickup = cfg.Bind("StuckBox", "RetryPickup", true,
             "After freeing the controls, try once more to pick the box up the normal way.");
         RegrantToSameHolder = cfg.Bind("StuckBox", "RegrantToSameHolder", true,
