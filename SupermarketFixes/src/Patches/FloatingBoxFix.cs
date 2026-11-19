@@ -16,32 +16,55 @@ namespace SupermarketFixes.Patches;
 /// Suspected cause (not confirmed in-game): the pile's boxes are ordinary non-kinematic Rigidbodies that have
 /// gone to sleep. A sleeping body doesn't notice that its support is gone: a held box turns its colliders
 /// into triggers and its Rigidbody kinematic (PlayerObjectHolder.HoldObject), a destroyed or moved box simply
-/// vanishes, and PhysX doesn't wake the neighbours that were resting on it. The game only knows this for its
-/// delivery street: Box.PickUp(PlayerInstance) calls SortableBoxManager.WakeUpAllBoxesInStreet, on the master
-/// client only and for boxes inside the street area. A pile anywhere else, or a box that leaves in any other
-/// way (clerk, trash, drop, throw), gets no wake-up.
+/// vanishes, and PhysX doesn't wake the neighbours that were resting on it.
 ///
-/// Fix: after every player pickup (boxes within 2.5 m, 0.25 s and 1 s later) and every 5 s for the whole scene, on the machine that simulates the box (offline, or the Photon owner), find boxes whose
-/// Rigidbody is asleep, not kinematic and has solid colliders, and probe a thin slab just under their
-/// collider bounds. Nothing solid there = unsupported: Rigidbody.WakeUp(), and the normal physics lets it
-/// fall. A supported box is left alone (its slab hits the box or floor it rests on), so the cost is one
-/// overlap query per sleeping loose box; the scene-wide scan runs only every 5 s. Remote clients only see the result through the game's transform sync.
+/// What the game does itself (verified in the dumps): Box.PickUp(PlayerInstance) calls
+/// SortableBoxManager.WakeUpAllBoxesInStreet when PhotonNetwork.IsConnectedAndMaster, just before HoldObject.
+/// The method calls GetBoxesInArea, but that only fills a list the wake never reads. The wake itself loops over
+/// StorageStreet.Instance.boxes and calls Rigidbody.WakeUp on each. Box.Start / Box.Setup subscribe every box
+/// to that list through StorageStreet.SubscribeBox, which skips only racked boxes and boxes on a placement
+/// area, so it holds every loose box in the store, not just the delivery street. OnTakeBoxFromStreet (clerk
+/// street takes) wakes the same list. The wake is therefore store-wide, not limited by the 100-collider
+/// buffer of GetBoxesInArea.
 ///
-/// VerboseLogging: an unsupported box that is NOT asleep or is kinematic is logged once ([FloatBox]) with its
-/// state, so a different cause (for example a box stuck kinematic) can be identified from the log.
+/// So on a host in a room, every player pickup already wakes every loose, host-owned box. What stays uncovered
+/// by the game, and what this fix adds:
+///  - Offline (Box.PickUp() has no wake-up at all).
+///  - Removals other than a player pickup (clerk or baker pickups, trash, throws, despawn).
+///  - Boxes this machine owns on a modded guest (a guest never runs the vanilla wake).
+///  - A second check 0.25 s and 1 s after a pickup, without the vanilla wake's timing (it runs before the
+///    support is removed).
+/// What it cannot fix on a host: a box a guest picked up and put down stays owned by that guest
+/// (NetworkBox.PickUp_Broadcast transfers the ownership) and is kinematic on the host, so only the guest's
+/// machine simulates it; and host-owned boxes whose transform sync is switched off fall on the host but stay
+/// put for guests. Taking ownership back (PhotonView.TransferOwnership to the master, as the game does in
+/// PlaceBoxToRack) was not added: nothing in the dumps shows it is safe for a box a guest may still be
+/// moving, so those cases are only logged.
+///
+/// Fix: after every player pickup (boxes within 2.5 m, 0.25 s and 1 s later) and every 5 s for the loose boxes
+/// of StorageStreet.Instance.boxes (all boxes if there is no StorageStreet), on the machine that simulates the
+/// box (offline, or the Photon owner), find boxes whose Rigidbody is asleep, not kinematic and has solid
+/// colliders, and probe a thin slab just under their collider bounds. Nothing solid there = unsupported:
+/// Rigidbody.WakeUp(), and the normal physics lets it fall. A supported box is left alone (its slab hits the
+/// box or floor it rests on). Right after a pickup every simulated sleeping neighbour is woken, supported or
+/// not (a box left half overhanging passes the slab test but would fall); only the unsupported ones are
+/// logged and counted. Remote clients only see the result through the game's transform sync.
+///
+/// VerboseLogging: every unsupported box this fix does not wake is logged once ([FloatBox]) with its state:
+/// kinematic boxes, and boxes this machine doesn't simulate (PhotonView owner, kinematic, sleeping and
+/// PhotonTransformViewOptimized.m_SyncEnabled included), so the remaining causes can be identified from the log.
 /// </summary>
 internal static class FloatingBoxFix
 {
     internal static ConfigEntry<bool> WakeUnsupported;
 
-    /// <summary>Safety net for boxes that leave a pile in ways we don't see (clerks, trash, despawn). Slow on purpose:
-    /// FindObjectsOfType walks every box in the scene, racked ones included.</summary>
+    /// <summary>Safety net for boxes that leave a pile in ways we don't see (clerks, trash, despawn).</summary>
     private const float SweepInterval = 5f;
     /// <summary>After a pickup: check the boxes within this radius once the box has left its spot.</summary>
     private const float NearRadius = 2.5f;
     private static readonly float[] NearDelays = { 0.25f, 1.0f };
     private const int MaxWakeLogs = 30;
-    private const int MaxOtherLogs = 12;
+    private const int MaxOtherLogs = 20;
 
     internal static void Bind(ConfigFile cfg)
     {
@@ -83,6 +106,19 @@ internal static class FloatingBoxFix
         s_next = now + SweepInterval;
         if (!NoktaSingleton<PlayerManager>.HasInstance) return;
 
+        // StorageStreet.boxes holds exactly the loose boxes (not racked, not on a placement area), so the sweep
+        // doesn't walk the racked ones. Fall back to every Box if there is no StorageStreet.
+        var street = NoktaSingleton<StorageStreet>.HasInstance ? NoktaSingleton<StorageStreet>.Instance : null;
+        var list = street != null ? street.boxes : null;
+        if (list != null)
+        {
+            for (int i = 0; i < list.Count; i++)
+            {
+                var box = list[i];
+                if (box != null) SafeCheck(box);
+            }
+            return;
+        }
         foreach (var o in Object.FindObjectsOfType(Il2CppType.Of<Box>()))
         {
             var box = o.TryCast<Box>();
@@ -136,8 +172,11 @@ internal static class FloatingBoxFix
         var rb = box.RigidBody;
         if (rb == null) return;
         bool sleeping = rb.IsSleeping();
-        if (!sleeping && !rb.isKinematic) return;   // awake and simulated: physics handles it
-        if (!Simulated(box)) return;
+        bool kinematic = rb.isKinematic;
+        if (!sleeping && !kinematic) return;   // awake and simulated: physics handles it
+        bool simulated = Simulated(box);
+        // A box this machine doesn't simulate can't be woken here; it is only looked at for the log.
+        if (!simulated && !Plugin.VerboseLogging.Value) return;
 
         // Solid colliders only: a held box has its colliders turned into triggers.
         var cols = box.GetComponentsInChildren<Collider>(false);
@@ -152,16 +191,25 @@ internal static class FloatingBoxFix
         }
         if (!any) return;
 
-        // Right after a pickup every sleeping neighbour is woken without the support test: a box left half
-        // overhanging (one of its two supports taken) counts as "supported" by the slab, yet would fall. PhysX
-        // puts stable boxes back to sleep within about half a second, so a needless wake costs nothing.
-        if ((probe || rb.isKinematic) && Supported(box, bounds)) return;
+        bool supported = Supported(box, bounds);
 
-        if (rb.isKinematic)
+        if (!simulated || kinematic)
         {
             // Carried boxes (employees, customers) are kinematic and parented: not interesting.
-            if (box.transform.parent == null)
-                LogOther(box, rb, bounds, "kinematic and nothing under it (not touched)");
+            if (!supported && box.transform.parent == null)
+                LogOther(box, rb, bounds, simulated
+                    ? "kinematic and nothing under it (not touched)"
+                    : "nothing under it, but this machine doesn't simulate it (not touched)");
+            return;
+        }
+
+        // Right after a pickup (probe == false) every sleeping neighbour is woken, supported or not: a box left
+        // half overhanging (one of its two supports taken) counts as "supported" by the slab, yet would fall.
+        // PhysX puts stable boxes back to sleep within about half a second, so a needless wake costs nothing.
+        // Only boxes with nothing under them are logged and counted.
+        if (supported)
+        {
+            if (!probe) rb.WakeUp();
             return;
         }
 
@@ -203,13 +251,16 @@ internal static class FloatingBoxFix
         try
         {
             var v = box.NetworkBox != null ? box.NetworkBox.PhotonView : null;
-            if (v != null) view = $"{v.ViewID} mine={v.IsMine}";
+            if (v != null) view = $"{v.ViewID} mine={v.IsMine} owner={v.OwnerActorNr}";
         }
+        catch { }
+        string sync = "?";
+        try { var t = box.NetworkBox != null ? box.NetworkBox.PhotonTransformView : null; if (t != null) sync = t.m_SyncEnabled.ToString(); }
         catch { }
         var parent = box.transform.parent;
         return $"uid={uid} product={product} pos=({b.center.x:F2},{b.min.y:F2},{b.center.z:F2}) view={view} " +
                $"parent={(parent != null ? parent.name : "none")} kinematic={rb.isKinematic} sleeping={rb.IsSleeping()} " +
-               $"gravity={rb.useGravity} layer={LayerMask.LayerToName(box.gameObject.layer)}";
+               $"transformSync={sync} gravity={rb.useGravity} layer={LayerMask.LayerToName(box.gameObject.layer)}";
     }
 }
 

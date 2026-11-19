@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.supermarketfixes";
     public const string Name = "Supermarket Fixes";
-    public const string Version = "0.11.5";
+    public const string Version = "0.11.6";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
