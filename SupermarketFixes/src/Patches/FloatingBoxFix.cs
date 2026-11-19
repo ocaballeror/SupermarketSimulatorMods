@@ -23,14 +23,17 @@ namespace SupermarketFixes.Patches;
 /// The method calls GetBoxesInArea, but that only fills a list the wake never reads. The wake itself loops over
 /// StorageStreet.Instance.boxes and calls Rigidbody.WakeUp on each. Box.Start / Box.Setup subscribe every box
 /// to that list through StorageStreet.SubscribeBox, which skips only racked boxes and boxes on a placement
-/// area, so it holds every loose box in the store, not just the delivery street. OnTakeBoxFromStreet (clerk
-/// street takes) wakes the same list. The wake is therefore store-wide, not limited by the 100-collider
+/// area, so it holds every loose box in the store, not just the delivery street. OnTakeBoxFromStreet (a clerk
+/// taking a box from the street) wakes the same list; Restocker.PickUpBox invokes it before Box.FrezeeBox. The wake is therefore store-wide, not limited by the 100-collider
 /// buffer of GetBoxesInArea.
 ///
 /// So on a host in a room, every player pickup already wakes every loose, host-owned box. What stays uncovered
 /// by the game, and what this fix adds:
 ///  - Offline (Box.PickUp() has no wake-up at all).
-///  - Removals other than a player pickup (clerk or baker pickups, trash, throws, despawn).
+///  - Removals other than a player pickup (baker pickups, trash, throws, despawn), and clerk pickups whose wake
+///    comes too early: the clerk's wake runs before FrezeeBox, the taken box then stays solid and kinematic
+///    while it is lifted, and neighbours resting on it can fall asleep again (the wake lasts about 0.4 s) and
+///    are left floating once it moves away. The 5 s sweep catches those.
 ///  - Boxes this machine owns on a modded guest (a guest never runs the vanilla wake).
 ///  - A second check 0.25 s and 1 s after a pickup, without the vanilla wake's timing (it runs before the
 ///    support is removed).
@@ -175,8 +178,10 @@ internal static class FloatingBoxFix
         bool kinematic = rb.isKinematic;
         if (!sleeping && !kinematic) return;   // awake and simulated: physics handles it
         bool simulated = Simulated(box);
-        // A box this machine doesn't simulate can't be woken here; it is only looked at for the log.
-        if (!simulated && !Plugin.VerboseLogging.Value) return;
+        // A box this machine doesn't simulate, or a kinematic one, can't be woken here; it is only looked at for
+        // the log, and not at all once its line is written or the log cap is reached.
+        if ((!simulated || kinematic) &&
+            (!Plugin.VerboseLogging.Value || s_otherLogs >= MaxOtherLogs || s_seenOther.Contains(box.Pointer))) return;
 
         // Solid colliders only: a held box has its colliders turned into triggers.
         var cols = box.GetComponentsInChildren<Collider>(false);
