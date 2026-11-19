@@ -216,7 +216,13 @@ internal static class ComputerFurniture
     {
         if (Ids == null) return;
         EnsureSo();
-        EnsureTemplate();
+        // The template is a copy of the store computer as it is right now: not while it is being moved (placing
+        // hologram materials) or used. A later EnsureTemplate call (purchase, box, guest spawn) builds it instead.
+        var comp = FindRealComputer();
+        if (Template == null && comp != null && (comp.IsInPlacingMode || comp.OpenPC))
+            Plugin.Debug("The store computer is in use or being moved; the computer prefab is built later");
+        else
+            EnsureTemplate();
         RefreshShopItem();
     }
 
