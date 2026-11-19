@@ -1,0 +1,139 @@
+name: Upload bumped mods to Nexus Mods
+
+# Runs on every push to master/main. Only mods whose csproj <Version> changed in the push are built and uploaded.
+# The mods compile against the game's BepInEx/interop assemblies. Those are game-derived, so they live in a private
+# repo release (ocaballeror/interop-dlls); BepInEx/core comes from the public BepInEx build. See .github/NEXUS.md.
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+    inputs:
+      mods:
+        description: 'Space-separated mod folders to upload regardless of version (leave empty to use the version diff)'
+        required: false
+
+env:
+  INTEROP_TAG: v1.7.3   # release of ocaballeror/interop-dlls matching the current game build
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+      any: ${{ steps.pick.outputs.any }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: pick
+        run: |
+          if [ -n "${{ github.event.inputs.mods }}" ]; then
+            changed="$(printf '%s\n' ${{ github.event.inputs.mods }})"
+          else
+            changed="$(tools/changed-versions.sh "${{ github.event.before }}" "${{ github.sha }}")"
+          fi
+          echo "Version-bumped mods:"; echo "${changed:-<none>}"
+          matrix="$(printf '%s\n' "$changed" | jq -R -s -c 'split("\n") | map(select(length>0)) | map({mod: .})')"
+          echo "matrix={\"include\":$matrix}" >> "$GITHUB_OUTPUT"
+          if [ "$matrix" = "[]" ]; then echo "any=false" >> "$GITHUB_OUTPUT"; else echo "any=true" >> "$GITHUB_OUTPUT"; fi
+
+  upload:
+    needs: detect
+    if: needs.detect.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve Nexus ids and read version
+        id: info
+        env:
+          NEXUSMODS_API_KEY: ${{ secrets.NEXUSMODS_API_KEY }}
+        run: |
+          mod="${{ matrix.mod }}"
+          echo "version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$mod"/*.csproj | head -n1)" >> "$GITHUB_OUTPUT"
+          url="$(jq -r --arg m "$mod" '.[$m] // ""' .github/nexus-mods.json)"
+          if [ -z "$url" ]; then
+            echo "::warning::$mod: no Nexus URL in .github/nexus-mods.json, skipping"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            tools/nexus-resolve.sh "$url" >> "$GITHUB_OUTPUT"
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.info.outputs.ok == 'true'
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Fetch game assemblies (BepInEx core + private interop)
+        if: steps.info.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.INTEROP_REPO_TOKEN }}
+        run: |
+          game="$RUNNER_TEMP/game"
+          mkdir -p "$game/BepInEx" "$RUNNER_TEMP/dl"
+          curl -fsSL -o "$RUNNER_TEMP/dl/bepinex.zip" \
+            "https://builds.bepinex.dev/projects/bepinex_be/785/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.785%2B6abdba4.zip"
+          unzip -q "$RUNNER_TEMP/dl/bepinex.zip" 'BepInEx/core/*' -d "$game"
+          gh release download "$INTEROP_TAG" -R ocaballeror/interop-dlls -p interop.zip -D "$RUNNER_TEMP/dl"
+          unzip -q "$RUNNER_TEMP/dl/interop.zip" -d "$game/BepInEx"
+          ls "$game/BepInEx/core/0Harmony.dll" "$game/BepInEx/interop/Assembly-CSharp.dll"
+          echo "GAME_DIR=$game" >> "$GITHUB_ENV"
+
+      - name: Build
+        if: steps.info.outputs.ok == 'true'
+        run: tools/build-mods.sh "${{ matrix.mod }}" -p:Deploy=false "-p:GameDir=$GAME_DIR"
+
+      - name: Zip (BepInEx/plugins/<mod>.dll, extract into the game folder)
+        if: steps.info.outputs.ok == 'true'
+        run: |
+          mod="${{ matrix.mod }}"
+          dll="$(find "$mod/bin/Release" -maxdepth 2 -name "$mod.dll" | head -n1)"
+          [ -f "$dll" ] || { echo "::error::$mod.dll not found"; exit 1; }
+          rm -rf pkg && mkdir -p pkg/BepInEx/plugins
+          cp "$dll" pkg/BepInEx/plugins/
+          (cd pkg && zip -r "../$mod-${{ steps.info.outputs.version }}.zip" BepInEx)
+
+      - name: Changelog from commits touching this mod
+        id: changelog
+        if: steps.info.outputs.ok == 'true'
+        run: |
+          base="${{ github.event.before }}"
+          git cat-file -e "$base^{commit}" 2>/dev/null || base=""
+          range="${base:+$base..}${{ github.sha }}"
+          {
+            echo "changelog<<EOF"
+            git log -n 15 --no-merges --pretty=format:'- %s' $range -- "${{ matrix.mod }}"
+            echo ""
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Read description.md
+        id: desc
+        if: steps.info.outputs.ok == 'true'
+        run: |
+          {
+            echo "text<<EOF"
+            cat "${{ matrix.mod }}/description.md"
+            echo ""
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload to Nexus Mods
+        if: steps.info.outputs.ok == 'true'
+        uses: Nexus-Mods/upload-action@main
+        with:
+          api_key: ${{ secrets.NEXUSMODS_API_KEY }}
+          file_id: ${{ steps.info.outputs.file_id }}
+          mod_id: ${{ steps.info.outputs.mod_id }}
+          filename: ${{ matrix.mod }}-${{ steps.info.outputs.version }}.zip
+          display_name: ${{ steps.info.outputs.display_name }}
+          description: ${{ steps.desc.outputs.text }}
+          version: ${{ steps.info.outputs.version }}
+          changelog: ${{ steps.changelog.outputs.changelog }}
+          update_mod_version: true

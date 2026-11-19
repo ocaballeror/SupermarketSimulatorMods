@@ -1,0 +1,19 @@
+{
+  "_comment": "Nexus mod page URL per mod folder, e.g. https://www.nexusmods.com/supermarketsimulator/mods/123. A mod with an empty URL is skipped. File id, file name and mod id are looked up through the API.",
+  "AutoCourierLoad": "",
+  "BulkShelfTransfer": "",
+  "ClearTags": "https://www.nexusmods.com/supermarketsimulator/mods/1966",
+  "EmployeeClothes": "https://www.nexusmods.com/supermarketsimulator/mods/1965",
+  "ExtraComputers": "",
+  "FurnitureMoveCancel": "https://www.nexusmods.com/supermarketsimulator/mods/1961",
+  "GridModeDefault": "https://www.nexusmods.com/supermarketsimulator/mods/1967",
+  "PackUpProducts": "",
+  "PaintCanCapacity": "https://www.nexusmods.com/supermarketsimulator/mods/1968",
+  "PlayerCrouch": "",
+  "PlayerDoubleCarry": "",
+  "PriceMarkupKeeper": "",
+  "ProductHighlight": "",
+  "RestockerDoubleCarry": "",
+  "SelfCheckoutSpeed": "",
+  "SupermarketFixes": ""
+}
