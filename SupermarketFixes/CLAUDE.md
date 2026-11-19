@@ -4,6 +4,8 @@ Player-facing info (what each fix does, settings, who needs the mod) is in [READ
 
 ## Status
 
+- **v0.11.3 (2026-11-19), Bug #2:** review follow-ups. `DelaySeconds` now uses a clamp-only `ClampedFloat` (new `src/ClampedFloat.cs`, copied from SelfCheckoutSpeed) so Mod Settings Tool shows a text field instead of a slider. The `HoldObject` prefix and the 0.25 s scan now run whenever the mod is active (they used to need `AutoRecover` or `VerboseLogging`), so the pre-hold layers are always recorded and F9 can drop a non-box orphan with `AutoRecover` off; the scan never acts without `AutoRecover` and the records are still pruned each scan. F9 says when a visible item was left alone because it was never recorded (and logs it), instead of "no stray items". Known uncovered variant: a late pickup grant that arrives while the earlier box is in placing mode leaves that box frozen as an uninteractable hologram; not part of the reported symptom, untested.
+
 - **v0.11.1 (2026-11-18):** settings tidy-up after the user's "simplify mod settings" commit. The per-bug `Diagnostics` entries (BoxPlace, CourierOrders, FloatingBox, GhostHeldItem, JanitorCleanAlign, RackMove, StuckBox) were merged into **one** standard `[Diagnostics] VerboseLogging` (`Plugin.VerboseLogging`, default **false**, standard description) that every fix reads. `Enabled` has the standard description. The per-bug fix settings are unchanged. Old per-bug `Diagnostics` keys in an existing cfg are ignored, so players start with verbose logging off. Testers must turn `[Diagnostics] VerboseLogging` on first to get the diagnostic log lines (F8 scan included; recoveries and failures log regardless).
 
 - **v0.7.0, Bug #1:** awaiting in-game confirmation.

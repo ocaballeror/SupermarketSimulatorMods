@@ -61,6 +61,9 @@ namespace SupermarketFixes.Patches;
 ///    placement check uses). Vanilla only drops through placing mode, whose hologram refuses such spots;
 ///    TryDropObject itself can't be used here because its trigger list is only filled while placing. If
 ///    the spot is blocked, it waits until the player moves.
+///  The prefix records layers whenever the mod is active, whatever AutoRecover or VerboseLogging say, so F9
+///  can still drop a non-box orphan (furniture box, paint bucket, paper bag) when AutoRecover is off. F9
+///  reports visible items it left alone (never recorded, e.g. created before the mod was switched on).
 ///  Skipped: inactive items (the ice-cream bucket box is parked inactive in the hands while the bucket is
 ///  used), racked or tweening boxes, the box BoxInteraction is waiting for (the 3 s pickup handshake),
 ///  everything while another interaction owns the hands, and everything during a placement.
@@ -84,7 +87,7 @@ internal static class GhostHeldItemFix
             "Drop items that are stuck in your hands without being held (the 'ghost in hands' bug).");
         DelaySeconds = cfg.Bind("GhostHeldItem", "DelaySeconds", 2f,
             new ConfigDescription("How long a stray item must stay in your hands before it is dropped.",
-                new AcceptableValueRange<float>(0.5f, 10f)));
+                new ClampedFloat(0.5f, 10f)));
     }
 
     internal static void ResetState()
@@ -105,6 +108,8 @@ internal static class GhostHeldItemFix
     /// <summary>Objects HoldObject left in the hands when it took a new item (pointer -> what replaced it).</summary>
     private static readonly Dictionary<IntPtr, string> s_displacedBy = new();
     private static float s_nextCheck;
+    /// <summary>Visible items the last scan found in the hands but left alone (not recorded by the prefix).</summary>
+    private static int s_leftAlone;
     private const float CheckInterval = 0.25f;
 
     private static int s_ignoreRaycastLayer = -2, s_interactableLayer = -2, s_solidMask;
@@ -125,7 +130,7 @@ internal static class GhostHeldItemFix
         {
             try
             {
-                if (item == null || (!AutoRecover.Value && !Plugin.VerboseLogging.Value)) return;
+                if (item == null) return;   // always record: F9 needs the layers even with AutoRecover off
                 var p = HeldState.LocalPlayer();
                 if (p == null || !HeldState.SameObject(p.PlayerObjectHolder, __instance)) return;
                 InitLayers();
@@ -153,7 +158,8 @@ internal static class GhostHeldItemFix
     /// <summary>Called every frame from DiagnosticsBehaviour.</summary>
     internal static void Tick(float now)
     {
-        if (!AutoRecover.Value && !Plugin.VerboseLogging.Value) return;
+        // Runs even with AutoRecover and VerboseLogging off: the scan also prunes the layer records, and
+        // it never acts without AutoRecover.
         if (now < s_nextCheck) return;
         s_nextCheck = now + CheckInterval;
         Scan(now, force: false, out _);
@@ -163,13 +169,20 @@ internal static class GhostHeldItemFix
     internal static void ForceCheck()
     {
         int n = Scan(Time.unscaledTime, force: true, out int blocked);
-        if (n == 0 && blocked == 0) Plugin.Logger.LogInfo("[GhostHeld] F9: no stray items in your hands");
+        if (n == 0 && blocked == 0)
+        {
+            if (s_leftAlone > 0)
+                Plugin.Logger.LogWarning($"[GhostHeld] F9: {s_leftAlone} visible item(s) in your hands were left alone " +
+                                         "because the mod can't tell they are strays (see the lines above; please send them)");
+            else Plugin.Logger.LogInfo("[GhostHeld] F9: no stray items in your hands");
+        }
     }
 
     private static int Scan(float now, bool force, out int blocked)
     {
         int dropped = 0;
         blocked = 0;
+        s_leftAlone = 0;
         try
         {
             var p = HeldState.LocalPlayer();
@@ -229,7 +242,7 @@ internal static class GhostHeldItemFix
                     layer = LayerFor(key, -1);
                     if (layer < 0 || go.layer != s_ignoreRaycastLayer)
                     {
-                        ReportUnknown(go);
+                        ReportUnknown(go, force);
                         continue;
                     }
                 }
@@ -296,11 +309,12 @@ internal static class GhostHeldItemFix
                   : $"item[{HeldState.Path(go.transform)} layer={LayerMask.LayerToName(go.layer)}]";
 
     /// <summary>Anything else in the hands that isn't the held object: log once, don't touch.</summary>
-    private static void ReportUnknown(GameObject go)
+    private static void ReportUnknown(GameObject go, bool force)
     {
-        if (!Plugin.VerboseLogging.Value) return;
         if (go.GetComponentInChildren<Renderer>() == null) return;
-        if (!s_reported.Add(go.Pointer)) return;
+        s_leftAlone++;
+        if (!force && !Plugin.VerboseLogging.Value) return;
+        if (!s_reported.Add(go.Pointer) && !force) return;
         Plugin.Logger.LogWarning($"[GhostHeld] Unknown object in your hands that you are not holding: " +
                                  $"{HeldState.Path(go.transform)} layer={LayerMask.LayerToName(go.layer)} " +
                                  $"(left alone; please send this line)");

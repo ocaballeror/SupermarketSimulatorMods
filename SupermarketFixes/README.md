@@ -60,7 +60,7 @@ With `VerboseLogging` on, the log has `[CourierOrders]` lines when an order is h
 
 ### F9: "my hands are stuck" key
 
-Press **F9** if your hands or controls seem stuck on an item. It fixes either of the two problems above right away, and writes what it found to `BepInEx/LogOutput.log`. Please send those lines.
+Press **F9** if your hands or controls seem stuck on an item. It fixes the problems of Bug #2 and Bug #3 right away, and writes what it found to `BepInEx/LogOutput.log`. Please send those lines.
 
 ## Settings
 
