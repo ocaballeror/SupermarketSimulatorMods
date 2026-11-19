@@ -32,9 +32,9 @@ This does not interfere with gameplay, but it blocks the player's view and looks
 
 ## Bug #3: Player Gets Stuck When Buying Boxes from Wholesale Stores
 
-**Status:** in-progress  
+**Status:** reviewed  
 **Code:** `SupermarketFixes/src/Patches/StuckBoxFix.cs`  
-**Review:** 2026-11-15, 1 round, hash `2858032d1b39` (stale: settings reduced and code changed 2026-11-18; needs re-review)
+**Review:** 2026-11-19, 2 rounds, hash `c60856611a18`
 **Waiting on:** In-game test + logs.
 
 When buying boxes from wholesale stores, sometimes the box remains stationary at the location where it was purchased.
