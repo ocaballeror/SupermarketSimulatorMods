@@ -289,40 +289,56 @@ internal static class ClothesStore
     private static bool _applyAll;
     private static bool _applyAllLoaded;
 
-    /// <summary>The "Apply to all" switch of the screen, remembered across game restarts (read once, written on change).</summary>
+    /// <summary>The "Apply to all" switch of the screen, remembered across game restarts (cached; see <see cref="ReloadApplyToAll"/>).</summary>
     internal static bool ApplyToAll
     {
         get
         {
-            if (!_applyAllLoaded)
-            {
-                _applyAllLoaded = true;
-                _applyAll = ReadLine(ApplyAllKey)?.Trim() == "1";
-            }
+            if (!_applyAllLoaded) ReloadApplyToAll();
             return _applyAll;
         }
         set
         {
             _applyAllLoaded = true;
-            if (_applyAll == value) return;
             _applyAll = value;
             if (IsGuest) return; // guests can't open the screen; never write from a guest
-            try
-            {
-                var lines = new List<string>();
-                if (File.Exists(FilePath))
-                    foreach (var line in File.ReadAllLines(FilePath))
-                    {
-                        int tab = line.IndexOf('\t');
-                        if (tab > 0 && line.Substring(0, tab) == ApplyAllKey) continue;
-                        if (!string.IsNullOrWhiteSpace(line)) lines.Add(line);
-                    }
-                if (value) lines.Add(ApplyAllKey + "\t1");
-                File.WriteAllLines(FilePath, lines);
-                Plugin.Debug($"Saved Apply to all: {value}");
-            }
-            catch (Exception e) { Plugin.Warn("Saving the Apply to all switch failed: " + e.Message); }
+            WriteApplyAll(value);
         }
+    }
+
+    /// <summary>
+    /// Reads the switch from the saves file again (the file is the truth, the field is only a cache) and returns it.
+    /// Called every time the screen opens, so a stale cache can never show a different state than what is stored.
+    /// </summary>
+    internal static bool ReloadApplyToAll()
+    {
+        var line = ReadLine(ApplyAllKey);
+        _applyAll = line?.Trim() == "1";
+        _applyAllLoaded = true;
+        Plugin.Debug($"Apply to all read from '{Path.GetFileName(FilePath)}': {(line == null ? "no line (off)" : "'" + line.Trim() + "'")} -> {_applyAll}");
+        return _applyAll;
+    }
+
+    private static void WriteApplyAll(bool value)
+    {
+        try
+        {
+            var lines = new List<string>();
+            if (File.Exists(FilePath))
+                foreach (var line in File.ReadAllLines(FilePath))
+                {
+                    int tab = line.IndexOf('\t');
+                    if (tab > 0 && line.Substring(0, tab) == ApplyAllKey) continue;
+                    if (!string.IsNullOrWhiteSpace(line)) lines.Add(line);
+                }
+            if (value) lines.Add(ApplyAllKey + "\t1");
+            File.WriteAllLines(FilePath, lines);
+            // Read it back: a write that didn't stick must be visible in the log, not silently lost.
+            bool back = ReadLine(ApplyAllKey)?.Trim() == "1";
+            if (back != value) Plugin.Warn($"Saving the Apply to all switch did not stick (wrote {value}, file says {back}) in '{FilePath}'");
+            else Plugin.Debug($"Saved Apply to all: {value} in '{Path.GetFileName(FilePath)}'");
+        }
+        catch (Exception e) { Plugin.Warn("Saving the Apply to all switch failed: " + e.Message); }
     }
 
     /// <summary>Writes the current colors under the current save's key (host / solo only).</summary>

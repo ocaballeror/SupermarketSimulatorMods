@@ -635,7 +635,7 @@ internal static class TabUi
     {
         for (int i = 0; i < Pending.Length; i++) Pending[i] = ClothesStore.Get((HrEmployeeKind)i);
         RefreshKinds();
-        _applyAll = ClothesStore.ApplyToAll;   // remembered across game restarts
+        _applyAll = ClothesStore.ReloadApplyToAll();   // remembered across game restarts: re-read from the saves file at every open
         _open = true;
         _message = null;
         _polled = default;
@@ -741,6 +741,7 @@ internal static class TabUi
     internal static void EndSession(string reason = null)
     {
         bool was = _open;
+        if (was) SyncSwitch();
         _open = false;
         try { if (_panel != null && _panel.activeSelf) _panel.SetActive(false); } catch (Exception) { }
         RestoreUnlocked();
@@ -814,6 +815,22 @@ internal static class TabUi
     /// <summary>The player flipped the switch: remember it (saved in flamboyanthopper.employeeclothes.saves.txt).</summary>
     private static void SaveApplyAll() => ClothesStore.ApplyToAll = _applyAll;
 
+    /// <summary>
+    /// Safety net: the game's switch is what the player sees. If it disagrees with <see cref="_applyAll"/> while the screen
+    /// is open (its onValueChanged callback was missed), adopt the switch and save it, so what is shown is what is stored.
+    /// </summary>
+    private static void SyncSwitch()
+    {
+        try
+        {
+            if (!_open || _toggleSwitch == null || _toggleSwitch.isOn == _applyAll) return;
+            _applyAll = _toggleSwitch.isOn;
+            Plugin.Debug($"Apply to all: the switch shows {_applyAll} but the callback was missed; saving it now");
+            SaveApplyAll();
+        }
+        catch (Exception) { }
+    }
+
     private static void RefreshToggle(bool force = false)
     {
         if (_resetLabel != null) SetIfChanged(_resetLabel, _applyAll ? "Reset all types" : "Reset this type");
@@ -872,6 +889,7 @@ internal static class TabUi
     {
         try
         {
+            SyncSwitch();
             var kind = CurrentKind;
             var pend = Pending[(int)kind];
             if (!pend.HasValue) { _message = "Pick a color first."; RefreshTexts(); return; }
@@ -909,6 +927,7 @@ internal static class TabUi
     {
         try
         {
+            SyncSwitch();
             if (_applyAll)
                 foreach (var k in ClothesStore.Kinds) { ClothesStore.Set(k, null); Pending[(int)k] = null; }
             else
