@@ -181,10 +181,10 @@ The mod works, but there is no animation for the player crouching, so it does no
 
 ## Improvement #4: Make Self-Checkout Machines Faster
 
-**Status:** in-progress  
+**Status:** implemented  
 **Code:** `SelfCheckoutSpeed/`  
 **Review:** 2026-11-16, 1 round, hash `59ec1550c17b` (stale: settings reduced and code changed 2026-11-18; needs re-review)
-**Waiting on:** In-game test of v1.1.1 on host and a modded guest (same checkout pace on both screens).
+**Waiting on:** In-game test of v1.2.0: cashier scans faster, payment stays at vanilla speed (steps in the mod's `CLAUDE.md`); host and a modded guest.
 
 Make customers using self-checkout machines 2x faster.
 
@@ -200,10 +200,10 @@ Allow values up to `10x`.
 
 ## Improvement #5: Allow Level 10 Restockers to Carry Two Boxes
 
-**Status:** in-progress  
+**Status:** implemented  
 **Code:** `RestockerDoubleCarry/`  
 **Review:** 2026-11-16, 2 rounds, hash `b0f7219e16b7` (stale: settings reduced and code changed 2026-11-18; needs re-review)
-**Waiting on:** In-game test of v1.2.0 (storage-only and mixed two-box trips); send the `[DoubleCarry]` lines.
+**Waiting on:** In-game test of v1.3.0 (a dropped box is not taken by other restockers; no walk back for a missing box); send the `[DoubleCarry]` lines.
 
 Make level 10 restockers capable of carrying two product boxes at a time.
 
@@ -382,10 +382,10 @@ It should also work at the wholesale store. When the player is holding a box and
 
 ## Improvement #11: More clear tags
 
-**Status:** in-progress  
+**Status:** implemented  
 **Code:** `ClearTags/`  
 **Review:** 2026-11-17, 1 round (v0.3.x rework), hash `66fadc5d8622` (stale: code changed in v0.3.2 and v0.3.3; 0.3.2 review found the vending price tag bug, fixed in 0.3.3)  
-**Waiting on:** In-game test of v0.3.3 (steps in the mod's `CLAUDE.md`); send the `[ClearTags]` lines.
+**Waiting on:** In-game test of v0.3.6 (hover on any part of a racked box; steps in the mod's `CLAUDE.md`); send the `[ClearTags]` lines.
 
 Features:
 - Make the tags on boxes that show a small icon of what's inside 2x bigger. This number is configurable in the settings.
@@ -394,10 +394,10 @@ Features:
 
 ## Improvement #12: Auto courier load
 
-**Status:** in-progress  
+**Status:** implemented  
 **Code:** `AutoCourierLoad/`  
 **Review:** 2026-11-17, 2 rounds, hash `f6d2236f16f8` (stale: settings reduced and code changed 2026-11-18; needs re-review)
-**Waiting on:** In-game test of v0.2.0 on the host (steps in the mod's `CLAUDE.md`); send the `[AutoCourier]` lines.
+**Waiting on:** In-game test of v0.2.3 (bag dropped next to the idle courier; steps in the mod's `CLAUDE.md`); send the `[AutoCourier]` lines.
 
 When the courier comes back from a delivery, he scans a small area around and including his regular parking space, and if there are any delivery bags that are closed and tagged with the customer's name whose delivery is active at the moment, he immediately takes it and loads it in his trunk. This works for up to 3 bags at a time (or whatever his trunk limit happens to be). if the bags he collected cover all the active online orders at the moment, or if one of those deliveries has less than one minute left, he leaves for delivery, as if the player went to him and pressed E to send him.
 
