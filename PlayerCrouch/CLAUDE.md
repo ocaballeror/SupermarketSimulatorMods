@@ -4,7 +4,17 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
-v1.0.4: settings reduced (commit "simplify mod settings"). Only `Enabled`, `Key`, `GamepadButton`, `ToggleMode` and `VerboseLogging` (the cfg key `[Diagnostics] VerboseLogging` already existed, so existing cfgs keep their stored value; the default is now false for new configs) remain as config; `SpeedMultiplier` 0.5, `CameraHeight` 0.55, `TransitionTime` 0.2, `ShrinkCollider`, `BodyDepth` 0.4, `LeanAngle` 15, `ShareWithOthers` and `AnimateOthers` are `internal const` in `Plugin.cs`. Only the C# field was renamed (`Verbose` -> `VerboseLogging`); the cfg key was not. Behaviour is otherwise as in 1.0.3 (note that the default crouch eye height is now 0.55 instead of 0.65).
+v1.0.6 (review round after the v1.0.5 changes; not yet tested in-game):
+- **Held box while crouched (remote view):** the carried box hangs under the player's `Camera Pivot` (`CinemachineCameraTarget`), whose position is not networked (prefab `PhotonTransformView`: SyncPosition=0, SyncRotation=1, UseLocal=1; verified with UnityPy in `level2`), and the hand IK is solved before our LateUpdate. The pose used to pull the body down while the box stayed at standing height. `CrouchPose.MovePivot` now moves the remote player's pivot by the exact world displacement of the model's head (hips drop + lean), so the box (and the IK'd hands) stay together. Restored on stand-up, error, mod disable (`CrouchPose.Reset`) and when the player leaves.
+- **Model depth matches the camera:** the hips drop is derived from the crouch eye height instead of a fixed fraction: `headHeight * (1 - CameraHeight)` (head bone height above the skin root), minus the lean's own drop, limited to `MaxBodyDepth` (0.6) x leg length. `LeanAngle` 15 -> 20. `BodyDepth` was replaced by `MaxBodyDepth`. Check the verbose `Pose dims:` line (legLen, headHeight, wantHeadDrop, hipsDrop): if `hipsDrop` equals 0.6 x legLen the legs are the limit and the head stays above the camera height (the head can still clip into a ceiling the collider allows, by the difference).
+- **Local model is no longer posed** (renderers are always off for it; also removes the `No active character model found ... (local)` warning).
+- **Warnings throttled** (`Plugin.WarnThrottled`, 10 s per key) for pose failures, headroom failures and send failures; `SyncNetwork` now has a real 5 s retry back-off (`_sendRetryAt`). The boxed Photon key is cached.
+- **Driving guard:** `Crouch.Update` forces standing while `PlayerInstance.VehicleInteraction.enabled`. Verified in the dumps: `Interaction.Enable` is `Behaviour.set_enabled` and only the active `*Interaction` is enabled (`PlayerInteraction.SetCurrentInteraction` / `VehicleInteraction.EnterVehicleMode`). Not verified: whether `_movementInteraction` is false while driving (nothing in the vehicle code writes it; its only writer is `FirstPersonController.SubscribeControllerState`, subscribed to `PlayerController.onControllerEnabled`, whose callers don't include vehicle code), and what a passenger's state is (passengers don't enable `VehicleInteraction`; untested).
+- **Switching the mod off while crouched under something:** the collider is no longer restored into the geometry; `Crouch.DeferColliderRestoreIfBlocked` keeps the shrunk capsule and `CrouchBehaviour.Update` calls `TickPendingRestore` (also while the mod is disabled) until `HasHeadroom` passes. Re-enabling restores it at once.
+
+v1.0.5: renamed the plugin id to `flamboyanthopper.playercrouch` and the Photon key to `flamboyanthopper.crouch` (the previous id/key used a different prefix). Consequences: **peers on 1.0.4 or older and peers on 1.0.5+ cannot see each other crouch** (different property key), and the settings file is now `BepInEx/config/flamboyanthopper.playercrouch.cfg`, so settings reset to defaults and the old `<prefix>.playercrouch.cfg` is orphaned (the host's `BepInEx/config` still has only the old file; it can be deleted or its values copied). Make sure every machine that should show crouching runs >= 1.0.5, including the Windows guest's BepInEx install, or the in-game test fails for an unrelated reason.
+
+v1.0.4: settings reduced (commit "simplify mod settings"). Only `Enabled`, `Key`, `GamepadButton`, `ToggleMode` and `VerboseLogging` (the cfg key `[Diagnostics] VerboseLogging` already existed; before the 1.0.5 rename this kept the stored value, since 1.0.5 the cfg file has a new name and starts from defaults; the default is false) remain as config; `SpeedMultiplier` 0.5, `CameraHeight` 0.55, `TransitionTime` 0.2, `ShrinkCollider`, `BodyDepth` 0.4 (replaced by `MaxBodyDepth` in 1.0.6), `LeanAngle` 15, `ShareWithOthers` and `AnimateOthers` are `internal const` in `Plugin.cs`. Only the C# field was renamed (`Verbose` -> `VerboseLogging`); the cfg key was not. Behaviour is otherwise as in 1.0.3 (note that the default crouch eye height is now 0.55 instead of 0.65).
 
 v1.0.3 (rework after the 2026-11-15 session, not yet tested in-game): the user saw no crouch pose on the other player's screen with the mod on both sides. The logs showed the network state arriving both ways (`Player '<name>' crouched`), so the pose step failed silently: it took the Animator of the first `PlayerAnimation` in the player (`GetComponentInChildren<PlayerAnimation>(true)`), which is the normally inactive `Man_01_Rig_Test Variant` skin (`man_rig_test`), and returned without a log when it wasn't active. Every skin has its own Animator (see Game reference: player models). `FindAnimator` now uses `PlayerInstance.SkinController.ActiveSkin.m_Animator` (+ that skin's `PlayerIKHandler`), falling back to the first active humanoid Animator; re-resolved every 2 s and whenever the current one goes inactive (skin change); a warning is logged once if none is found. Check the `Model for player ...: animator '...' (active skin '...')` lines.
 
@@ -14,7 +24,7 @@ v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switc
 - Does the FPS vcam actually follow `FirstPersonController.CinemachineCameraTarget`? (Logged `VCam follows:`.) If not, the camera won't drop and the camera offset must move whatever the vcam follows.
 - Is the player Animator humanoid (`human=True`)? The pose needs `Animator.GetBoneTransform`.
 - The local player's own body renderers are disabled (`PlayerSkin.Toggle(!m_IsLocal)`), so the local pose is invisible (no shadow either); it is applied anyway, harmlessly.
-- Do held boxes look wrong for other players while someone crouches? The hand IK (Animation Rigging) is solved before our LateUpdate, so hands move with the lowered torso.
+- Do held boxes look wrong for other players while someone crouches? Yes, it was a real problem (box stays at standing height while the hands follow the torso); handled in 1.0.6 by lowering the remote pivot.
 
 ## How it works
 
@@ -26,7 +36,7 @@ v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switc
 - **Camera:** `CinemachineCameraTarget.localPosition.y` gets an offset in LateUpdate. The only native writer of that position is `PushCameraEffect` (a DOTween `DOLocalMove`), so we re-base whenever the value differs from our last write.
 - **Collider:** `CharacterController.height/center` are untouched by game code, so they're shrunk with the bottom kept fixed. Standing up waits for a `Physics.OverlapCapsule` (crouched top → standing top, radius × 0.9, the player layer's collision mask, triggers and own hierarchy ignored).
 - **Network:** the Photon player custom property `flamboyanthopper.crouch` (bool) on `PhotonNetwork.LocalPlayer`. It's sent on change and re-checked every 2 s, so it self-heals after a room change. Remote state is read from `PlayerInstance.m_PhotonView.Owner.CustomProperties`. Unmodded clients just store the key. The game itself uses player properties `sid` and `png`.
-- **Pose:** on the active skin's Animator (`FindAnimator`), in LateUpdate (after the Animator and rigs), the mod lowers the hips, leans the spine (and restores the head's world rotation), and runs two-bone IK on both legs back to the animated foot positions, bending the knees toward the model's forward. An accumulation guard skips frames where the Animator didn't overwrite the bones, by comparing hips localPosition and left thigh localRotation with what we wrote.
+- **Pose (remote players only):** on the active skin's Animator (`FindAnimator`), in LateUpdate (after the Animator and rigs), the mod lowers the hips, leans the spine (and restores the head's world rotation), and runs two-bone IK on both legs back to the animated foot positions, bending the knees toward the model's forward. An accumulation guard skips frames where the Animator didn't overwrite the bones, by comparing hips localPosition and left thigh localRotation with what we wrote.
 
 ## Review round 1 (v1.0.1)
 
@@ -41,10 +51,21 @@ v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switc
 
 - If the camera turns out to be parented under a bone or the vcam follows something else, the camera offset needs to move to that transform.
 - Execution order relative to `CinemachineBrain.LateUpdate` is undefined, so the camera may lag one frame during the transition. That's invisible at the default speed.
-- Possible follow-up: arms or hand IK while crouched and holding a box (seen by others).
+- Remote pivot (1.0.6): `Camera Pivot` is found through `FirstPersonController.CinemachineCameraTarget` on the remote `PlayerInstance`, with a name search as fallback; the log says whether `Object Holder` is below it (`Remote camera pivot ... Object Holder is below it: True`). If it says False the box won't follow.
+- Remote hands aren't re-solved after the bend: they follow the chest by the same head displacement, but the forward lean moves them slightly relative to the box.
 
 ## Game reference: player models
 
 - The player prefab has `Network Objects/Skins/<skin>` children, one per selectable character (`Man_01_Rig_Test Variant`, `Man_01`, `Man_02`, `Woman_01`, `Woman_02`; verified in the `level2` asset with UnityPy). **Each skin has its own** humanoid `Animator` (e.g. `man_rig_test`, `man (1)`), `PlayerAnimation`, rigs and `PlayerIKHandler`; the chosen one is `ActiveSkin`; `SetSkinIndex` activates it and only hides the others' renderers (`PlayerSkin.Toggle(!m_IsLocal)`), so don't assume the others are inactive. The shown one is `PlayerInstance.SkinController.ActiveSkin` (`PlayerSkin.m_Animator`, `m_Renderers`).
 - `GetComponentInChildren<PlayerAnimation>(true)` returns the inactive rig-test variant: don't use it.
 - `PlayerAnimation` holds Animation Rigging rigs (`m_LookAtRig`; hand and leg IK in `PlayerIKHandler`). The locomotion blend tree is fed from `CharacterController.velocity`. There is no crouch state. Animators are humanoid (`human=True`, confirmed in-game).
+
+## In-game test (1.0.6)
+
+Both machines need PlayerCrouch >= 1.0.5 (1.0.6 for the box and depth changes on the viewing side), and `VerboseLogging = true` in `flamboyanthopper.playercrouch.cfg` on both.
+1. Join a game, hold Ctrl on one player; the other player must see the character crouch (knees bent, head about at the crouched eye height, slight lean). Walk while crouched.
+2. Pick up a box and crouch while carrying it; on the other screen the box must lower with the character and stay in the hands. Stand up: box back at standing height.
+3. Crouch under a ~1.1 m obstacle (collider allows it) and check the other screen for clipping.
+4. Switch the mod off in the config manager while crouched under something low: you must not get pushed; the collider restores after you leave.
+5. Drive a vehicle with Ctrl pressed: the camera must not drop.
+Send back: lines containing `[Crouch]` from both `BepInEx/LogOutput.log` files (`Model for player (remote)`, `Pose dims:`, `Remote camera pivot`, `crouched`/`stood up`, and any warnings).

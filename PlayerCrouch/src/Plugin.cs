@@ -31,7 +31,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.playercrouch";
     public const string Name = "Player Crouch";
-    public const string Version = "1.0.5";
+    public const string Version = "1.0.6";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -49,10 +49,14 @@ public class Plugin : BasePlugin
     internal const float TransitionTime = 0.2f;
     /// <summary>Shrink the CharacterController while crouched so the player fits under low obstacles.</summary>
     internal const bool ShrinkCollider = true;
-    /// <summary>How far the body of other players drops when crouching, as a fraction of leg length.</summary>
-    internal const float BodyDepth = 0.4f;
+    /// <summary>
+    /// Upper limit for how far other players' hips drop when crouching, as a fraction of leg length. The actual drop
+    /// is derived from the crouch eye height (CameraHeight) so the model's head ends up where the camera is, but
+    /// the legs can't fold any deeper than this.
+    /// </summary>
+    internal const float MaxBodyDepth = 0.6f;
     /// <summary>Forward lean of other players' bodies when crouching, in degrees.</summary>
-    internal const float LeanAngle = 15f;
+    internal const float LeanAngle = 20f;
     /// <summary>Tell other players (via a player property) that the local player is crouching.</summary>
     internal const bool ShareWithOthers = true;
     /// <summary>Animate other players that share their crouch state.</summary>
@@ -121,6 +125,17 @@ public class Plugin : BasePlugin
     internal static void Info(string msg)
     {
         if (VerboseLogging.Value) Logger.LogInfo("[Crouch] " + msg);
+    }
+
+    private static readonly System.Collections.Generic.Dictionary<string, float> NextWarn = new();
+
+    /// <summary>A warning that can repeat every frame: logged at most once per 10 s per key.</summary>
+    internal static void WarnThrottled(string key, string msg)
+    {
+        float now = UnityEngine.Time.unscaledTime;
+        if (NextWarn.TryGetValue(key, out var next) && now < next) return;
+        NextWarn[key] = now + 10f;
+        Logger.LogWarning("[Crouch] " + msg);
     }
 
     public override bool Unload()

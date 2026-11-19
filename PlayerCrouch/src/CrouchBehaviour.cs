@@ -12,7 +12,12 @@ public class CrouchBehaviour : MonoBehaviour
 
     private void Update()
     {
-        if (!Plugin.Active) return;
+        if (!Plugin.Active)
+        {
+            try { Crouch.TickPendingRestore(); }
+            catch (Exception e) { LogError("Restore", e); }
+            return;
+        }
         try { Crouch.Update(); }
         catch (Exception e) { LogError("Update", e); }
     }

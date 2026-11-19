@@ -10,7 +10,7 @@
  *    (FurniturePlacer.m_PlacingMode) or an object (PlayerObjectHolder.m_PlacingMode). While placing, and
  *    while FirstPersonController._movementInteraction is false (menus, computer, checkout, pause), the
  *    crouch input is ignored and the current state is kept. On a skateboard
- *    (PlayerInteraction.InSkateboard) the player always stands.
+ *    (PlayerInteraction.InSkateboard) or while driving (VehicleInteraction enabled) the player always stands.
  *  - Camera: the Cinemachine FPS camera follows FirstPersonController.CinemachineCameraTarget. Native code
  *    only writes that transform's localPosition in PushCameraEffect (a DOLocalMove tween back to
  *    defaultCameraPosition); CameraRotation only sets its rotation. We add a vertical offset in LateUpdate and
@@ -21,12 +21,14 @@
  *  - Collider: nothing in the game reads or writes CharacterController.height/center (checked: only
  *    pathfinding/other controllers touch them), so we shrink the capsule while crouched, keeping its bottom
  *    where it was. Standing back up waits until an overlap test of the standing capsule finds nothing.
+ *    Switching the mod off while crouched under something keeps the shrunk capsule until there is room.
  *
  * Other players (CrouchPose.cs)
  *  - Each player's crouch state is published as the Photon player custom property "flamboyanthopper.crouch" (bool).
  *    The game already uses player properties ("sid", "png"); unmodded clients just store the extra key.
  *    Properties persist in the room, so late joiners see the right state.
- *  - Every modded client poses every player's model procedurally (see CrouchPose).
+ *  - Every modded client poses every remote player's model procedurally (see CrouchPose); the local model is
+ *    never visible, so it is not posed.
  */
 using System;
 using Il2CppInterop.Runtime;
@@ -63,6 +65,8 @@ internal static class Crouch
 
     private static bool? _lastSent;
     private static float _nextVerify;
+    private static float _sendRetryAt;
+    private static Il2CppSystem.Object _propKeyBoxed;
     private static bool _loggedBlocked;
     private static bool _suppressUntilRelease;
     private static float _nextCamResolve;
@@ -86,6 +90,10 @@ internal static class Crouch
         bool placing = (player.FurniturePlacer != null && player.FurniturePlacer.m_PlacingMode)
                        || (player.PlayerObjectHolder != null && player.PlayerObjectHolder.m_PlacingMode);
         bool canMove = fpc._movementInteraction;
+        // Driving: the game enables VehicleInteraction (Interaction.Enable is Behaviour.set_enabled; only the active
+        // *Interaction component is enabled). Whether _movementInteraction is false then is unverified, so stand up.
+        bool driving = false;
+        try { var vi = player.VehicleInteraction; driving = vi != null && vi.enabled; } catch (Exception) { }
 
         ReadInput(out bool held, out bool pressed);
 
@@ -93,7 +101,7 @@ internal static class Crouch
         if (!held) _suppressUntilRelease = false;
         else if (!allowed) _suppressUntilRelease = true; // key held while blocked (e.g. Ctrl = snap): needs a fresh press
 
-        if (skate) Want = false;
+        if (skate || driving) Want = false;
         else if (ToggleModeOn)
         {
             if (allowed && pressed) Want = !Want;
@@ -102,7 +110,7 @@ internal static class Crouch
         else Want &= held; // blocked: can't start a crouch, but letting go of the key still stands you up
 
         float target = Want ? 1f : 0f;
-        if (!Want && LocalT > 0f && _ccModified && !HasHeadroom(player))
+        if (!Want && LocalT > 0f && _ccModified && !HasHeadroom(_cc, _standHeight, _standCenter, player.transform))
         {
             target = LocalT; // something above us: stay down until there's room
             if (!_loggedBlocked) { Plugin.Info("No room to stand up; staying crouched"); _loggedBlocked = true; }
@@ -183,6 +191,7 @@ internal static class Crouch
     private static void Capture(FirstPersonController fpc)
     {
         Release();
+        FinishPendingRestore();
         _fpc = fpc;
         LocalFpcPtr = fpc.Pointer;
         _cc = fpc._controller;
@@ -255,6 +264,8 @@ internal static class Crouch
         _lastSent = null;
 
         if (_fpc == null && !_ccModified && !_camWritten) return;
+        try { DeferColliderRestoreIfBlocked(); }
+        catch (Exception) { }
         try { RestoreCollider(); } catch (Exception e) { Plugin.Logger.LogWarning($"[Crouch] Restoring collider failed: {e.Message}"); }
         try { RestoreCamera(); } catch (Exception e) { Plugin.Logger.LogWarning($"[Crouch] Restoring camera failed: {e.Message}"); }
         _fpc = null;
@@ -295,6 +306,42 @@ internal static class Crouch
         _ccModified = true;
     }
 
+    // Mod switched off (or player replaced) while crouched under something: restoring the full-height capsule
+    // inside the geometry could push or wedge the player, so keep the shrunk capsule and restore it once there is room
+    // (CrouchBehaviour calls TickPendingRestore even while the mod is disabled).
+    private static CharacterController _pendCc;
+    private static float _pendHeight;
+    private static Vector3 _pendCenter;
+    private static Transform _pendRoot;
+
+    private static void DeferColliderRestoreIfBlocked()
+    {
+        if (!_ccModified || _cc == null || !_ccCaptured || _fpc == null) return;
+        var root = _fpc.playerInstance != null ? _fpc.playerInstance.transform : _cc.transform;
+        if (HasHeadroom(_cc, _standHeight, _standCenter, root)) return;
+        _pendCc = _cc; _pendHeight = _standHeight; _pendCenter = _standCenter; _pendRoot = root;
+        _ccModified = false; // RestoreCollider (called next) leaves the capsule alone; TickPendingRestore finishes the job
+        Plugin.Info("No room to stand up while switching off; collider restored once there is space");
+    }
+
+    /// <summary>Runs every frame even while the mod is disabled; cheap when nothing is pending.</summary>
+    internal static void TickPendingRestore()
+    {
+        if (_pendCc == null) { _pendCc = null; return; }
+        if (!HasHeadroom(_pendCc, _pendHeight, _pendCenter, _pendRoot)) return;
+        FinishPendingRestore();
+    }
+
+    private static void FinishPendingRestore()
+    {
+        if (_pendCc != null)
+        {
+            try { _pendCc.height = _pendHeight; _pendCc.center = _pendCenter; }
+            catch (Exception) { }
+        }
+        _pendCc = null; _pendRoot = null;
+    }
+
     private static void RestoreCollider()
     {
         if (!_ccModified) return;
@@ -313,36 +360,35 @@ internal static class Crouch
     }
 
     /// <summary>Is the space between the current (crouched) capsule top and the standing capsule top free?</summary>
-    private static bool HasHeadroom(PlayerInstance player)
+    private static bool HasHeadroom(CharacterController cc, float standHeight, Vector3 standCenter, Transform root)
     {
-        if (_cc == null) return true;
+        if (cc == null) return true;
         try
         {
-            var tr = _cc.transform;
+            var tr = cc.transform;
             float scaleY = Mathf.Abs(tr.lossyScale.y);
             float scaleXZ = Mathf.Max(Mathf.Abs(tr.lossyScale.x), Mathf.Abs(tr.lossyScale.z));
-            float r = _cc.radius * scaleXZ * 0.9f;
-            float rLocal = _cc.radius;
-            Vector3 curTop = tr.TransformPoint(_cc.center + Vector3.up * Mathf.Max(0f, _cc.height * 0.5f - rLocal));
-            Vector3 standTop = tr.TransformPoint(_standCenter + Vector3.up * Mathf.Max(0f, _standHeight * 0.5f - rLocal));
+            float r = cc.radius * scaleXZ * 0.9f;
+            float rLocal = cc.radius;
+            Vector3 curTop = tr.TransformPoint(cc.center + Vector3.up * Mathf.Max(0f, cc.height * 0.5f - rLocal));
+            Vector3 standTop = tr.TransformPoint(standCenter + Vector3.up * Mathf.Max(0f, standHeight * 0.5f - rLocal));
             if (standTop.y - curTop.y < 0.01f * Mathf.Max(scaleY, 0.0001f)) return true;
 
-            var hits = Physics.OverlapCapsule(curTop, standTop, r, CollisionMask(_cc.gameObject.layer),
+            var hits = Physics.OverlapCapsule(curTop, standTop, r, CollisionMask(cc.gameObject.layer),
                 QueryTriggerInteraction.Ignore);
             if (hits == null) return true;
-            var root = player.transform;
             for (int i = 0; i < hits.Length; i++)
             {
                 var h = hits[i];
                 if (h == null || h.isTrigger) continue;
-                if (h.transform.IsChildOf(root)) continue;
+                if (root != null && h.transform.IsChildOf(root)) continue;
                 return false;
             }
             return true;
         }
         catch (Exception e)
         {
-            Plugin.Logger.LogWarning($"[Crouch] Headroom check failed, standing up anyway: {e.Message}");
+            Plugin.WarnThrottled("headroom", $"Headroom check failed, standing up anyway: {e.Message}");
             return true;
         }
     }
@@ -385,6 +431,7 @@ internal static class Crouch
         try
         {
             if (!PhotonNetwork.InRoom || PhotonNetwork.OfflineMode) { _lastSent = null; return; }
+            if (Time.unscaledTime < _sendRetryAt) return; // back off after a failure
             bool value = share && crouched;
             bool verify = Time.unscaledTime >= _nextVerify;
             if (_lastSent == value && !verify) return;
@@ -401,8 +448,9 @@ internal static class Crouch
         }
         catch (Exception e)
         {
-            Plugin.Logger.LogWarning($"[Crouch] Sending crouch state failed: {e.Message}");
-            _nextVerify = Time.unscaledTime + 5f;
+            Plugin.WarnThrottled("send", $"Sending crouch state failed: {e.Message}");
+            _sendRetryAt = Time.unscaledTime + 5f;
+            _nextVerify = _sendRetryAt;
         }
     }
 
@@ -418,7 +466,7 @@ internal static class Crouch
     {
         var props = p?.CustomProperties;
         if (props == null) return null;
-        var key = (Il2CppSystem.Object)PropKey;
+        var key = _propKeyBoxed ??= (Il2CppSystem.Object)PropKey;
         if (!props.ContainsKey(key)) return null;
         var v = props[key];
         if (v == null) return null;

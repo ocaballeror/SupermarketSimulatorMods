@@ -22,14 +22,17 @@ Optional toggle mode: press once to crouch and again to stand. In this mode, jum
 | Controls | `ToggleMode` | `false` | `false`: hold to crouch. `true`: press to crouch, press again (or jump) to stand. |
 | Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (`[Crouch]` lines in `BepInEx/LogOutput.log`). |
 
-Fixed values (not configurable): you walk at half speed, your eye height drops to 55% of standing height, going down or up takes 0.2 s, and your collision shape shrinks while crouched. Your character's hips drop by 40% of leg length and lean forward 15 degrees. Your crouch state is shared with other players, and other modded players are shown crouching.
+Fixed values (not configurable): you walk at half speed, your eye height drops to 55% of standing height, going down or up takes 0.2 s, and your collision shape shrinks while crouched. Other players see your character bend its knees so its head sits at your crouched eye height, with a slight forward lean. Your crouch state is shared with other players, and other modded players are shown crouching.
+
+The config file is named after the plugin id. Version 1.0.5 renamed the id to `flamboyanthopper.playercrouch`, so the settings file is now `flamboyanthopper.playercrouch.cfg`. If you had changed settings before, they start at the defaults; copy them over from the old file (`<prefix>.playercrouch.cfg`) and delete that one.
 
 ## Who needs it (multiplayer)
 
 - **To crouch, you need the mod yourself.** This works for the host or a guest. Crouching only changes your own camera, speed and collision, so it can't desync anything.
-- **To see someone else crouch, both of you need the mod.** The crouch state is shared as a small piece of player data through the game's online service. Players without the mod ignore it and just see you standing (they still see you move more slowly and at your real position).
+- **To see someone else crouch, both of you need the mod, version 1.0.5 or newer.** The crouch state is shared as a small piece of player data through the game's online service. Players without the mod ignore it and just see you standing (they still see you move more slowly and at your real position). Versions before 1.0.5 used a different name for that data, so they can't see (or be seen by) newer versions.
 
 ## Notes
 
-- The crouch pose is generated from the game's normal walk/idle animations, since the game has no crouch animation. While crouched, the arms keep the same pose as when standing.
+- The crouch pose is generated from the game's normal walk/idle animations, since the game has no crouch animation. While crouched, the arms keep the same pose as when standing. If a modded player crouches while carrying a box, the box lowers with them on your screen.
+- You always stand up while driving a vehicle, on a skateboard, and when the mod is turned off. If you turn the mod off while crouched under something low, your collision shape stays short until there is room to stand.
 - Compatible with other mods that don't change the player's movement speed, camera height or collision shape.
