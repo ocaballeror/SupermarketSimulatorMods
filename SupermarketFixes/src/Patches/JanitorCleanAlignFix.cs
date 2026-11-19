@@ -47,11 +47,13 @@ namespace SupermarketFixes.Patches;
 ///   then a tight fit, a blocked mop path (a thin capsule from her hands to where the mop head lands), and
 ///   the walk round the stain. Rings are searched nearest-to-reach first and the search stops once no
 ///   further ring can beat the best candidate.
-/// - Fallbacks: if no spot fits within 0.5 m of the reach, the nearest fitting spot further out is used (she
-///   still faces the stain with the mop aimed at its centre, but the mop falls short of it). If nothing on the
-///   rings fits (a stain in a niche or dead end), the stain centre and spots 0.1-0.2 m from it are tried: if her
-///   body fits there she stands there (the game's own spot; the mop can't reach the centre, but she is inside
-///   nothing). Only if her body fits nowhere at all does she stand on the walkable ring spot closest to the
+/// - Fallbacks: if no spot fits within 0.5 m of the reach, the stain centre and spots 0.1-0.2 m from it are
+///   tried first (the mop lands about 0.4-0.6 m from the centre, still on the stain; among them a roomy fit and
+///   a clear mop path win). Only if her body doesn't fit there either, the nearest fitting spot further out is
+///   used (she still faces the stain with the mop aimed at its centre, but the mop falls short of it, off the
+///   stain). If nothing on the rings fits (a stain in a niche or dead end), the near-centre spots are the last
+///   resort: if her body fits there she stands there (the game's own spot; the mop can't reach the centre,
+///   but she is inside nothing). Only if her body fits nowhere at all does she stand on the walkable ring spot closest to the
 ///   reach, and a warning is logged (body overlap, mop still aimed). If no candidate is walkable at all, the
 ///   vanilla destination is kept. She is
 ///   never sent away without cleaning: the selected stain has already been taken off the janitors' list
@@ -77,7 +79,7 @@ internal static class JanitorCleanAlignFix
     /// <summary>Wait this long after cleaning starts before measuring the mop (turn and animation blend-in).</summary>
     private const float MeasureDelay = 0.6f;
     private const int MinSamples = 20;
-    private const int MaxLogs = 80;
+    private const int MaxLogs = 300;
 
     /// <summary>Body capsule: comfortable radius (body plus arms) and her own collider radius.</summary>
     private const float RoomRadius = 0.20f, TightRadius = 0.13f;
@@ -186,7 +188,7 @@ internal static class JanitorCleanAlignFix
             s_plans[j.Pointer] = new Plan(stain, stand);
             string msg = $"Janitor {j.JanitorID} heads for a stain at {Fmt(stain)}: standing at {Fmt(stand)}, " +
                          $"{Flat(stand - stain).magnitude:F2} m from it, mop reach {s_offset.magnitude:F2} m ({how}).";
-            if (warn && Plugin.VerboseLogging.Value) Plugin.Logger.LogWarning($"[JanitorAlign] {msg}");
+            if (warn) Plugin.Logger.LogWarning($"[JanitorAlign] {msg}");   // rare, once per stain: always logged
             else Log(msg);
         }
         else
@@ -231,6 +233,7 @@ internal static class JanitorCleanAlignFix
 
         float bestCost = float.MaxValue;
         string bestHow = null;
+        float bestOff = 0f;
         bool haveNoFit = false;
         Vector3 noFit = default;
         float noFitCost = float.MaxValue;
@@ -270,6 +273,7 @@ internal static class JanitorCleanAlignFix
                     bestCost = cost;
                     stand = cand;
                     float off = Mathf.Abs(dist - reach);
+                    bestOff = off;
                     bestHow = (off < 0.05f ? "mop on the stain centre" :
                                off <= OnStainBand + 1e-3f ? $"mop about {off:F1} m off the centre, on the stain" :
                                $"no fitting spot nearer, mop about {off:F1} m short of the centre") +
@@ -278,17 +282,27 @@ internal static class JanitorCleanAlignFix
                 }
             }
         }
-        if (bestHow != null)
+        // A far fallback spot puts the mop 0.7 m or more short of the centre, off the stain. Standing on or right
+        // next to the stain keeps the mop on it (about 0.4-0.6 m from the centre), so try that first.
+        bool farBest = bestHow != null && bestOff > OnStainBand + 1e-3f;
+        if (bestHow != null && !farBest)
         {
             how = bestHow;
             return true;
         }
-        // Nothing on the rings fits: try the stain itself and spots right next to it before accepting an overlap.
-        if (FindNearCentre(stain, stainNav, out var near, out bool nearRoom))
+        // Nothing on the rings fits (or only far away): try the stain itself and spots right next to it before
+        // accepting an overlap.
+        if (FindNearCentre(stain, stainNav, reach, out var near, out bool nearRoom))
         {
             stand = near;
-            how = "her body fits only on or right next to the stain, so the mop can't reach the centre" +
+            how = (farBest ? "no fitting spot within mop reach, and standing on or right next to the stain keeps the mop on it"
+                           : "her body fits only on or right next to the stain, so the mop can't reach the centre") +
                   (nearRoom ? "" : ", tight fit");
+            return true;
+        }
+        if (bestHow != null)
+        {
+            how = bestHow;
             return true;
         }
         if (haveNoFit)
@@ -302,12 +316,14 @@ internal static class JanitorCleanAlignFix
         return false;
     }
 
-    /// <summary>The stain's NavMesh point, then 8 directions at 0.1 and 0.2 m; a roomy fit beats a tight one.</summary>
-    private static bool FindNearCentre(Vector3 stain, Vector3 stainNav, out Vector3 spot, out bool room)
+    /// <summary>The stain's NavMesh point, then 8 directions at 0.1 and 0.2 m; a roomy fit beats a tight one, and
+    /// a clear mop path beats a blocked one.</summary>
+    private static bool FindNearCentre(Vector3 stain, Vector3 stainNav, float reach, out Vector3 spot, out bool room)
     {
         spot = default;
         room = false;
         bool found = false;
+        float bestCost = float.MaxValue;
         for (int r = 0; r <= 2; r++)
         {
             for (int k = 0; k < (r == 0 ? 1 : 8); k++)
@@ -321,8 +337,16 @@ internal static class JanitorCleanAlignFix
                     cand = hit.position;
                     if (Flat(cand - want).magnitude > 0.1f || Blocked(stainNav, cand, stain)) continue;
                 }
-                if (Fits(cand, RoomRadius)) { spot = cand; room = true; return true; }
-                if (!found && Fits(cand, TightRadius)) { spot = cand; found = true; }
+                bool candRoom = Fits(cand, RoomRadius);
+                if (!candRoom && !Fits(cand, TightRadius)) continue;
+                float cost = (candRoom ? 0f : 0.5f) + (MopPathClear(cand, stain, reach) ? 0f : 0.6f);
+                if (cost < bestCost)   // strict: earlier (nearer the centre) spots win ties
+                {
+                    bestCost = cost;
+                    spot = cand;
+                    room = candRoom;
+                    found = true;
+                }
             }
         }
         return found;
@@ -356,7 +380,15 @@ internal static class JanitorCleanAlignFix
         }
         Vector3 a = new(stain.x, stainNav.y + 0.3f, stain.z);
         Vector3 b = new(cand.x, cand.y + 0.3f, cand.z);
-        return Physics.Linecast(a, b, BodyMask, QueryTriggerInteraction.Ignore);
+        if (Physics.Linecast(a, b, BodyMask, QueryTriggerInteraction.Ignore)) return true;
+        // A clear line doesn't prove she can walk there (another NavMesh island or level), and she has no arrival
+        // timeout, so also require a complete path.
+        try
+        {
+            var path = new NavMeshPath();
+            return !NavMesh.CalculatePath(stainNav, cand, NavMesh.AllAreas, path) || path.status != NavMeshPathStatus.PathComplete;
+        }
+        catch { return true; }
     }
 
     // ---------------------------------------------------------------- facing + measuring (DirtCleaningState)
@@ -388,6 +420,8 @@ internal static class JanitorCleanAlignFix
             t.HasStand = true;
             t.Stand = plan.Stand;
         }
+        if (t.HasStand && Plugin.VerboseLogging.Value && !Fits(t.Stand, TightRadius))
+            Log($"Janitor {j.JanitorID}: her planned spot {Fmt(t.Stand)} is no longer free (something was placed there after she set off).");
         Vector3 aimFrom = t.HasStand ? t.Stand : feet;
         Vector3 v = Flat(t.Stain - aimFrom);
         float reach = s_offset.magnitude;
