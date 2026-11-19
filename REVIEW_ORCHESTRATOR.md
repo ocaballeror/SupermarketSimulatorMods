@@ -1,5 +1,7 @@
 # Orchestrator: implement and review loop (prompt for the master agent)
 
+**This is the manual review request.** Reviews aren't part of the normal workflow (`CLAUDE.md` section 2b): implemented items sit at `implemented` until the user tests them or loads this file to have them reviewed.
+
 Paste this whole file as the prompt of a fresh agent (or tell an agent to read it). It drives an implement-and-review loop over the work listed in `TODO.md`: items that are missing or only half done are implemented first, then every item goes through the review loop.
 
 ---
@@ -30,14 +32,15 @@ Read `TODO.md` fresh every time: it holds the user's requests and, in each entry
 | State in `TODO.md` | Meaning | Orchestrator action |
 |---|---|---|
 | `open` | No code yet | **Eligible for implementation** (step 0b), then review. |
-| `in-progress` | Code exists, not reviewed (or changed since the last review) | **Eligible.** The "Code" column says where it lives. It may be finished or only half done; step 0b decides. |
-| `reviewed` | **Code review only**, pending the user's in-game test | Skip, unless the user names the item explicitly. Before skipping, run `tools/modhash.sh <Code paths>`: if the hash differs from the stored one, the review is stale. Set the state back to `in-progress` and treat the item as eligible. |
+| `in-progress` | Code partly written | **Eligible.** The "Code" column says where it lives. It may be finished or only half done; step 0b decides. |
+| `implemented` | Built, not code-reviewed, pending the user's in-game test | **Eligible for review** (step 1): this is what a review request is for. |
+| `reviewed` | **Code review only**, pending the user's in-game test | Skip, unless the user names the item explicitly. Before skipping, run `tools/modhash.sh <Code paths>`: if the hash differs from the stored one, the review is stale. Set the state back to `implemented` and treat the item as eligible. |
 | `needs-rework` | The in-game test failed or the user asked for changes | **Eligible for implementation**: the implementer makes the requested changes first (step 0b), then review. |
 | `done YYYY-MM-DD` | Tested in-game **and** accepted by the user | Skip. |
 
-`reviewed` means only "code review passed". `done` means "tested and confirmed by the user". The orchestrator only ever writes `reviewed`; it never writes `done`.
+`reviewed` means only "code review passed". `done` means "tested and confirmed by the user". The orchestrator writes only `implemented` and `reviewed`; it never writes `done`.
 
-For `start` or `continue`, take the first item in `TODO.md` order whose state is `open`, `in-progress` or `needs-rework`, or `reviewed` with a stale hash, skipping items that aren't actionable (below). Tell the user which one you picked before spawning anything. If none qualifies, say so and stop.
+For `start` or `continue`, take the first item in `TODO.md` order whose state is `open`, `in-progress`, `implemented` or `needs-rework`, or `reviewed` with a stale hash, skipping items that aren't actionable (below). Tell the user which one you picked before spawning anything. If none qualifies, say so and stop.
 
 **Not actionable, skip and tell the user why:**
 
@@ -58,7 +61,7 @@ Don't read the implementation to form opinions, and don't pass on any theories y
 
 ### 0b. Is it implemented? (decide cheaply, don't read the code)
 
-Go to **step 1 (review)** when the state is `in-progress` or stale-`reviewed` and nothing in the entry's Status block or the mod's `CLAUDE.md` status section says the work is incomplete. Go to **step 0c (implement)** when:
+Go to **step 1 (review)** when the state is `implemented` or stale-`reviewed`, or a finished-looking `in-progress` item, and nothing in the entry's Status block or the mod's `CLAUDE.md` status section says the work is incomplete. Go to **step 0c (implement)** when:
 
 - the state is `open`;
 - the state is `needs-rework`;
@@ -82,7 +85,7 @@ Spawn an **implementer** subagent (`general-purpose`, `model: "sonnet"`) with:
 
 Record the implementer's agent id; the review loop reuses it.
 
-When the implementer reports, update the item **yourself** (you own the Status blocks in `TODO.md`): set `Status: in-progress`, fill in `Code`, and set `Waiting on: Review loop`. Never touch the user's request text. Commit with a brief title-only message. Then continue to step 1.
+When the implementer reports, update the item **yourself** (you own the Status blocks in `TODO.md`): set `Status: implemented`, fill in `Code`, and set `Waiting on: Review loop`. Never touch the user's request text. Commit with a brief title-only message. Then continue to step 1.
 
 If the implementer reports it couldn't finish, or the request needs a decision from the user (see Rules), stop and report to the user instead of going on to review.
 

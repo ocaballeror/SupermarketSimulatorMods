@@ -5,7 +5,7 @@ BepInEx mods for **Supermarket Simulator** (Nokta Games, Steam app 2670630). The
 1. **Fix game bugs.** They mostly show up in online co-op. All bug fixes ship together in one mod, **SupermarketFixes**.
 2. **Add improvements.** Each improvement is its own small, standalone mod, so it can be published separately for other players.
 
-What each mod does, and where it stands (open, in progress, reviewed, done), is tracked per request in [`TODO.md`](TODO.md).
+What each mod does, and where it stands (open, in progress, implemented, reviewed, done), is tracked per request in [`TODO.md`](TODO.md).
 
 ## Mods
 
