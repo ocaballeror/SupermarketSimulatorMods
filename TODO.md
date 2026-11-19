@@ -142,10 +142,10 @@ Currently, orders are only removed when they have been delivered to the customer
 
 ## Improvement #1: Make Global Pricing Settings Persist Across Days
 
-**Status:** in-progress  
+**Status:** reviewed  
 **Code:** `PriceMarkupKeeper/`  
-**Review:** 2026-11-16, 1 round, hash `b88bc963388e` (stale: settings reduced and code changed 2026-11-18; needs re-review)
-**Waiting on:** In-game test of v1.1.1 (buy a license after applying a bulk markup; check the new products' prices).
+**Review:** 2026-11-19, 3 rounds, hash `540ebcd2c600`
+**Waiting on:** In-game test of v1.1.3 (buy a license after applying a bulk markup; check the new products' prices; check prices after a day change). The mod's cfg file was renamed in 1.1.3, so settings start at defaults.
 
 Make prices respect the global settings configured through the pricing tab on the computer.
 
