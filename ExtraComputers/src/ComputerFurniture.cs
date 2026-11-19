@@ -209,6 +209,21 @@ internal static class ComputerFurniture
         }
     }
 
+    private static bool _buildPending;
+
+    /// <summary>Retries a build that <see cref="EnsureForLoadedScene"/> postponed, once the store computer is idle
+    /// (called about once a second from Presence.Tick).</summary>
+    internal static void RetryPendingBuild()
+    {
+        if (!_buildPending) return;
+        if (Template != null || Ids == null) { _buildPending = false; return; }
+        var comp = FindRealComputer();
+        if (comp == null || comp.IsInPlacingMode || comp.OpenPC) return;
+        _buildPending = false;
+        EnsureTemplate();
+        RefreshShopItem();
+    }
+
     /// <summary>Called when the mod is switched on while the game runs (never from Load): creates the definition and
     /// the prefab if this scene was loaded without them, so the mod counts as ready for other players. The shop
     /// entry itself is only created by the next store load. Does nothing outside a loaded game (no IDManager).</summary>
@@ -220,7 +235,10 @@ internal static class ComputerFurniture
         // hologram materials) or used. A later EnsureTemplate call (purchase, box, guest spawn) builds it instead.
         var comp = FindRealComputer();
         if (Template == null && comp != null && (comp.IsInPlacingMode || comp.OpenPC))
-            Plugin.Debug("The store computer is in use or being moved; the computer prefab is built later");
+        {
+            _buildPending = true; // Presence.Tick retries once the store computer is idle
+            Plugin.Debug("The store computer is in use or being moved; the computer prefab is built when it's idle");
+        }
         else
             EnsureTemplate();
         RefreshShopItem();

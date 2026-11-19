@@ -184,6 +184,7 @@ internal static class Presence
         _nextTick = Time.unscaledTime + 1f;
         try
         {
+            ComputerFurniture.RetryPendingBuild();
             if (Online) Publish(Ready);
             ComputerFurniture.ApplyPrice();
 
