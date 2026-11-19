@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.restockerdoublecarry";
     public const string Name = "Restocker Double Carry";
-    public const string Version = "1.3.0";
+    public const string Version = "1.3.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

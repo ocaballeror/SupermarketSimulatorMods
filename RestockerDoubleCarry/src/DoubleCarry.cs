@@ -63,7 +63,7 @@
  *                      three restocker street searches all read it). Reserving through Box.IsTargeted instead
  *                      would also stop online players picking it up (NetworkBox.IsClaimedByNpc), so it isn't used.
  *                      Safety net: a MoveTo.ShouldAbort postfix stops the walk back (AbortWithFailure) when the
- *                      box is gone (`Plan.FetchingFloor`, hands empty).
+ *                      box is gone (`Plan.FetchingFloor`, floor box not in hand; also on the regroup walk back).
  *   Phase DeliverFirst: vanilla handles the current box to the end: more displays, then the trash if
  *                      empty (GoToTrash), or a rack if not (RackingState). The mod stays out of every
  *                      search made with a box in hand, with one exception (regroup):
@@ -949,10 +949,11 @@ internal static class DoubleCarry
         if (clerk == null) return false;
         var plan = GetPlan(clerk);
         if (plan == null || !plan.FetchingFloor) return false;
-        // Box in hand: it was picked up (or this is a later leg of the run), nothing left to check.
-        if (clerk.m_CurrentBox != null && clerk.m_CarryingBox) { plan.FetchingFloor = false; return false; }
         var floor = plan.Floor;
         if (floor == null) { plan.FetchingFloor = false; return false; }
+        // The floor box itself is in hand: it was picked up (or this is a later leg of the run), nothing left to
+        // check. Another box in hand (leftovers, on the regroup walk back) doesn't end the check.
+        if (Same(Current(clerk), floor)) { plan.FetchingFloor = false; return false; }
         if (IsOnFloor(clerk, floor)) return false;
         plan.FetchingFloor = false;
         Info($"{Name(clerk)}: the box it was walking back for (product {ProductOf(floor)}) is gone, stopping");
@@ -988,6 +989,7 @@ internal static class DoubleCarry
         plan.FloorRetryStart = -1f;
         plan.FloorSince = Time.time;
         plan.FetchingFloor = false;
+        LoggedReserved.Remove(stash.Pointer);   // log the reservation again for this set-down
         Info($"{Name(clerk)}: put box (product {ProductOf(stash)}) on the floor to unpack product {ProductOf(cur)}");
     }
 
@@ -1145,6 +1147,7 @@ internal static class DoubleCarry
         ApplyJob(h, new Job { Target = new IBoxTarget(new StreetBoxTarget(floor).Pointer), Rack = rack, Product = pid });
         plan.Phase = Phase.FetchSecond;
         plan.FetchOnlyNext = true;
+        plan.FetchingFloor = true;   // safety net: stop the walk back if the floor box is taken meanwhile
         Info($"{Name(clerk)}: box (product {ProductOf(cur)}) has leftovers and the box on the floor (product {pid}) " +
              "goes to storage too, picking it up again first");
     }
