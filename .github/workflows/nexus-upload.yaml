@@ -28,7 +28,7 @@ jobs:
           fetch-depth: 0
       - id: pick
         env:
-          NEXUSMODS_API_KEY: ${{ secrets.NEXUSMODS_API_KEY }}
+          NEXUS_MODS_API_KEY: ${{ secrets.NEXUS_MODS_API_KEY }}
         run: |
           if [ -n "${{ github.event.inputs.mods }}" ]; then
             changed="$(printf '%s\n' ${{ github.event.inputs.mods }})"
@@ -55,7 +55,7 @@ jobs:
       - name: Resolve Nexus ids and read version
         id: info
         env:
-          NEXUSMODS_API_KEY: ${{ secrets.NEXUSMODS_API_KEY }}
+          NEXUS_MODS_API_KEY: ${{ secrets.NEXUS_MODS_API_KEY }}
         run: |
           mod="${{ matrix.mod }}"
           echo "version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$mod"/*.csproj | head -n1)" >> "$GITHUB_OUTPUT"
@@ -102,17 +102,6 @@ jobs:
           cp "$dll" pkg/BepInEx/plugins/
           (cd pkg && zip -r "../$mod-${{ steps.info.outputs.version }}.zip" BepInEx)
 
-      - name: Changelog from commits touching this mod
-        id: changelog
-        if: steps.info.outputs.ok == 'true'
-        run: |
-          {
-            echo "changelog<<EOF"
-            git log -n 15 --no-merges --pretty=format:'- %s' -- "${{ matrix.mod }}"
-            echo ""
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Read description.md
         id: desc
         if: steps.info.outputs.ok == 'true'
@@ -128,12 +117,11 @@ jobs:
         if: steps.info.outputs.ok == 'true'
         uses: Nexus-Mods/upload-action@main
         with:
-          api_key: ${{ secrets.NEXUSMODS_API_KEY }}
+          api_key: ${{ secrets.NEXUS_MODS_API_KEY }}
           file_id: ${{ steps.info.outputs.file_id }}
           mod_id: ${{ steps.info.outputs.mod_id }}
           filename: ${{ matrix.mod }}-${{ steps.info.outputs.version }}.zip
           display_name: ${{ steps.info.outputs.display_name }}
           description: ${{ steps.desc.outputs.text }}
           version: ${{ steps.info.outputs.version }}
-          changelog: ${{ steps.changelog.outputs.changelog }}
           update_mod_version: true

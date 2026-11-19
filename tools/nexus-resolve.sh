@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Resolve a Nexus mod page URL to the ids the upload action needs.
-# Usage: NEXUS_MODS_API_KEY=... tools/nexus-resolve.sh https://www.nexusmods.com/<game>/mods/<n>nexusmods
+# Usage: NEXUS_MODS_API_KEY=... tools/nexus-resolve.sh https://www.nexusmods.com/<game>/mods/<n>
 # Prints (as key=value lines): mod_id (internal id), file_id, display_name, latest_version (highest uploaded version, empty if none).
 # Assumes the mod page has one active file that gets a new version on each release; if there are several,
 # the one most recently uploaded to is used and a warning is printed to stderr.
