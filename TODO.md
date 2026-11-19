@@ -19,9 +19,9 @@ This issue mostly affects the other computer (the guest, not the host) during on
 
 ## Bug #2: Ghost Item Remaining in Player's Hands
 
-**Status:** in-progress  
+**Status:** reviewed  
 **Code:** `SupermarketFixes/src/Patches/GhostHeldItemFix.cs`  
-**Review:** 2026-11-15, 1 round, hash `d48d7436015a` (stale: settings reduced and code changed 2026-11-18; needs re-review)
+**Review:** 2026-11-19, 2 rounds, hash `28b2783348e6`
 **Waiting on:** In-game test + logs, including the host's `[BoxDiag] DropBox_RPC` lines.
 
 Sometimes, a player holds an item and then puts it down on the floor, but a ghost image of the item remains in their hands.
