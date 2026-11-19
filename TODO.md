@@ -166,10 +166,10 @@ Make paint cans last twice as long as they currently do.
 
 ## Improvement #3: Add Player Crouching
 
-**Status:** in-progress  
+**Status:** reviewed  
 **Code:** `PlayerCrouch/`  
-**Review:** 2026-11-16, 1 round, hash `13bd134104b2` (stale: settings reduced and code changed 2026-11-18; needs re-review)
-**Waiting on:** In-game test of v1.0.3 (crouch pose visible on the other player's screen); send the `Model for player` log lines.
+**Review:** 2026-11-19, 3 rounds, hash `1cf972758683`
+**Waiting on:** In-game test of v1.0.7 on both machines (crouch pose and gaze while carrying a box visible on the other player's screen; steps in the mod's `CLAUDE.md`); send the `Model for player` and `Remote look-at target` log lines.
 
 Allow players to crouch by pressing `Ctrl`.
 
