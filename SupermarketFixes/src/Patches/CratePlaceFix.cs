@@ -145,12 +145,16 @@ internal static class CratePlaceFix
             string slotType = display != null ? display.DisplayType.ToString() : "?";
             int sel = ci.m_ScrollCurrentGroupID;
             string selType = "?";
-            try
+            if (sel > 0) // IDManager.ProductSO logs a game error for an unknown id (e.g. -1)
             {
-                var so = NoktaSingleton<IDManager>.Instance.ProductSO(sel);
-                selType = so != null ? so.ProductDisplayType.ToString() : "none";
+                try
+                {
+                    var so = NoktaSingleton<IDManager>.Instance.ProductSO(sel);
+                    selType = so != null ? so.ProductDisplayType.ToString() : "none";
+                }
+                catch (Exception) { }
             }
-            catch (Exception) { }
+            else selType = "none";
             var groups = new System.Text.StringBuilder();
             var seen = new System.Collections.Generic.HashSet<int>();
             var list = crate.m_Product;
@@ -203,11 +207,16 @@ internal static class CratePlace_Update_Patch
 {
     private static void Prefix(CrateInteraction __instance)
     {
+        // Separate try blocks: a failing diagnostic must never switch the repair off.
+        try
+        {
+            if (CratePlaceFix.RepairSelection.Value) CratePlaceFix.BeforeUpdate(__instance);
+        }
+        catch (Exception e) { CratePlaceFix.LogError("Update prefix (repair)", e); }
         try
         {
             if (Plugin.VerboseLogging.Value) CratePlaceFix.TrackPress(__instance);
-            if (CratePlaceFix.RepairSelection.Value) CratePlaceFix.BeforeUpdate(__instance);
         }
-        catch (Exception e) { CratePlaceFix.LogError("Update prefix", e); }
+        catch (Exception e) { CratePlaceFix.LogError("Update prefix (diagnostic)", e); }
     }
 }
