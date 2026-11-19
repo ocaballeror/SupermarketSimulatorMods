@@ -1,20 +1,22 @@
-# Paint Can Capacity
+[size=6][b]Paint Can Capacity[/b][/size]
 
 Wall paint cans last longer. By default each can paints twice as many walls.
 
-## Features
+[size=5][b]Features[/b][/size]
 
-- Set the multiplier from 1x to 10x.
-- The liquid level in the can scales too. A new can looks as full as a normal one and empties gradually.
+[list]
+[*]Set the multiplier from 1x to 10x.
+[*]The liquid level in the can scales too. A new can looks as full as a normal one and empties gradually.
+[/list]
 
-## How it works
+[size=5][b]How it works[/b][/size]
 
 Install it and paint as usual. Each can just goes further.
 
-## Settings
+[size=5][b]Settings[/b][/size]
 
 You can change the multiplier.
 
-## Installation
+[size=5][b]Installation[/b][/size]
 
-Requires BepInEx 6 (IL2CPP). Copy `PaintCanCapacity.dll` into `BepInEx/plugins/`.
+Requires BepInEx 6 (IL2CPP). Copy [i]PaintCanCapacity.dll[/i] into [i]BepInEx/plugins/[/i].
