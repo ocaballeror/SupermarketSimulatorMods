@@ -44,8 +44,10 @@ internal sealed class HoverData
 ///    own local space, against its mesh bounds (a flat box for a quad; padded 10 %). That follows the quad's
 ///    real rectangle at any box rotation and at the scaled size. The renderers under <c>Box.m_IconUI</c> are
 ///    cached per instance id (no per-frame allocation while holding a box).
-///    Racked boxes work too: vanilla swaps their interactable for the RackSlot, but the hit collider is still
-///    the Box's.
+///    Racked boxes work too: vanilla swaps their interactable for the RackSlot (<c>PlayerInteraction.Raycast</c>: hit
+///    collider has a Box with <c>m_Racked</c> -> takes the RackSlot from its parent), but the hit collider is still the
+///    Box's. Since 0.3.6 a racked box needs no tag hit: the ray hitting any part of the box's collider is enough
+///    (the held box and loose boxes still need the tag).
 ///  - A furniture box (<c>FurnitureBox</c>, same kind of tag; also the one in the hands): name and price of the furniture inside.
 ///  - A Label (<c>Label</c> component, collider on its own GameObject): the tag of a shelf slot
 ///    (<c>Label.m_DisplaySlot</c>), a rack slot (<c>m_RackSlot</c>) or a vending slot (<c>m_VendingSlot</c>).
@@ -144,12 +146,14 @@ internal static class HoverInfo
                     var box = go.GetComponent<Box>();
                     if (box != null)
                     {
-                        if (TagHit(TagScaler.UiOf(box), ray, range))
+                        // A box in a storage rack answers anywhere on the box (the ray already hit its collider); any other box only on its tag.
+                        bool racked = box.m_Racked;
+                        if (racked || TagHit(TagScaler.UiOf(box), ray, range))
                         {
                             target = box.Pointer;
                             s_pBox = box;
                             text = Cached(target, KBox);
-                            LastKind = box.m_Racked ? "racked box" : "box";
+                            LastKind = racked ? "racked box" : "box";
                         }
                     }
                     else

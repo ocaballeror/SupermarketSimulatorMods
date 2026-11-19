@@ -4,7 +4,8 @@ Makes the product tags easier to read.
 
 - **Bigger tags on boxes.** The small tag with the product icon on every box (and the icon tag on furniture boxes) is drawn **2x bigger** by default. The factor is a setting. The tag always stays on the box lid instead of hanging over the edge: it is moved as needed, and on small boxes (or with a big factor) it is drawn smaller than requested, never smaller than the original.
 - **Hover panel.** Put your crosshair on a tag and a small panel in the game's own menu style (dark rounded panel, the game's font, product icon at the left) appears under the crosshair.
-  - **Box tag** (also boxes in racks, and the box in your hands): the product icon, **brand and name** (for example `Kilemol Cleaner`), the **quantity** (items inside out of the box capacity, for example `12 / 24`) and the **box price**.
+  - **Box tag** (the box in your hands, and loose boxes): the product icon, **brand and name** (for example `Kilemol Cleaner`), the **quantity** (items inside out of the box capacity, for example `12 / 24`) and the **box price**.
+  - **Boxes in storage racks:** the panel appears when you look at **any part of the box**, not only its tag. Same content as the box tag.
   - **Shelf, rack and vending machine tags**: the product icon and brand and name only. This also works when the crosshair is on the **price tag** of a shelf or vending machine item (racks have no price tag).
   - **Furniture box tag**: the furniture's icon, name and price (what the furniture shop charges). A paint-can box shows its name only.
   - **Box price** is what one full box of that product costs to buy at today's market price (the wholesale price).

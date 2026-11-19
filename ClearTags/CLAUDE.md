@@ -5,6 +5,7 @@ style (icon, brand + name; on a box also quantity and box price) when the crossh
 
 ## Status
 
+- v0.3.6 (user request): a box **in a storage rack** shows the hover panel when the crosshair is on **any part of the box**, not only on its tag. `HoverInfo.Resolve`: in the `Box` branch the tag-quad test (`TagHit`) is skipped when `box.m_Racked`; loose boxes, the held box and furniture boxes still need the tag. No new patch and no setting: the existing `Physics.Raycast` (same ray and layer mask as the game) already returns the racked box's own collider (vanilla `PlayerInteraction.Raycast` relies on it too: hit collider has a `Box` with `m_Racked` -> takes the `RackSlot` from the parent, else logs "Racked box doesn't have an interactable rack slot as parent"). Vanilla interaction (picking up a racked box, the rack slot hints) is untouched, nothing is patched. Purely local, so it works the same on a guest. **Not yet tested in-game.**
 - v0.3.4 (settings reduced, commit "simplify mod settings"): the remaining settings are `Enabled`, `ScaleMultiplier`, `ShowHoverText`, `TextSize` (default now 30, was 22) and `VerboseLogging` (the cfg key `[Diagnostics] VerboseLogging` already existed, so existing cfgs keep their stored value; default now off for new configs; the box sweep diagnostic only runs when it is on). The descriptions were shortened by the user. Nothing was turned into a constant.
 - v0.3.3 (review of 0.3.2): fix, no hover on **vending price tags**. `VendingPriceTag` is a subclass of `PriceTag` (stub `class VendingPriceTag : PriceTag`, dump "base: PriceTag"), so `GetComponent<PriceTag>()` also returned vending tags, the vending branch was never reached, and the shelf branch read the inherited `DisplaySlot`, which is null for them (`VendingPriceTag.EnableTag` writes only `m_VendingSlot`, +0x68). `Resolve` now looks up `VendingPriceTag` first, then `PriceTag`. **Not yet tested in-game.**
 - v0.3.2 (user's in-game test of 0.3.1: tag size, location and hover fine): `Hover/TextSize` default 18 -> 22 (the whole panel scales with it: padding, gaps, icon, separator and title are all derived from the size; only the 40-unit offset below the crosshair is fixed); the hover also works on the **price tag** of a shelf item (`PriceTag`) and of a vending machine item (`VendingPriceTag`), same content as the slot's Label (`HoverInfo.ProductData(id)` is shared by all three). **Not yet tested in-game.**
@@ -131,7 +132,8 @@ a tag that pokes out) no longer applies for the same reason.
 `Physics.Raycast`: a hit collider with a `Label`, a `VendingPriceTag` or a `PriceTag` (tested in that order, since the vending tag is also a `PriceTag`; each on the collider's own GameObject) gives the slot info (the price tag shows the same as the Label; `LastKind` "shelf price tag" / "vending price tag"); with a `Box` it is a tag hit only if the same ray
 also intersects one of the tag quads: tested per quad in the quad's local space (ray vs the plane of the thinnest mesh-bounds axis, then
 the hit point within the other extents * 1.1 + 0.01), so a turned box doesn't enlarge the hit area and there is no depth slack; the renderers/bounds are cached per `m_IconUI` instance id. Racked boxes: vanilla
-turns a racked box hit into its RackSlot interactable, but the hit collider is still the Box's, so this works.
+turns a racked box hit into its RackSlot interactable, but the hit collider is still the Box's, so this works; since 0.3.6 a racked box (`Box.m_Racked`) needs no tag hit at all: any point of the box's collider the ray hits shows the panel.
+A box that is not racked (loose, held) keeps the tag-only rule. A racked box that isn't materialized (only a record in `RackSlotData`, no `Box` object) has no collider to hit; its rack's tag (`Label`) still works.
 Since 0.3.0 the enlarged tag stays within the box's collider bounds (see above), so a ray that misses the collider can no longer hit it (apart from the 8 mm margin).
 
 **Panel** (`HoverPanel`, built lazily from `ClearTagsBehaviour.Update` on the first hover, never from `Load`): one screen-space overlay `Canvas`
@@ -162,7 +164,7 @@ and `ClearTagsBehaviour.OnGUI` draws the old IMGUI text from `HoverPanel.Fallbac
 
 | Target | Title | Icon | Rows |
 |---|---|---|---|
-| Box (loose, racked, held) | brand + name (see below) | `ProductAtlasManager.GetProductIcon(id, RawImage)` | `Quantity:` `Box.ProductCount` / `MaxProductCount` (green), `Box price:` `ProductSO.BoxPrice` |
+| Box (loose or held: on its tag; racked: anywhere on the box) | brand + name (see below) | `ProductAtlasManager.GetProductIcon(id, RawImage)` | `Quantity:` `Box.ProductCount` / `MaxProductCount` (green), `Box price:` `ProductSO.BoxPrice` |
 | Shelf tag (`Label.DisplaySlot`), rack tag (`Label.RackSlot`, id from `RackSlot.Data.ProductID`), vending tag (`Label.VendingSlot`), shelf price tag (`PriceTag.DisplaySlot`), vending price tag (`VendingPriceTag.VendingSlot`) | same | same | none (quantity and price are box-only, user decision) |
 | Furniture box (loose, held) | `LocalizationManager.LocalizedFurnitureName(id)` (fallback `FurnitureSO.FurnitureName`); paint box: `LocalizedBucketName` | `FurnitureSO.FurnitureIcon` sprite (texture + `textureRect` as `uvRect`); none for a paint box | `Price:` `FurnitureSO.Cost` (the shop price of the furniture inside), none for a paint box |
 
@@ -192,7 +194,7 @@ live in `RackSlotData`, which is what the rack tag reads).
 
 ## In-game test
 
-1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.3.3 loaded` and `Patches applied (5/5)`.
+1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.3.6 loaded` and `Patches applied (5/5)`.
 2. Load a save with boxes (storage room, racks). **Tag position:** a 15x15x15, an 8x8x8, a 20x10x7, a 30x20x20 and a 40x26x26 furniture box, loose, racked and in your hands: the
    tag lies completely on the lid (nothing hangs over an edge); on big boxes it is 2x, on the smallest (8x8x8, 20x10x7) about 1.7x. `[ClearTags] tag capped to x... (requested x2.0) ...`
    lines (once per lid size) show where it was reduced. A `[ClearTags] sweep: N of M ...` line (only while `VerboseLogging` is on) would mean a spawn path isn't hooked;
@@ -207,7 +209,8 @@ live in `RackSlotData`, which is what the rack tag reads).
 7. Furniture box (order furniture): its icon (if the sprite exists), name and `Price:`; a paint-can box: name only, no errors in the logs.
 8. `TextSize` default is now 30 (was 22 in 0.3.2); try 12 / 30 and another resolution/window size: the panel scales; the hover stays off when the crosshair is beside the tag.
 9. If the panel never shows but a plain dark text does, send the `[ClearTags]` warnings (`hover panel attempt N failed`, `hover panel failed`).
-10. Multiplayer (host with the mod, guest without, and the other way round): nothing different for the other player.
+10. **New in 0.3.6:** put the crosshair on the **side, front and top (away from the tag)** of boxes standing in a storage rack, at several rack heights: the panel appears everywhere on the box (icon, name, `Quantity:`, `Box price:`), `[ClearTags] hover (racked box): ...` in the log. Also on boxes that were in the save and on boxes you rack during the session. A **loose** box (floor, table) still shows the panel only on its tag, and the box in your hands too. Left-click / E on a racked box and on its rack slot still picks it up / works as before; the vanilla key hints on a rack still show; the panel does not stay when you look past the box. On a guest (with or without the mod on the host) the same; if a racked box on the guest still only reacts on its tag, send the log line (that box's `m_Racked` may not be set there).
+11. Multiplayer (host with the mod, guest without, and the other way round): nothing different for the other player.
 
 Send back the `[ClearTags]` lines from `BepInEx/LogOutput.log` (turn on `VerboseLogging` in the cfg first; it's off by default) (the `hover panel created` line, `tag kept on its box face`, `hover (...)` lines, any warnings) and a screenshot of the panel
 and of a big tag on a small box.
