@@ -41,7 +41,8 @@ namespace SupermarketFixes.Patches;
 ///  - Hide: when CourierManager.ClaimChanged fires for an order the courier holds (CourierManager.
 ///    IsClaimedByCourier), the local OrderNotebookContainer's notebook for that order is removed
 ///    (RemoveInstance, as OnOrderRemoved does). An OrderNotebookContainer.OnOrderIssued postfix does the same
-///    for an order that is already claimed when its notebook is created (a save load, a late join).
+///    for an order that is already claimed when its notebook is created in the local container (a save load, a
+///    late join); the containers of remote players' avatars are left alone.
 ///  - Count: an OrderManager.GetUnreadOrderCount postfix leaves courier-held orders out of the count, and the
 ///    claim handler re-runs OrderManager.CanShowUI so the badge refreshes at once.
 ///  - Show again: if the courier releases an order that still exists (a player takes the bag back from the
@@ -276,6 +277,10 @@ internal static class CourierOrdersFix
     {
         if (!On || s_force || data == null) return;
         if (!IsClaimed(data.ID)) return;
+        // Every player's notebook container listens to OrderIssued, remote avatars' included; Show only ever
+        // restores the local one, so leave the others alone. (No local container yet: act, as before.)
+        var local = LocalContainer();
+        if (local != null && container != null && local.Pointer != container.Pointer) return;
         if (Hide(container, data.ID, "issued while with the courier")) RefreshBadge();
     }
 

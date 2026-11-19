@@ -56,7 +56,7 @@ In co-op, when a player handed an online-order bag to the courier, the order's n
 
 This only changes what your own screen shows, so every player who wants it needs the mod (see below).
 
-With `VerboseLogging` on, the log has `[CourierOrders]` lines when an order is hidden or shown again. Please send those.
+With `VerboseLogging` on, the log has `[CourierOrders]` lines when an order is hidden or shown again.
 
 ### F9: "my hands are stuck" key
 
