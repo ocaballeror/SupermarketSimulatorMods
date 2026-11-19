@@ -27,7 +27,7 @@ internal static class HostSync
     private static float? _sentHelp;
     private static float _nextCheck;
 
-    /// <summary>Multiplier for a customer scanning and paying on their own.</summary>
+    /// <summary>Multiplier for a customer scanning on their own (and for the cashier, which only runs on the host).</summary>
     internal static float SelfMultiplier => Effective(SelfKey, LocalSelf());
 
     /// <summary>Multiplier for an employee (customer helper) scanning for the customer.</summary>

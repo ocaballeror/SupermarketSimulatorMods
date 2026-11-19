@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.selfcheckoutspeed";
     public const string Name = "Self Checkout Speed";
-    public const string Version = "1.1.3";
+    public const string Version = "1.2.0";
 
     internal const float MaxMultiplier = 10f;
 
@@ -34,7 +34,7 @@ public class Plugin : BasePlugin
         // ClampedFloat instead of AcceptableValueRange: config managers draw a text field, not a slider.
         SpeedMultiplier = Config.Bind("SelfCheckout", "SpeedMultiplier", 2f,
             new ConfigDescription(
-                "How much faster customers are at using self checkouts.",
+                "How much faster items are scanned at checkouts (self checkouts and cashiers). Payment is not changed.",
                 new ClampedFloat(1f, MaxMultiplier)));
         VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");

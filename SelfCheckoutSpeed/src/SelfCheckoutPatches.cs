@@ -1,6 +1,7 @@
 /*
- * Improvement #4: customers using self checkout machines are N times faster (default 2x, max 10x),
- * including when an employee (customer helper) scans for them.
+ * Improvement #4: scanning at checkouts is N times faster (default 2x, max 10x): customers at self
+ * checkout machines, an employee (customer helper) scanning for them, and cashier employees at a
+ * regular checkout. The customer's payment step that follows scanning stays at vanilla speed.
  *
  * How a self checkout runs (native dumps of SelfCheckout and its coroutines):
  *   Checkout.StartCheckout puts the customer's products on the belt instantly, then
@@ -13,7 +14,9 @@
  *   The last ProductScanned -> Checkout.FinishedScanning (host only) -> customer pays immediately ->
  *   SelfCheckout.FinishSelfCheckout starts <FinishSelfCheckout>g__Payment|26_0:
  *       yield new WaitForSeconds(2f); hand card, complete checkout, broadcast finish to guests.
- *   The customer's time at the machine is the per-item waits plus the payment wait.
+ *   That payment coroutine is deliberately NOT patched since 1.2.0 (the user wants the payment step at
+ *   vanilla speed; 1.0 and 1.1 divided its 2 s wait). The customer's time at the machine is the per-item waits (sped up)
+ *   plus the payment wait (vanilla).
  *
  *   A customer who needs help is served by a customer helper employee instead:
  *   <StartCustomerHelperCheckout>g__Scanning|24_0 (host) scans each item and yields
@@ -21,11 +24,26 @@
  *   1 s wait. Guests run <StartCustomerHelperCheckoutOrder>g__ScanningOrder|51_0 with the same per-item
  *   wait.
  *
- * Fix: postfix all four coroutines' MoveNext and divide the yielded WaitForSeconds.m_Seconds by the
+ *   Cashier employees (regular checkout) use AutomatedCheckout: Checkout.StartCheckout (host only; the
+ *   guest check PhotonNetwork.IsConnectedAndSlave skips it) starts
+ *   AutomatedCheckout.<StartCashierCheckout>g__Scanning|22_0, which loops
+ *       yield new WaitForSeconds(Cashier.ScanningInterval);       // field +0x8C, set by Cashier.ApplySpeeds
+ *       NetworkAutomatedCheckout.CashierProductScanned_Broadcast, Checkout.ProductScanned(next), scan animation
+ *   until the belt is empty. The last ProductScanned -> Checkout.FinishedScanning inlines
+ *   AutomatedCheckout.FinishCheckout, which starts <FinishCheckout>g__Payment|0 (in the display class
+ *   AutomatedCheckout+<>c__DisplayClass23_0): three waits, m_IntervalAfterScanningAll, m_TakingPaymentInterval
+ *   and m_FinishingPaymentDuration (each through BoostScaledDuration), around hand card/money and
+ *   CashierTookPayment/CashierCompletedCheckout broadcasts. Not patched either (payment stays vanilla).
+ *
+ * Fix: postfix the four scanning coroutines' MoveNext and divide the yielded WaitForSeconds.m_Seconds by the
  * multiplier. Unity reads the wait time after MoveNext returns, and every yield allocates a new
  * WaitForSeconds, so this shortens each wait exactly once without touching prefab values.
  *
- * Multiplayer: the host drives the checkout (FinishedScanning and the finish broadcasts only run on
+ * Multiplayer (cashier): only the host runs the cashier scanning coroutine and broadcasts one
+ * CashierProductScanned_RPC per item, which guests apply (they take the next product off their belt).
+ * Guests therefore follow the host's pace without any mod and need no sync or catch-up for cashiers.
+ *
+ * Multiplayer (self checkout): the host drives the checkout (FinishedScanning and the finish broadcasts only run on
  * the master client). Each guest runs its own copy of the scanning coroutine at its own speed, and the
  * host's finish messages (SelfCheckout.FinishSelfCheckout_Order, NetworkCheckout.FinishHelperCheckout_RPC)
  * neither stop that coroutine nor clear CheckoutBelt.m_Products. Confirmed in-game (2026-11-15): with
@@ -34,15 +52,13 @@
  *   1. HostSync: the host publishes the multipliers it uses; modded guests always use those, whatever
  *      their own settings say. Patches therefore stay installed even when [General] Enabled is off,
  *      and Enabled only decides the speed when you host or play solo.
- *   2. Catch-up: when the host's finish message reaches a guest while that guest's scanning
+ *   2. Catch-up (self checkout and employee help only): when the host's finish message reaches a guest while that guest's scanning
  *      coroutine for the same checkout is still running (network lag, frame-rounding of short waits),
  *      every remaining wait of that coroutine becomes 0, so the remaining items are scanned on the next
  *      frames. The guest's employee-scanning loop (ScanningOrder) also stops when the host's
  *      FinishHelperCheckout_RPC clears SelfCheckout.IsScanning, so while catching up a MoveNext prefix
  *      keeps IsScanning set as long as products are left on the belt. A coroutine's first step
  *      (<>1__state == 0) clears any record left under its address by a coroutine stopped from outside.
- *   3. Online, the host's payment wait keeps at least 0.5 s (vanilla 2 s): it is the slack a guest has
- *      to finish scanning before the customer leaves.
  * An unmodded guest still scans at normal speed; nothing on the host can change that.
  */
 using System;
@@ -58,27 +74,22 @@ namespace SelfCheckoutSpeed;
 
 internal static class SelfCheckoutPatches
 {
-    private enum Kind { Self, Help }
+    private enum Kind { Self, Help, Cashier }
 
-    /// <summary>Native names of the SelfCheckout coroutine classes to speed up, and whose speed applies.</summary>
-    private const string PaymentName = "<<FinishSelfCheckout>g__Payment|26_0>d";
+    /// <summary>Native names of the checkout scanning coroutine classes to speed up, and whose speed applies.</summary>
     // Guest copy of employee scanning; it loops only while SelfCheckout.IsScanning.
     private const string HelpOrderName = "<<StartCustomerHelperCheckoutOrder>g__ScanningOrder|51_0>d";
 
-    private static readonly (string Name, Kind Kind)[] TargetList =
-    {
-        ("<<StartSelfCheckout>g__Scanning|23_0>d", Kind.Self),
-        (PaymentName, Kind.Self),
-        ("<<StartCustomerHelperCheckout>g__Scanning|24_0>d", Kind.Help),
-        (HelpOrderName, Kind.Help),
-    };
+    // Cashier employee scanning (nested in AutomatedCheckout, host only).
+    private const string CashierName = "<<StartCashierCheckout>g__Scanning|22_0>d";
 
-    /// <summary>
-    /// Online, the host's payment wait is never cut below this. In vanilla the 2 s payment wait is the
-    /// slack a lagging guest has to finish its own scanning before the customer leaves; dividing it by 10
-    /// would leave 0.2 s.
-    /// </summary>
-    private const float MinOnlinePaymentWait = 0.5f;
+    private static readonly (Type Outer, string Name, Kind Kind)[] TargetList =
+    {
+        (typeof(SelfCheckout), "<<StartSelfCheckout>g__Scanning|23_0>d", Kind.Self),
+        (typeof(SelfCheckout), "<<StartCustomerHelperCheckout>g__Scanning|24_0>d", Kind.Help),
+        (typeof(SelfCheckout), HelpOrderName, Kind.Help),
+        (typeof(AutomatedCheckout), CashierName, Kind.Cashier),
+    };
 
     internal static int TargetCount => TargetList.Length;
 
@@ -88,8 +99,8 @@ internal static class SelfCheckoutPatches
         public PropertyInfo Current;   // <>2__current
         public PropertyInfo This;      // <>4__this (the SelfCheckout)
         public PropertyInfo State;     // <>1__state (0 = not started yet)
-        public bool IsPayment;
         public bool IsHelpOrder;
+        public bool Track;             // guest catch-up applies (SelfCheckout coroutines only)
     }
 
     private static readonly Dictionary<Type, Coro> Coros = new();
@@ -112,11 +123,12 @@ internal static class SelfCheckoutPatches
         _postfixErrorLogged = false;
         var postfix = new HarmonyMethod(typeof(SelfCheckoutPatches), nameof(MoveNextPostfix));
         var prefix = new HarmonyMethod(typeof(SelfCheckoutPatches), nameof(MoveNextPrefix));
-        foreach (var nested in typeof(SelfCheckout).GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
+        foreach (var outer in new[] { typeof(SelfCheckout), typeof(AutomatedCheckout) })
+        foreach (var nested in outer.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
         {
             string native = NativeName(nested);
             if (native == null) continue;
-            int idx = Array.FindIndex(TargetList, t => t.Name == native);
+            int idx = Array.FindIndex(TargetList, t => t.Outer == outer && t.Name == native);
             if (idx < 0) continue;
             try
             {
@@ -128,13 +140,14 @@ internal static class SelfCheckoutPatches
                     Plugin.Logger.LogError($"[SelfCheckout] {native}: MoveNext or <>2__current not found");
                     continue;
                 }
+                bool track = outer == typeof(SelfCheckout);
                 Coros[nested] = new Coro
                 {
                     Kind = TargetList[idx].Kind, Current = current, This = self,
                     State = AccessTools.Property(nested, "__1__state"),
-                    IsPayment = native == PaymentName, IsHelpOrder = native == HelpOrderName,
+                    IsHelpOrder = native == HelpOrderName, Track = track,
                 };
-                harmony.Patch(moveNext, prefix: prefix, postfix: postfix);
+                harmony.Patch(moveNext, prefix: track ? prefix : null, postfix: postfix);
                 applied++;
                 Plugin.Logger.LogDebug($"[SelfCheckout] patched {native} ({nested.Name})");
             }
@@ -145,7 +158,7 @@ internal static class SelfCheckoutPatches
         }
         if (applied < TargetList.Length)
             Plugin.Logger.LogWarning("[SelfCheckout] not every coroutine was found; the game may have been updated. " +
-                                     "Self checkouts are only partly sped up.");
+                                     "Checkouts are only partly sped up.");
 
         TryPatch(harmony, AccessTools.Method(typeof(SelfCheckout), nameof(SelfCheckout.FinishSelfCheckout_Order)),
             nameof(FinishSelfCheckoutOrderPrefix), "SelfCheckout.FinishSelfCheckout_Order");
@@ -238,7 +251,7 @@ internal static class SelfCheckoutPatches
             if (!Coros.TryGetValue(__instance.GetType(), out var coro)) return;
 
             bool guest = HostSync.IsGuest;
-            if (guest && coro.This != null)
+            if (guest && coro.Track && coro.This != null)
             {
                 var sc = coro.This.GetValue(__instance) as SelfCheckout;
                 var checkout = sc != null ? sc.m_Checkout : null;
@@ -251,6 +264,7 @@ internal static class SelfCheckoutPatches
             }
 
             bool rush = guest && Rushed.Contains(me);
+            // The cashier coroutine only runs on the host, where SelfMultiplier is the local setting.
             float mult = coro.Kind == Kind.Help ? HostSync.HelpMultiplier : HostSync.SelfMultiplier;
             if (!rush && mult <= 1.0001f) return;
 
@@ -258,8 +272,6 @@ internal static class SelfCheckoutPatches
             if (wait == null) return;
             float before = wait.m_Seconds;
             float after = rush ? 0f : before / mult;
-            if (!rush && coro.IsPayment && !guest && InRoom())
-                after = Math.Max(after, Math.Min(before, MinOnlinePaymentWait));
             wait.m_Seconds = after;
             if (Plugin.VerboseLogging.Value)
                 Plugin.Logger.LogInfo($"[SelfCheckout] {coro.Kind} wait {before:0.###}s -> {wait.m_Seconds:0.###}s" +
@@ -273,12 +285,6 @@ internal static class SelfCheckoutPatches
                 Plugin.Logger.LogError($"[SelfCheckout] MoveNext postfix failed (further failures are not logged): {e}");
             }
         }
-    }
-
-    private static bool InRoom()
-    {
-        try { return Photon.Pun.PhotonNetwork.InRoom && !Photon.Pun.PhotonNetwork.OfflineMode; }
-        catch (Exception) { return false; }
     }
 
     // Host's "customer finished paying" reaching a guest.
