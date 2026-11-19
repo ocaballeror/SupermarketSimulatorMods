@@ -305,10 +305,10 @@ Make grid mode the default placement mode when placing furniture of any kind.
 
 ## Improvement #9: Add Bulk Item Transfer Between Shelves and Containers
 
-**Status:** in-progress  
+**Status:** reviewed  
 **Code:** `BulkShelfTransfer/`  
-**Review:** 2026-11-16, 1 round, hash `f718cb4574da` (stale: settings reduced and code changed 2026-11-18; needs re-review)
-**Waiting on:** In-game test of v0.2.0 (paper-bag bulk take); send the `[Bulk] bag` lines.
+**Review:** 2026-11-19, 2 rounds, hash `d82ddc72ce11`
+**Waiting on:** In-game test of v0.2.3 (paper-bag bulk take and place; steps in the mod's `CLAUDE.md`, "In-game test"); send the `[Bulk]` lines.
 
 Allow players to transfer multiple products at once using `Shift + Right Click`.
 
