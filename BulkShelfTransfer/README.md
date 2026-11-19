@@ -31,7 +31,7 @@ Vending machines, the baker's crate and the security guard's crate are left as t
 | Keys | `ModifierKey` | `LeftShift` | Key to hold while clicking. The clicks themselves are the game's **Take** (right click) and **Use** (left click) bindings, so if you rebind those in the game's settings the mod follows. `None` makes every Take/Use click a bulk transfer. |
 | Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (`[Bulk]` lines in `BepInEx/LogOutput.log` for each bulk transfer). |
 
-Products are moved one every 0.02 seconds (never faster than 0.02 s online). The modifier is a keyboard key; there is no gamepad shortcut.
+Products are moved one every 0.02 seconds. The modifier is a keyboard key; there is no gamepad shortcut.
 
 ## Who needs it (multiplayer)
 
