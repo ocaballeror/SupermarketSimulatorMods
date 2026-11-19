@@ -155,9 +155,9 @@ internal static class IconMaker
 
     private static int FreeLayer()
     {
-        for (int i = 31; i >= 8; i--)
-            if (string.IsNullOrEmpty(LayerMask.LayerToName(i))) return i;
-        return 31;
+        // All 32 layers are named and layer 31 (FPSHand) is outside every URP renderer's layer mask, so a "free layer"
+        // search ends at 31 and renders nothing. Layer 4 (Water) is unused and in the mask.
+        return 4;
     }
 
     private static bool Magentaish(Color32 c) => c.r > 200 && c.g < 60 && c.b > 200;
@@ -247,7 +247,15 @@ internal static class IconMaker
                 for (int x = 0; x < w; x++)
                 {
                     var c = gp[y * w + x];
-                    px[(y + oy) * side + x + ox] = new Color32(45, 48, 54, c.a);
+                    {
+                        // Premultiplied onto white: transparent pixels stay white (like the other icon paths), so an
+                        // opaque or alpha-ignoring material still shows a readable glyph, not a dark square.
+                        int a = c.a;
+                        px[(y + oy) * side + x + ox] = new Color32(
+                            (byte)((255 * (255 - a) + 45 * a) / 255),
+                            (byte)((255 * (255 - a) + 48 * a) / 255),
+                            (byte)((255 * (255 - a) + 54 * a) / 255), (byte)a);
+                    }
                 }
             Object.Destroy(glyph);
             outTex.SetPixels32(px);

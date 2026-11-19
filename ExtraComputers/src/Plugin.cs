@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.extracomputers";
     public const string Name = "Extra Computers";
-    public const string Version = "1.4.3";
+    public const string Version = "1.4.4";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -38,7 +38,16 @@ public class Plugin : BasePlugin
         VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");
 
-        Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
+        Enabled.SettingChanged += (_, _) =>
+        {
+            SetActive(Enabled.Value);
+            // Switched on in a scene that was loaded while the mod was off: build what the scene load would have.
+            if (Active)
+            {
+                try { ComputerFurniture.EnsureForLoadedScene(); }
+                catch (Exception e) { Log.LogWarning($"Preparing the computer furniture failed: {e.Message}"); }
+            }
+        };
 
         SetActive(Enabled.Value);
         Log.LogInfo($"{Name} {Version} loaded ({(Active ? "enabled" : "disabled")})");

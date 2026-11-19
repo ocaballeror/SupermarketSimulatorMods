@@ -183,7 +183,7 @@ internal static class ComputerFurniture
             So.FurnitureColor = new Color(0.25f, 0.45f, 0.85f, 1f);
             So.FurniturePrefab = Template;
             ApplyPrice();
-            Plugin.Info($"Computer furniture registered: id {FurnitureId}, box {So.BoxSize}, price {So.Cost} " +
+            Plugin.Debug($"Computer furniture registered: id {FurnitureId}, box {So.BoxSize}, price {So.Cost} " +
                         $"(definition copied from id {donor.ID})");
             if (Plugin.VerboseLogging.Value) LogFurnitureList(list);
         }
@@ -207,6 +207,17 @@ internal static class ComputerFurniture
             So.Cost = price;
             Plugin.Debug($"Computer price is now {price}");
         }
+    }
+
+    /// <summary>Called when the mod is switched on while the game runs (never from Load): creates the definition and
+    /// the prefab if this scene was loaded without them, so the mod counts as ready for other players. The shop
+    /// entry itself is only created by the next store load. Does nothing outside a loaded game (no IDManager).</summary>
+    internal static void EnsureForLoadedScene()
+    {
+        if (Ids == null) return;
+        EnsureSo();
+        EnsureTemplate();
+        RefreshShopItem();
     }
 
     /// <summary>The mod was switched on or off: the shop item follows (the furniture definition itself stays
@@ -376,7 +387,7 @@ internal static class ComputerFurniture
         _buildStep = "finishing";
         Template = tpl;
         _partial = null;
-        Plugin.Info("Computer furniture prefab built from a copy of the store computer");
+        Plugin.Debug("Computer furniture prefab built from a copy of the store computer");
         Plugin.Debug($"Placing settings: tags [{string.Join(",", Strings(tplPm.m_PlacingTag))}], " +
                      $"renderers {tplPm.m_Renderers?.Length ?? 0}, owner colliders {tplPm.m_OwnerCollider?.Count ?? 0}, " +
                      $"placing box {(tplPm.m_PlacingModeCollider == null ? "none" : tplPm.m_PlacingModeCollider.name)}, " +

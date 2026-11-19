@@ -84,7 +84,8 @@ internal static class ComputerUiState
     /// <summary>The computer didn't open: forget the windows that were waiting to be opened.</summary>
     internal static void DropPending() { _pending = null; _pendingKey = Unknown; }
 
-    internal static int KeyOf(Furniture prop) => prop != null ? prop.GetInstanceID() : StoreKey;
+    /// <summary>Keyed on the GameObject (what LeanPool re-uses and what <c>Forget</c> callers hold).</summary>
+    internal static int KeyOf(Furniture prop) => prop != null ? prop.gameObject.GetInstanceID() : StoreKey;
 
     private static string Name(int key) => key == StoreKey ? "store" : key.ToString();
 

@@ -4,7 +4,7 @@
     <TargetFramework>net6.0</TargetFramework>
     <AssemblyName>ExtraComputers</AssemblyName>
     <RootNamespace>ExtraComputers</RootNamespace>
-    <Version>1.4.3</Version>
+    <Version>1.4.4</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

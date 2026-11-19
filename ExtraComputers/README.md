@@ -6,6 +6,7 @@ Adds a **Computer** to the furniture shop ($1000). Buy as many as you like. Each
 - **Every player has their own screen.** Each player sees only what they do on the computer they're using. Two players can use two computers at the same time, or one player can use an extra computer while another uses the store computer.
 - Changes (prices, orders, hires, ...) are shared exactly like changes made on the store computer. If two players have the same page open, one of them may see an older view until they reopen that page (the same as playing with the store computer alone).
 - Hold the use key to move an extra computer. It can be moved and boxed up like other furniture (and an unopened computer box can be sold like other furniture boxes). Placed extra computers are saved with the store like other furniture.
+- Everybody in the session must run the same version of the mod.
 - The price is the same for everybody: a guest with the mod sees and pays the host's price.
 - Only one player can use a given extra computer at a time. If somebody else is on it, you get the game's "in use by another player" message. A second extra computer, or the store computer, is always free for you.
 
@@ -15,7 +16,7 @@ Adds a **Computer** to the furniture shop ($1000). Buy as many as you like. Each
 
 | Section | Setting | Default | Meaning |
 |---|---|---|---|
-| General | `Enabled` | `true` | Enable the mod, applied immediately. While it's off, the computer leaves the shop and placed computers stay as furniture but can't be used. **Don't load a store while it's off** (including starting the game with it off) unless you've boxed up every computer first: see "Removing or disabling the mod". |
+| General | `Enabled` | `true` | Enable the mod, applied immediately (if you turn it on after loading a store with it off, the shop entry appears from the next store load). While it's off, the computer leaves the shop and placed computers stay as furniture but can't be used. **Don't load a store while it's off** (including starting the game with it off) unless you've boxed up every computer first: see "Removing or disabling the mod". |
 | Multiplayer | `ProtectUnmoddedPlayers` | `true` | While any other player in the room doesn't have this mod, the computer is hidden in the shop, and the host refuses to buy it or to open computer boxes. The host's setting is what counts; a guest with the mod also applies its own setting to its own shop and its own box clicks. See below. |
 | Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (tag `[ExtraComputers]` in `BepInEx/LogOutput.log`). |
 

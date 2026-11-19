@@ -415,6 +415,8 @@ internal static class ComputerBackPatch
     private static void Postfix(Computer __instance)
     {
         ComputerSession.InBack = false;
+        // Vanilla Back returns at once while the pause menu is open: the PC is then still open, keep the session.
+        if (__instance.OpenPC) return;
         // Back has put the player at m_PlayerPosition (still on the extra computer). Save this computer's screen and
         // end the session; the borrowed camera stays on the extra computer until the exit blend is done.
         try { ComputerSession.AfterClose(__instance, "left the computer"); }
