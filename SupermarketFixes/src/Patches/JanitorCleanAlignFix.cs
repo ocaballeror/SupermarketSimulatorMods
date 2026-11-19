@@ -339,7 +339,9 @@ internal static class JanitorCleanAlignFix
                 }
                 bool candRoom = Fits(cand, RoomRadius);
                 if (!candRoom && !Fits(cand, TightRadius)) continue;
-                float cost = (candRoom ? 0f : 0.5f) + (MopPathClear(cand, stain, reach) ? 0f : 0.6f);
+                // On the stain itself she isn't turned (no direction to aim), so the mop path is unknown: a small
+                // penalty makes a spot beside it with a clear, aimed mop path win.
+                float cost = (candRoom ? 0f : 0.5f) + (MopPathClear(cand, stain, reach) ? 0f : 0.6f) + (r == 0 ? 0.05f : 0f);
                 if (cost < bestCost)   // strict: earlier (nearer the centre) spots win ties
                 {
                     bestCost = cost;
