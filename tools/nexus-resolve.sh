@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Resolve a Nexus mod page URL to the ids the upload action needs.
 # Usage: NEXUSMODS_API_KEY=... tools/nexus-resolve.sh https://www.nexusmods.com/<game>/mods/<n>
-# Prints (as key=value lines): mod_id (internal id), file_id, display_name.
+# Prints (as key=value lines): mod_id (internal id), file_id, display_name, latest_version (highest uploaded version, empty if none).
 # Assumes the mod page has one active file that gets a new version on each release; if there are several,
 # the one most recently uploaded to is used and a warning is printed to stderr.
 set -euo pipefail
@@ -20,3 +20,5 @@ pick="$(jq -c '[.data.mod_files[] | select(.is_active)] | sort_by(.last_file_upl
 echo "mod_id=$mod_id"
 echo "file_id=$(jq -r .id <<<"$pick")"
 echo "display_name=$(jq -r .name <<<"$pick")"
+versions="$(get "/mod-files/$(jq -r .id <<<"$pick")/versions")"
+echo "latest_version=$(jq -r '.data.versions[].version' <<<"$versions" | sort -V | tail -n1)"

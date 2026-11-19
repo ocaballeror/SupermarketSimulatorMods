@@ -1,6 +1,7 @@
 name: Upload bumped mods to Nexus Mods
 
-# Runs on every push to master/main. Only mods whose csproj <Version> changed in the push are built and uploaded.
+# Runs on every push to master/main. Only mods whose csproj <Version> is newer than the latest version uploaded on Nexus
+# are built and uploaded (tools/nexus-outdated.sh).
 # The mods compile against the game's BepInEx/interop assemblies. Those are game-derived, so they live in a private
 # repo release (ocaballeror/interop-dlls); BepInEx/core comes from the public BepInEx build. See .github/NEXUS.md.
 on:
@@ -26,13 +27,15 @@ jobs:
         with:
           fetch-depth: 0
       - id: pick
+        env:
+          NEXUSMODS_API_KEY: ${{ secrets.NEXUSMODS_API_KEY }}
         run: |
           if [ -n "${{ github.event.inputs.mods }}" ]; then
             changed="$(printf '%s\n' ${{ github.event.inputs.mods }})"
           else
-            changed="$(tools/changed-versions.sh "${{ github.event.before }}" "${{ github.sha }}")"
+            changed="$(tools/nexus-outdated.sh)"
           fi
-          echo "Version-bumped mods:"; echo "${changed:-<none>}"
+          echo "Mods newer than Nexus:"; echo "${changed:-<none>}"
           matrix="$(printf '%s\n' "$changed" | jq -R -s -c 'split("\n") | map(select(length>0)) | map({mod: .})')"
           echo "matrix={\"include\":$matrix}" >> "$GITHUB_OUTPUT"
           if [ "$matrix" = "[]" ]; then echo "any=false" >> "$GITHUB_OUTPUT"; else echo "any=true" >> "$GITHUB_OUTPUT"; fi
@@ -103,12 +106,9 @@ jobs:
         id: changelog
         if: steps.info.outputs.ok == 'true'
         run: |
-          base="${{ github.event.before }}"
-          git cat-file -e "$base^{commit}" 2>/dev/null || base=""
-          range="${base:+$base..}${{ github.sha }}"
           {
             echo "changelog<<EOF"
-            git log -n 15 --no-merges --pretty=format:'- %s' $range -- "${{ matrix.mod }}"
+            git log -n 15 --no-merges --pretty=format:'- %s' -- "${{ matrix.mod }}"
             echo ""
             echo "EOF"
           } >> "$GITHUB_OUTPUT"

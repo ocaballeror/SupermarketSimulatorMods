@@ -1,6 +1,6 @@
 # Nexus upload workflow
 
-`workflows/nexus-upload.yaml` runs on every push to master/main. It finds the mods whose csproj `<Version>` changed in that push (`tools/changed-versions.sh`), builds each, zips `BepInEx/plugins/<Mod>.dll`, and uploads it as a new version of the mod's Nexus file, with `description.md` (written in BBCode, not markdown) as the file description and the mod's commits as the changelog. Mods whose version didn't change are untouched.
+`workflows/nexus-upload.yaml` runs on every push to master/main. It finds the mods whose csproj `<Version>` is newer than the latest version uploaded on Nexus (`tools/nexus-outdated.sh`, whatever commit changed it), builds each, zips `BepInEx/plugins/<Mod>.dll`, and uploads it as a new version of the mod's Nexus file, with `description.md` (written in BBCode, not markdown) as the file description and the mod's commits as the changelog. Mods whose version didn't change are untouched.
 
 ## One-time setup
 1. **Secrets** (repo Settings > Secrets and variables > Actions):
