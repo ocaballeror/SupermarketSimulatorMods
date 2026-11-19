@@ -181,9 +181,9 @@ The mod works, but there is no animation for the player crouching, so it does no
 
 ## Improvement #4: Make Self-Checkout Machines Faster
 
-**Status:** implemented  
+**Status:** reviewed  
 **Code:** `SelfCheckoutSpeed/`  
-**Review:** 2026-11-16, 1 round, hash `59ec1550c17b` (stale: settings reduced and code changed 2026-11-18; needs re-review)
+**Review:** 2026-11-19, 2 rounds, hash `2839d1f4e16f`
 **Waiting on:** In-game test of v1.2.0: cashier scans faster, payment stays at vanilla speed (steps in the mod's `CLAUDE.md`); host and a modded guest.
 
 Make customers using self-checkout machines 2x faster.
