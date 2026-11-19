@@ -52,7 +52,13 @@ namespace AutoCourierLoad;
 ///    when that reaches zero. "Less than a minute left" in this mod is that same number.
 ///
 /// What this mod does (host / solo only; a guest does nothing here):
-///  - A postfix on Courier.NotifyReturned starts a "visit" for that courier. A per-frame behaviour (every
+///  - A "visit" for a courier starts in two ways: a postfix on Courier.NotifyReturned (he just came back), and an
+///    idle watch (every 1 s, EmployeeManager.ActiveCouriers) for a courier who has no visit but is already
+///    waiting: state Idle, not dispatched, IsAvailableForHandOver, trunk not full, and at least one bag that
+///    could be loaded lies within ScanRadius of his park spot (a bag dropped next to him while he waits, a
+///    courier already waiting after a save load, or one whose last visit ran out). Everything after the start
+///    is the same for both.
+///  - A per-frame behaviour (every
 ///    0.4 s) looks at each visit: while the courier is still returning it only watches the bags near his
 ///    park spot (so a bag that was already lying there counts as settled when he arrives); once he is Idle,
 ///    IsAvailableForHandOver and not dispatched, it scans every bag in OnlineOrderPaperBagContainer.m_PaperBags
@@ -91,6 +97,7 @@ internal static class AutoLoad
     private const float SettleSeconds = 0.75f;
     private const float DepartDelay = 1.2f;          // stowing is instant (no tween); this is just a short pause
     private const float MinScanWindow = 1.5f;
+    private const float IdleWatchInterval = 1.0f;   // how often an idle courier without a visit is checked for bags near him
     private const float GiveUpSeconds = 180f;       // a visit that never becomes ready (courier dismissed, ...)
     private const float DefaultDayEnd = 46800f;
     private const int FallbackTrunk = 3;
@@ -112,12 +119,14 @@ internal static class AutoLoad
     /// <summary>Bags the courier threw into the drop area: instance id -> where. Ignored until moved.</summary>
     private static readonly Dictionary<int, Vector3> s_ignored = new();
     private static float s_next;
+    private static float s_nextIdleWatch;
     private static bool s_loggedError;
 
     internal static void Reset()
     {
         s_visits.Clear();
         s_ignored.Clear();
+        s_nextIdleWatch = 0f;
         s_loggedError = false;
     }
 
@@ -168,11 +177,18 @@ internal static class AutoLoad
 
     internal static void Tick()
     {
-        if (!Plugin.Active || s_visits.Count == 0) return;
+        if (!Plugin.Active) return;
         float now = Time.time;
         if (now < s_next) return;
         s_next = now + TickInterval;
         if (IsGuest) { s_visits.Clear(); return; }
+
+        if (now >= s_nextIdleWatch)
+        {
+            s_nextIdleWatch = now + IdleWatchInterval;
+            try { WatchIdleCouriers(now); }
+            catch (Exception e) { LogError("idle watch", e); }
+        }
 
         for (int i = s_visits.Count - 1; i >= 0; i--)
         {
@@ -180,6 +196,35 @@ internal static class AutoLoad
             try { keep = Step(s_visits[i], now); }
             catch (Exception e) { LogError("visit", e); keep = false; }
             if (!keep) s_visits.RemoveAt(i);
+        }
+    }
+
+    /// <summary>
+    /// A courier that is simply waiting at his parking space (he never "returned" since the game started, or his
+    /// last visit ran out) has no visit. Start one as soon as a bag he could take lies near the spot.
+    /// </summary>
+    private static void WatchIdleCouriers(float now)
+    {
+        if (!NoktaSingleton<EmployeeManager>.HasInstance) return;
+        var couriers = NoktaSingleton<EmployeeManager>.Instance.ActiveCouriers;
+        if (couriers == null) return;
+        for (int i = 0; i < couriers.Count; i++)
+        {
+            var c = couriers[i];
+            if (c == null) continue;
+            bool has = false;
+            foreach (var v in s_visits)
+                if (v.Ptr == c.Pointer) { has = true; break; }
+            if (has) continue;
+
+            // Same readiness ReceiveBag demands.
+            if (!IsIdle(c) || c.IsDispatched || !c.IsAvailableForHandOver) continue;
+            if (c.ParcelCount >= Capacity(c) || c.IsFull) continue;
+            if (!AnyCandidateNear(c)) continue;
+
+            s_visits.Add(new Visit { Courier = c, Ptr = c.Pointer, ArmedAt = now });
+            Log($"courier #{c.EmployeeId} is waiting at his parking space (trunk {c.ParcelCount}/{Capacity(c)}) " +
+                $"and a bag lies within {Plugin.ScanRadius.Value:0.#} m; watching");
         }
     }
 
@@ -266,6 +311,43 @@ internal static class AutoLoad
     }
 
     /// <summary>
+    /// Whether a bag could be loaded now apart from the settle time: nobody holds it, the courier didn't just put
+    /// it back, it is within the radius, and the game's own hand-over check accepts it.
+    /// </summary>
+    private static bool IsEligible(OrderPaperBag bag, Vector3 park, float radius, out float dist, out OrderListData order)
+    {
+        dist = 0f;
+        order = null;
+        int id = bag.GetInstanceID();
+        if (OnlineOrderPaperBagContainer.IsCarried(bag)) { s_ignored.Remove(id); return false; }
+        if (s_ignored.TryGetValue(id, out var where))
+        {
+            if ((bag.transform.position - where).sqrMagnitude < 0.25f) return false; // still where the courier left it
+            s_ignored.Remove(id);
+        }
+        dist = Vector3.Distance(bag.transform.position, park);
+        if (dist > radius) return false;
+        return CourierNpc.TryResolveHandOverOrder(bag, out order) && order != null;
+    }
+
+    private static bool AnyCandidateNear(CourierNpc c)
+    {
+        var bags = OnlineOrderPaperBagContainer.m_PaperBags;
+        if (bags == null) return false;
+        var park = ParkPoint(c);
+        float radius = Plugin.ScanRadius.Value;
+        for (int i = 0; i < bags.Count; i++)
+        {
+            var bag = bags[i];
+            if (bag == null) continue;
+            var go = bag.gameObject;
+            if (go == null || !go.activeInHierarchy) continue;
+            if (IsEligible(bag, park, radius, out _, out _)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Updates the settle timers and, when <paramref name="into"/> is given, lists the bags that have been
     /// lying free in the area for at least <see cref="SettleSeconds"/>.
     /// </summary>
@@ -285,17 +367,9 @@ internal static class AutoLoad
             var go = bag.gameObject;
             if (go == null || !go.activeInHierarchy) continue;
 
-            if (OnlineOrderPaperBagContainer.IsCarried(bag)) { s_ignored.Remove(id); continue; }
-            if (s_ignored.TryGetValue(id, out var where))
-            {
-                if ((bag.transform.position - where).sqrMagnitude < 0.25f) continue; // still where the courier left it
-                s_ignored.Remove(id);
-            }
-
-            float dist = Vector3.Distance(bag.transform.position, park);
-            if (dist > radius) continue;
+            float dist;
             OrderListData order;
-            if (!CourierNpc.TryResolveHandOverOrder(bag, out order) || order == null) continue;
+            if (!IsEligible(bag, park, radius, out dist, out order)) continue;
 
             present.Add(id);
             if (!v.FirstSeen.TryGetValue(id, out var first)) { first = now; v.FirstSeen[id] = now; }

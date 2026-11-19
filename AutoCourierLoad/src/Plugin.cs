@@ -13,7 +13,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.autocourierload";
     public const string Name = "Auto Courier Load";
-    public const string Version = "0.2.2";
+    public const string Version = "0.2.3";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
