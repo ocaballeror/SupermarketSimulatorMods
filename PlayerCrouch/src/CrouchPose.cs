@@ -3,7 +3,7 @@
  * always disabled (PlayerSkin.Toggle(!isLocal)), so posing it would be invisible work; the local player only
  * sees the camera drop (Crouch.cs).
  *
- * Player models are driven by a humanoid Animator plus Animation Rigging rigs for look-at and hand IK. Each
+ * Player models are driven by a humanoid Animator plus Animation Rigging rigs (look-at while carrying; leg and hand IK only in vehicles / with the mop). Each
  * selectable character (skin) has its own; the one shown is PlayerInstance.SkinController.ActiveSkin (see
  * FindAnimator). There is no crouch clip, so after the Animator has written the pose (we run in
  * LateUpdate, which Unity runs after the animation update) we bend it:
@@ -17,10 +17,17 @@
  * The walk cycle keeps playing, so crouch-walking still moves the feet.
  *
  * Held items: the carried box hangs under the player's "Camera Pivot" (FirstPersonController.CinemachineCameraTarget
- * -> "Object Holder" child), and the hands are IK'd onto it before our LateUpdate. Only rotation is networked for
- * the pivot (PhotonTransformView SyncPosition=0), so its position is ours to move on a remote copy: we shift it by
- * exactly the displacement of the model's head (hips drop + lean), which keeps the box with the hands and body.
- * Restored when the player stands, on errors, when the mod is switched off.
+ * -> "Object Holder" child). The hands are not IK'd onto it: they follow the carry animation pose
+ * (PlayerAnimation.ToggleCarrying -> SetUpperBodyState); no game code sets the hand IK targets. Only rotation is
+ * networked for the pivot (PhotonTransformView SyncPosition=0), so its position is ours to move on a remote copy: we
+ * shift it by exactly the displacement of the model's head (hips drop + lean), which keeps the box with the hands and
+ * body. Restored when the player stands, on errors, when the mod is switched off.
+ *
+ * Look-at: while carrying, PlayerAnimation.ToggleLookAt turns on a MultiAimConstraint (rig "LookAt") that aims the
+ * model's Spine1 at "Camera Pivot/FPS VCam/RigLookTarget" (prefab, all skins). That target is a child of the pivot,
+ * so moving the pivot would drag it down about 0.5 m (1 m in front of the pivot) and the Spine1 aim (which the rig
+ * solves before our LateUpdate, and whose head rotation we capture and restore) would point ~30 degrees too far
+ * down. So the target is put back where it was in world space every frame (same re-base pattern as the pivot).
  *
  * Accumulation guard: the bend is applied on top of whatever pose the bones have. If the Animator didn't
  * write this frame (culled or disabled), the bones still hold last frame's bent pose and bending again would
@@ -66,7 +73,12 @@ internal static class CrouchPose
         public bool PivotWritten;
         public Vector3 PivotLastPos;
         public Vector3 PivotLastOffset;
+        public Transform Look;
+        public bool LookWritten;
+        public Vector3 LookLastPos;
+        public Vector3 LookLastOffset;
         public bool LoggedDims;
+        public float NextLookFind;
     }
 
     private static readonly Dictionary<IntPtr, State> States = new();
@@ -359,18 +371,74 @@ internal static class CrouchPose
         }
         var p = s.Pivot;
         if (p == null) return;
+        if (s.Look == null && s.NextLookFind <= Time.unscaledTime)
+        {
+            s.NextLookFind = Time.unscaledTime + 2f;
+            s.Look = FindLook(p);
+        }
+        var lt = s.Look;
         Vector3 local = p.parent != null ? p.parent.InverseTransformVector(worldDelta) : worldDelta;
+
+        // Undo our previous writes first, so we start from what the game and the animation expect.
+        Vector3 ltBase = default;
+        if (lt != null)
+        {
+            var lc = lt.localPosition;
+            ltBase = s.LookWritten && lc == s.LookLastPos ? lc - s.LookLastOffset : lc;
+            lt.localPosition = ltBase;
+        }
         var cur = p.localPosition;
         var basePos = s.PivotWritten && cur == s.PivotLastPos ? cur - s.PivotLastOffset : cur;
+        p.localPosition = basePos;
+        Vector3 ltWorld = lt != null ? lt.position : default; // where the look-at rig expects its target
+
         var pos = basePos + local;
         p.localPosition = pos;
         s.PivotLastPos = pos;
         s.PivotLastOffset = local;
         s.PivotWritten = true;
+
+        if (lt != null)
+        {
+            lt.position = ltWorld; // keep the gaze target where it was
+            var lp = lt.localPosition;
+            s.LookLastPos = lp;
+            s.LookLastOffset = lp - ltBase;
+            s.LookWritten = true;
+        }
+    }
+
+    private static Transform FindLook(Transform pivot)
+    {
+        Transform t = null;
+        try
+        {
+            t = pivot.Find("FPS VCam/RigLookTarget");
+            if (t == null)
+            {
+                var all = pivot.GetComponentsInChildren<Transform>(true);
+                for (int i = 0; all != null && i < all.Length; i++)
+                    if (all[i] != null && all[i].name == "RigLookTarget") { t = all[i]; break; }
+            }
+        }
+        catch (Exception) { }
+        Plugin.Info(t != null ? "Remote look-at target found; it stays in place while the pivot moves"
+                              : "Remote look-at target 'RigLookTarget' not found; a carrying player's gaze may point too low");
+        return t;
     }
 
     private static void RestorePivot(State s)
     {
+        if (s.LookWritten)
+        {
+            s.LookWritten = false;
+            try
+            {
+                var lt = s.Look;
+                if (lt != null && lt.localPosition == s.LookLastPos) lt.localPosition = lt.localPosition - s.LookLastOffset;
+            }
+            catch (Exception) { /* object already destroyed */ }
+        }
         if (!s.PivotWritten) return;
         s.PivotWritten = false;
         try

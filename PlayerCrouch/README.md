@@ -24,7 +24,7 @@ Optional toggle mode: press once to crouch and again to stand. In this mode, jum
 
 Fixed values (not configurable): you walk at half speed, your eye height drops to 55% of standing height, going down or up takes 0.2 s, and your collision shape shrinks while crouched. Other players see your character bend its knees so its head sits at your crouched eye height, with a slight forward lean. Your crouch state is shared with other players, and other modded players are shown crouching.
 
-The config file is named after the plugin id. Version 1.0.5 renamed the id to `flamboyanthopper.playercrouch`, so the settings file is now `flamboyanthopper.playercrouch.cfg`. If you had changed settings before, they start at the defaults; copy them over from the old file (`<prefix>.playercrouch.cfg`) and delete that one.
+The config file is named after the plugin id. Version 1.0.5 renamed the id to `flamboyanthopper.playercrouch`, so the settings file is now `flamboyanthopper.playercrouch.cfg`. If you had changed settings before, they start at the defaults; copy them over from the old `*.playercrouch.cfg` file and delete that one.
 
 ## Who needs it (multiplayer)
 

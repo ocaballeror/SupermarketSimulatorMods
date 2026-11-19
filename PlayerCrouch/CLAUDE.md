@@ -4,8 +4,12 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
+v1.0.7 (round 2 of the review; not yet tested in-game):
+- **Gaze while carrying (remote view):** the 1.0.6 pivot move also dragged down `Camera Pivot/FPS VCam/RigLookTarget`, the target of the model's `LookAt` rig (a `MultiAimConstraint` that aims `mixamorig:Spine1` at it; verified with UnityPy in `level2` for all five skins). `PlayerAnimation.ToggleCarrying` -> `ToggleLookAt` tweens that rig on only while carrying, and the rig is solved before our LateUpdate, so a crouched carrier would have stared about 30 degrees down (target 1 m in front, lowered about 0.55 m) and the aim would have tilted the chest and arms. `CrouchPose.MovePivot` now keeps `RigLookTarget` at its original world position (same re-base and restore pattern as the pivot). The verbose log shows `Remote look-at target found ...`.
+- **Doc fix:** there is no hand IK on the carry: the hands follow the carry animation pose (`ToggleCarrying` -> `SetUpperBodyState`). `PlayerIKHandler.SetLeftHand`/`SetRightHand` have no callers in `native-all` and the only `SetWeight` callers are `NetworkVehicle.SeatPlayer`/`UnseatPlayer`. Remote copies of a held box also hang under that player's own `Object Holder` (`HoldObject` parents the item to `m_ObjectHolder`; `NetworkPlayerObjectHolder.UpdateObjectParent_RPC` is the shared no-op).
+
 v1.0.6 (review round after the v1.0.5 changes; not yet tested in-game):
-- **Held box while crouched (remote view):** the carried box hangs under the player's `Camera Pivot` (`CinemachineCameraTarget`), whose position is not networked (prefab `PhotonTransformView`: SyncPosition=0, SyncRotation=1, UseLocal=1; verified with UnityPy in `level2`), and the hand IK is solved before our LateUpdate. The pose used to pull the body down while the box stayed at standing height. `CrouchPose.MovePivot` now moves the remote player's pivot by the exact world displacement of the model's head (hips drop + lean), so the box (and the IK'd hands) stay together. Restored on stand-up, error, mod disable (`CrouchPose.Reset`) and when the player leaves.
+- **Held box while crouched (remote view):** the carried box hangs under the player's `Camera Pivot` (`CinemachineCameraTarget`), whose position is not networked (prefab `PhotonTransformView`: SyncPosition=0, SyncRotation=1, UseLocal=1; verified with UnityPy in `level2`), while the pose pulls the body (and the arms, which follow the carry animation) down. The pose used to pull the body down while the box stayed at standing height. `CrouchPose.MovePivot` now moves the remote player's pivot by the exact world displacement of the model's head (hips drop + lean), so the box and the hands stay together. Restored on stand-up, error, mod disable (`CrouchPose.Reset`) and when the player leaves.
 - **Model depth matches the camera:** the hips drop is derived from the crouch eye height instead of a fixed fraction: `headHeight * (1 - CameraHeight)` (head bone height above the skin root), minus the lean's own drop, limited to `MaxBodyDepth` (0.6) x leg length. `LeanAngle` 15 -> 20. `BodyDepth` was replaced by `MaxBodyDepth`. Check the verbose `Pose dims:` line (legLen, headHeight, wantHeadDrop, hipsDrop): if `hipsDrop` equals 0.6 x legLen the legs are the limit and the head stays above the camera height (the head can still clip into a ceiling the collider allows, by the difference).
 - **Local model is no longer posed** (renderers are always off for it; also removes the `No active character model found ... (local)` warning).
 - **Warnings throttled** (`Plugin.WarnThrottled`, 10 s per key) for pose failures, headroom failures and send failures; `SyncNetwork` now has a real 5 s retry back-off (`_sendRetryAt`). The boxed Photon key is cached.
@@ -24,7 +28,7 @@ v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switc
 - Does the FPS vcam actually follow `FirstPersonController.CinemachineCameraTarget`? (Logged `VCam follows:`.) If not, the camera won't drop and the camera offset must move whatever the vcam follows.
 - Is the player Animator humanoid (`human=True`)? The pose needs `Animator.GetBoneTransform`.
 - The local player's own body renderers are disabled (`PlayerSkin.Toggle(!m_IsLocal)`), so the local pose is invisible (no shadow either); it is applied anyway, harmlessly.
-- Do held boxes look wrong for other players while someone crouches? Yes, it was a real problem (box stays at standing height while the hands follow the torso); handled in 1.0.6 by lowering the remote pivot.
+- Do held boxes look wrong for other players while someone crouches? Yes, it was a real problem (box stays at standing height while the arms follow the torso); handled in 1.0.6 by lowering the remote pivot.
 
 ## How it works
 
@@ -52,7 +56,7 @@ v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switc
 - If the camera turns out to be parented under a bone or the vcam follows something else, the camera offset needs to move to that transform.
 - Execution order relative to `CinemachineBrain.LateUpdate` is undefined, so the camera may lag one frame during the transition. That's invisible at the default speed.
 - Remote pivot (1.0.6): `Camera Pivot` is found through `FirstPersonController.CinemachineCameraTarget` on the remote `PlayerInstance`, with a name search as fallback; the log says whether `Object Holder` is below it (`Remote camera pivot ... Object Holder is below it: True`). If it says False the box won't follow.
-- Remote hands aren't re-solved after the bend: they follow the chest by the same head displacement, but the forward lean moves them slightly relative to the box.
+- The arms aren't re-posed after the bend: they follow the chest by roughly the same head displacement, but the forward lean moves them slightly relative to the box.
 
 ## Game reference: player models
 
@@ -60,12 +64,12 @@ v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switc
 - `GetComponentInChildren<PlayerAnimation>(true)` returns the inactive rig-test variant: don't use it.
 - `PlayerAnimation` holds Animation Rigging rigs (`m_LookAtRig`; hand and leg IK in `PlayerIKHandler`). The locomotion blend tree is fed from `CharacterController.velocity`. There is no crouch state. Animators are humanoid (`human=True`, confirmed in-game).
 
-## In-game test (1.0.6)
+## In-game test (1.0.7)
 
-Both machines need PlayerCrouch >= 1.0.5 (1.0.6 for the box and depth changes on the viewing side), and `VerboseLogging = true` in `flamboyanthopper.playercrouch.cfg` on both.
+Both machines need PlayerCrouch >= 1.0.5 (1.0.7 on the viewing side for the box, depth and gaze changes), and `VerboseLogging = true` in `flamboyanthopper.playercrouch.cfg` on both.
 1. Join a game, hold Ctrl on one player; the other player must see the character crouch (knees bent, head about at the crouched eye height, slight lean). Walk while crouched.
-2. Pick up a box and crouch while carrying it; on the other screen the box must lower with the character and stay in the hands. Stand up: box back at standing height.
+2. Pick up a box and crouch while carrying it; on the other screen the box must lower with the character and stay in the hands, and the head and gaze must match the crouching player's real view pitch (look straight ahead, up and down; the character must not stare at the floor). Stand up: box back at standing height.
 3. Crouch under a ~1.1 m obstacle (collider allows it) and check the other screen for clipping.
 4. Switch the mod off in the config manager while crouched under something low: you must not get pushed; the collider restores after you leave.
 5. Drive a vehicle with Ctrl pressed: the camera must not drop.
-Send back: lines containing `[Crouch]` from both `BepInEx/LogOutput.log` files (`Model for player (remote)`, `Pose dims:`, `Remote camera pivot`, `crouched`/`stood up`, and any warnings).
+Send back: lines containing `[Crouch]` from both `BepInEx/LogOutput.log` files (`Model for player (remote)`, `Pose dims:`, `Remote camera pivot`, `Remote look-at target`, `crouched`/`stood up`, and any warnings).
