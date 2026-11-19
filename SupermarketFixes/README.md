@@ -28,13 +28,13 @@ Where it can, the mod uses the game's own drop, so other players see the item le
 
 After buying a box in a market (often ice cream cones in the general goods store), the box could stay on the shelf while your controls stayed locked onto it: clicking opened and closed it, and you couldn't drop or throw it. Now, after 2 seconds in that state, your controls are freed and the game tries once more to put the box in your hands. This works every time it happens, not just the first few. If you're a guest and the host never answers your pickup request, that is handled after about 8 seconds. Pressing F9 while a pickup is still waiting for the host does nothing until 3 seconds have passed, so it can't cancel a pickup that is about to succeed.
 
-### Bug #5: can't put items from a box onto a shelf until the box is closed and reopened
+### Bug #5: can't put items from a box or crate onto a shelf until it is closed and reopened (or deselected and reselected)
 
 Sometimes holding left click with an open box on an empty shelf slot (often one whose old label had just been cleared) placed nothing, until you closed the box and opened it again. The game could end up treating an open box as closed: for example when you pressed close while the box was still in its opening animation, or in multiplayer when a late "place/take item" answer from the host reopened a box you had just closed. Now, as soon as you hold left click with an open box, it's treated as open again and items go onto the shelf. If the game also still thinks you're holding right click after you've let go (that blocks placing too), that's released after half a second.
 
 The same symptom with a **crate** (left click on an empty shelf slot that has no label places nothing until you deselect and reselect the crate) is also handled: if the crate's remembered product choice points at something that is no longer in the crate, it is repaired when you aim at such a slot.
 
-If it still happens, the log says why (see `Diagnostics` / `VerboseLogging` below). Please send those lines.
+If it still happens, the log says why for boxes and crates (with `VerboseLogging` on, holding left click for 1.5 s without anything being placed logs one `[BoxPlace]` or `[CratePlace]` line; see `Diagnostics` / `VerboseLogging` below). Please send those lines.
 
 ### Bug #6: boxes stay floating after the box under them is taken
 
@@ -69,7 +69,7 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes the probl
 | Section | Setting | Default | What it does |
 |---|---|---|---|
 | General | `Enabled` | `true` | Enable the mod. Turning it off removes every fix right away; no restart needed. |
-| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes. Turns on the extra `[RackMove]`, `[GhostHeld]`, `[StuckBox]`, `[FloatBox]`, `[BoxPlace]`, `[JanitorAlign]` and `[CourierOrders]` log lines (recoveries and failures are always logged). With it on, **F8** scans the whole store for orphan, duplicate and stale (ghost) rack boxes. |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes. Turns on the extra `[RackMove]`, `[GhostHeld]`, `[StuckBox]`, `[FloatBox]`, `[BoxPlace]`, `[CratePlace]`, `[JanitorAlign]` and `[CourierOrders]` log lines (recoveries and failures are always logged). With it on, **F8** scans the whole store for orphan, duplicate and stale (ghost) rack boxes. |
 | RackMove | `AdoptNetworkedBoxesOnRebuild` | `true` | When a guest rebuilds a rack slot from network data, keeps its networked boxes in the slot instead of orphaning them. This is the main ghost-box fix. |
 | RackMove | `GuardDelayedInstancing` | `true` | Ignores delayed "draw this box as racked" calls for boxes no longer in a slot, or on a rack being carried. |
 | RackMove | `FinishBoxTweensBeforePickup` | `true` | Before a rack is picked up, finishes any box animations still running on it. |
