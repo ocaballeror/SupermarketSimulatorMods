@@ -5,7 +5,9 @@ Improvement #9 (`TODO`). Modifier (LeftShift) + Take/Use moves every product bet
 
 ## Status
 
-- v0.2.1 (settings reduced, commit "simplify mod settings"): only `Enabled`, `ModifierKey` and `VerboseLogging` (the cfg key `[Diagnostics] VerboseLogging` already existed, so existing cfgs keep their stored value; the default is now false for new configs) remain settings. `BulkTake`, `BulkPlace`, `Boxes`, `PaperBags`, `Crates` (all true), `SecondsBetweenItems` (**0.2**, was 0.02; the user's value, note it is slower than the game's own ~0.1-0.2 s repeat, so it may be a typo for 0.02) and `AnimationSpeed` (5) are `const`s in `Plugin.cs`.
+- v0.2.3 (review round 1 of Improvement #9): a bag place burst now ends quietly when the bag has no product left for the slot (`!bag.IsTargetProductExist(slot)` in the quiet end checks), so a mixed bag no longer ends with the game's "no matching product" warning; a box or bag burst is finished as stale when its interaction's `Update` hasn't run for 1 s (container thrown / put away mid-burst, then picked up again); `Plugin.AnimationSpeed` is `static readonly` (CS0162 warning); doc fixes (0.02 s interval, second-click behaviour).
+- v0.2.2: only the `SecondsBetweenItems` value change back to 0.02 (see below).
+- v0.2.1 (settings reduced, commit "simplify mod settings"): only `Enabled`, `ModifierKey` and `VerboseLogging` (the cfg key `[Diagnostics] VerboseLogging` already existed, so existing cfgs keep their stored value; the default is now false for new configs) remain settings. `BulkTake`, `BulkPlace`, `Boxes`, `PaperBags`, `Crates` (all true), `SecondsBetweenItems` (**0.02**; the user's value, commit `0ca098e` set it back from 0.2, do not change it) and `AnimationSpeed` (5) are `const`s in `Plugin.cs`.
 - v0.2.0 (rework after the 2026-11-15 session, not yet tested in-game): the user reported that Shift-click didn't work with online-order paper bags (no `[Bulk] bag` line in either log, so `BagBulk.TryStart` never started a burst; the failing condition is unknown). Now every refusal while the modifier is held is logged (`bag take: not started (<reason>)`). New: a take burst for a bag packed for an active order is capped at what the order still needs (`BagBulk.ActiveOrder`: `OrderNotebookContainer.CurrentOrder`; opening a bag runs `OrderPaperBag.OnDetachTag`, so the bag's tag is normally gone by then; excluded when `CourierManager.TryGetClaimStatus` or online `NetworkOrderManager.IsBeingWorkedOn(id, ownUserId)` says someone else handles it, the same checks as the notebook's "worked on by" label). Order without that product / already enough → the click is swallowed (`bag take: nothing to do`). Review 2026-11-16: the earlier bag burst never started because `Refusal` used `WeaponWheelController.IsWheelInteraction`, whose last link is `OnlineOrderInteraction.enabled` (true while a bag is held); only `IsOpen` is checked now. Don't use `IsWheelInteraction` in code that runs with a bag in hand. No active order → fill the bag as before.
 - v0.1.1 written and builds; review round 1 applied (see below). **Not tested in-game.** Nothing about the runtime behaviour is confirmed yet.
 - Open questions to settle from the first test logs (see "In-game test"):
@@ -36,7 +38,7 @@ Improvement #9 (`TODO`). Modifier (LeftShift) + Take/Use moves every product bet
   the game start its loop, swallow the matching release.
 - **Box steps** (`BoxInteraction.Update` prefix, runs before the game's per-product code in the click frame):
   the game's own `CheckTakeProductFromSlot` + `TryTakeProductFromSlot` / `CheckPlaceProductToSlot` +
-  `TryPlaceProductToDisplay(Vector3)`, one per `SecondsBetweenItems` (const 0.2 s). Capped up front at
+  `TryPlaceProductToDisplay(Vector3)`, one per `SecondsBetweenItems` (const 0.02 s). Capped up front at
   min(available, room) from local state.
 - **Bag order cap:** `Burst.Limit` = order quantity of the slot's product (`OrderListData.GetOrderDataOfId(pid).ProductCount`) minus that product's count in `bag.m_SortedProducts`; -1 without an active order.
 - **Bag steps** (`OnlineOrderInteraction.Update` prefix): `OnlineOrderService.TryTakeProductIntoBag(slot, bag,
@@ -79,7 +81,7 @@ Applied:
   the loop also StopCoroutine's `m_OnUseCoroutine`/`m_OnTakeCoroutine` like a release; Reset (mod disabled)
   finishes the burst; the 30 s timeout and an `isActiveAndEnabled` check also run in the MoveNext prefix.
 - Bag take refuses when the bag is already full, so the game's "bag full" warning shows; bag bursts don't
-  start while the weapon wheel is open / wheel interaction (`WeaponWheelController.IsOpen`/`IsWheelInteraction`).
+  start while the weapon wheel is open (`WeaponWheelController.IsOpen`; `IsWheelInteraction` is not used, see v0.2.0).
 - `Bulk.IsLocal` also requires `PlayerInstance.m_PhotonView.IsMine` online (the game's crate/bag input guard).
 - TweenBoost only speeds tweens whose target is (inside) a `Product`, plus target-less Sequences (the bag's
   PlayProductMove). Warning popups, sale signs, highlights keep their speed.
@@ -88,7 +90,8 @@ Applied:
 ## Not handled (on purpose)
 
 - Vending slots (`m_CurrentVendingSlot`), baker crate, guard crate: left vanilla.
-- Ice cream slots (`IceCreamConeDisplaySlot`/`IceCreamFlavourDisplaySlot`) with a box on a guest: vanilla (their
+- Ice cream slots (`IceCreamConeDisplaySlot`/`IceCreamFlavourDisplaySlot`) override `AddProduct` natively, so the `DisplaySlot.AddProduct` boost probably doesn't reach them: box bursts onto them (host/offline) likely play at normal animation speed (cosmetic, unverified, left as is).
+- Ice cream slots with a box on a guest: vanilla (their
   capacity rules aren't the plain `GridLayoutInStorage`).
 - No key hint added.
 

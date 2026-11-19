@@ -31,7 +31,7 @@ Vending machines, the baker's crate and the security guard's crate are left as t
 | Keys | `ModifierKey` | `LeftShift` | Key to hold while clicking. The clicks themselves are the game's **Take** (right click) and **Use** (left click) bindings, so if you rebind those in the game's settings the mod follows. `None` makes every Take/Use click a bulk transfer. |
 | Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (`[Bulk]` lines in `BepInEx/LogOutput.log` for each bulk transfer). |
 
-Products are moved one every 0.2 seconds (never faster than 0.02 s online). The modifier is a keyboard key; there is no gamepad shortcut.
+Products are moved one every 0.02 seconds (never faster than 0.02 s online). The modifier is a keyboard key; there is no gamepad shortcut.
 
 ## Who needs it (multiplayer)
 
@@ -39,7 +39,7 @@ Only the player who wants to use it, host or guest. Each product still moves thr
 
 When a guest fills or empties a **box**, every product goes through the host as in the normal game, so it can take a moment longer to finish on a slow connection. While a bulk transfer is running and its products are still on their way (at most about two seconds after it ends), the box stays in your hands: clicks, drop and throw on that box are ignored until everything has arrived. This keeps the box contents the same on every screen.
 
-On the host and offline, a second Shift-click during a running transfer is ignored too.
+With a box on the host or offline, a second Shift-click during a running transfer is ignored too. With a paper bag it restarts the transfer, and with the crate it stops the running transfer and starts a new one.
 
 With the crate, the transfer stops if you look away from the shelf slot before it is done.
 

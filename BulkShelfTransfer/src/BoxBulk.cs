@@ -58,10 +58,12 @@ internal static class BoxBulk
         public int Sent;
         public float NextStep;
         public float Started;
+        public float LastTick;
         public int StartBoxCount;
     }
 
     private static Burst _active;
+    private const float StaleSeconds = 1f;
 
     // Guest only: after a burst, the host's answers arrive over the next moments. Until the box shows the
     // expected count (or a short timeout), any new take/place on that box would count from stale numbers and
@@ -161,7 +163,7 @@ internal static class BoxBulk
         _active = new Burst
         {
             Bi = bi, Box = box, Slot = slot, Take = take, Target = target,
-            NextStep = 0f, Started = Time.time, StartBoxCount = box.ProductCount,
+            NextStep = 0f, Started = Time.time, LastTick = Time.time, StartBoxCount = box.ProductCount,
         };
         TweenBoost.Boosted = 0;
         TweenBoost.Mark(take ? box : slot, MarkSeconds);
@@ -176,6 +178,9 @@ internal static class BoxBulk
         var b = _active;
         if (b == null || !Bulk.Same(b.Bi, bi)) return;
         float now = Time.time;
+        // Update stops running while the box is out of the hands (thrown, interaction ended); don't resume a stale burst.
+        if (now - b.LastTick > StaleSeconds) { Finish("stale (interaction was not updating)"); return; }
+        b.LastTick = now;
         if (now < b.NextStep) return;
 
         var box = bi.m_Box;

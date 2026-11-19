@@ -30,7 +30,7 @@
  * (OrderNotebook.UpdateWorkedStatus): CourierManager.TryGetClaimStatus (a courier claimed it / is out
  * delivering it) and, online, NetworkOrderManager.IsBeingWorkedOn(id, ownUserId, out by) (another
  * player). An active order that doesn't contain the slot's product, or already has enough of it in the
- * bag, gets no burst: the click goes to the game.
+ * bag, gets no burst: the click is swallowed (nothing to do).
  */
 using System;
 using HarmonyLib;
@@ -50,11 +50,13 @@ internal static class BagBulk
         public int Moved;
         public float NextStep;
         public float Started;
+        public float LastTick;
         public int Limit = -1;   // max products to take; -1 = as many as the bag holds
     }
 
     private static Burst _active;
     private const int MaxSteps = 500;
+    private const float StaleSeconds = 1f;
 
     internal static void Reset() => _active = null;
 
@@ -98,7 +100,7 @@ internal static class BagBulk
         }
 
         TweenBoost.Boosted = 0;
-        _active = new Burst { Oi = oi, Bag = bag, Slot = slot, Take = take, Started = Time.time, Limit = limit };
+        _active = new Burst { Oi = oi, Bag = bag, Slot = slot, Take = take, Started = Time.time, LastTick = Time.time, Limit = limit };
         Bulk.Info($"bag {(take ? "take" : "place")}: start, bag {bag.ProductCount}/{oi.m_MaxBagItemCount}, slot {slot.ProductCount}{orderNote}");
         return true;
     }
@@ -202,6 +204,9 @@ internal static class BagBulk
         var b = _active;
         if (b == null || !Bulk.Same(b.Oi, oi)) return;
         float now = Time.time;
+        // Update stops running while the bag interaction is off (bag put away); don't resume a stale burst.
+        if (now - b.LastTick > StaleSeconds) { Finish("stale (interaction was not updating)"); return; }
+        b.LastTick = now;
         if (now < b.NextStep) return;
 
         var bag = oi.m_CurrentOrderPaperBag;
@@ -215,7 +220,7 @@ internal static class BagBulk
         else if (b.Take ? oi.m_holdingUse : oi.m_holdingTake) stop = "other button held";
         // Quiet end checks; the first step goes to the game unchecked so a refusal shows its warning.
         else if (b.Moved > 0 && (b.Take ? !slot.HasProduct || bag.ProductCount >= oi.m_MaxBagItemCount
-                                        : !bag.HasProduct || slot.Full)) stop = "nothing left to move";
+                                        : !bag.HasProduct || slot.Full || !bag.IsTargetProductExist(slot))) stop = "nothing left to move";
         if (stop != null) { Finish(stop); return; }
 
         bool begun = TweenBoost.Begin();

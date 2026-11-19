@@ -13,7 +13,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.bulkshelftransfer";
     public const string Name = "Bulk Shelf Transfer";
-    public const string Version = "0.2.2";
+    public const string Version = "0.2.3";
 
     internal static ManualLogSource Logger;
 
@@ -28,7 +28,7 @@ public class Plugin : BasePlugin
     internal const bool PaperBags = true;
     internal const bool Crates = true;
     internal const float SecondsBetweenItems = 0.02f;
-    internal const float AnimationSpeed = 5f;
+    internal static readonly float AnimationSpeed = 5f;
 
     internal static bool Active { get; private set; }
 
