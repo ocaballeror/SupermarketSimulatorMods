@@ -184,7 +184,8 @@ internal static class Presence
         _nextTick = Time.unscaledTime + 1f;
         try
         {
-            ComputerFurniture.RetryPendingBuild();
+            try { ComputerFurniture.RetryPendingBuild(); }
+            catch (Exception e) { Plugin.Debug("Retrying the computer prefab build failed: " + e.Message); }
             if (Online) Publish(Ready);
             ComputerFurniture.ApplyPrice();
 
