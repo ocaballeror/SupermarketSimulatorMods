@@ -54,9 +54,16 @@
  *                      begins (the clerk has walked to the first display and is about to open the box),
  *                      a RestockDisplay.OnBegin prefix puts the stashed box on the floor behind the clerk
  *                      (Clerk.DropBoxToGround on it, then CarryBox(B1) again). The box is now `Plan.Floor`.
- *                      Clerk-dropped boxes are subscribed to StorageStreet, but every street search also
- *                      requires StorageStreet.IsWithinRestockableArea (the outside delivery area), so no
- *                      restocker's search picks up a box lying inside the store: it waits for this clerk.
+ *                      Clerk-dropped boxes are subscribed to StorageStreet. Every street search also requires
+ *                      StorageStreet.IsWithinRestockableArea (the outside delivery area), which should already
+ *                      keep other restockers away from a box lying inside the store, but in-game another restocker
+ *                      did take one (2026-11-19 report), e.g. when the area covers the spot. So the box is
+ *                      also reserved: while it is `Plan.Floor` (owner alive and active, at most ReserveMaxSeconds),
+ *                      a StorageStreet.GetBoxesFromStreet postfix removes it from the list (a fresh list; the
+ *                      three restocker street searches all read it). Reserving through Box.IsTargeted instead
+ *                      would also stop online players picking it up (NetworkBox.IsClaimedByNpc), so it isn't used.
+ *                      Safety net: a MoveTo.ShouldAbort postfix stops the walk back (AbortWithFailure) when the
+ *                      box is gone (`Plan.FetchingFloor`, hands empty).
  *   Phase DeliverFirst: vanilla handles the current box to the end: more displays, then the trash if
  *                      empty (GoToTrash), or a rack if not (RackingState). The mod stays out of every
  *                      search made with a box in hand, with one exception (regroup):
@@ -134,6 +141,10 @@ internal static class DoubleCarry
         public Box Floor;
         /// <summary>Time of the first empty-handed search that tried to fetch the floor box (-1: not yet).</summary>
         public float FloorRetryStart = -1f;
+        /// <summary>When the box was put on the floor (Time.time); a reservation never outlives <c>ReserveMaxSeconds</c>.</summary>
+        public float FloorSince;
+        /// <summary>The run started by the last search walks back for <c>Floor</c>; cleared at the next search.</summary>
+        public bool FetchingFloor;
         /// <summary>The trip started with a storage job for box 1 (vanilla chose a rack, not displays).</summary>
         public bool FirstToStorage;
         /// <summary>The second job fetched (or being fetched) is a storage job.</summary>
@@ -166,6 +177,13 @@ internal static class DoubleCarry
     /// <summary>After this long the set-down box should have landed; its pose is sent to the guests again.</summary>
     private const float SettleSeconds = 1.5f;
 
+    /// <summary>
+    /// A set-down box stays hidden from other restockers' searches at most this long, even if its owner's plan
+    /// never ends (the plan normally ends far sooner: the owner picks the box up, finds it gone, or gives up
+    /// after <c>FloorRetrySeconds</c> of trying).
+    /// </summary>
+    private const float ReserveMaxSeconds = 600f;
+
     private const float StackTweenTime = 0.3f;
 
     private static readonly Dictionary<IntPtr, Plan> Plans = new();
@@ -175,6 +193,9 @@ internal static class DoubleCarry
     private static readonly HashSet<IntPtr> Raised = new();
     // Restocking/Racking sequence currently running a shortened list -> (sequence, its clerk, full task list).
     private static readonly Dictionary<IntPtr, (SupermarketSimulator.Sequence.Sequence Seq, ClerkT Clerk, List<SequenceTask> Original)> Stripped = new();
+
+    // Reserved boxes already reported in the log (verbose only), so a search every few seconds doesn't spam.
+    private static readonly HashSet<IntPtr> LoggedReserved = new();
 
     internal static bool InIdleTick;
     private static bool _dropping;
@@ -691,6 +712,7 @@ internal static class DoubleCarry
         var plan = GetPlan(clerk);
         if (plan == null) return true;
         plan.FetchOnlyNext = false;
+        plan.FetchingFloor = false;   // the run that went back for the floor box (if any) has ended
         // The fetch-only run that reserved these has ended (its Exit cleared them).
         plan.ReservedSecond = null;
 
@@ -864,6 +886,76 @@ internal static class DoubleCarry
             Info($"{Name(clerk)}: going back for the box it put down, taking product {pid} to storage");
         }
         plan.Phase = Phase.Unwind;
+        plan.FetchingFloor = true;
+        return true;
+    }
+
+    // ---------------------------------------------------------------- reserving the set-down box
+
+    /// <summary>
+    /// The box is the one a clerk with a two-box trip put on the floor and is coming back for: no other
+    /// restocker's search may take it. Derived from <c>Plan.Floor</c>, so it ends with the plan (owner picked
+    /// the box up, found it gone, gave up, was fired or deactivated, the mod was turned off) and never needs
+    /// to be released by hand. Two more limits so it can't stay reserved forever: the owner has to be alive and
+    /// active, and <c>ReserveMaxSeconds</c> after the set-down it lapses regardless.
+    /// </summary>
+    internal static bool IsReservedFloorBox(Box box, out ClerkT owner)
+    {
+        owner = null;
+        if (box == null || Plans.Count == 0) return false;
+        foreach (var plan in Plans.Values)
+        {
+            var floor = plan.Floor;
+            if (floor == null || floor.Pointer != box.Pointer) continue;
+            var clerk = plan.Clerk;
+            if (clerk == null) continue;
+            var mgmt = clerk.ManagementData;
+            if (mgmt == null || !mgmt.IsActive) continue;
+            if (Time.time - plan.FloorSince > ReserveMaxSeconds) continue;
+            owner = clerk;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Postfix of <c>StorageStreet.GetBoxesFromStreet</c>, the list every restocker street search walks (restock
+    /// from the street, street box to rack, empty street box), including this mod's second-box search. Returns
+    /// a fresh list, so removing from it is safe. The owner never needs this list for its own box: it points
+    /// its search results at the floor box directly (<c>FetchFromFloor</c>).
+    /// </summary>
+    internal static void HideReservedBoxes(Il2CppSystem.Collections.Generic.List<Box> boxes)
+    {
+        if (boxes == null || Plans.Count == 0 || !HostSide) return;
+        for (int i = boxes.Count - 1; i >= 0; i--)
+        {
+            var box = boxes[i];
+            if (!IsReservedFloorBox(box, out var owner)) continue;
+            boxes.RemoveAt(i);
+            if (LoggedReserved.Add(box.Pointer))
+                Info($"box (product {ProductOf(box)}) put down by {Name(owner)} is reserved for it, hidden from other restockers' searches");
+        }
+    }
+
+    /// <summary>
+    /// Safety net, called every frame for the clerk's current MoveTo: the clerk is walking back for the box it
+    /// put down (hands still empty) and the box has been taken, racked or destroyed since the search -> stop
+    /// walking (the run fails and the clerk goes back to idle and picks up its normal work).
+    /// </summary>
+    internal static bool ShouldStopWalkingBack(MoveTo move)
+    {
+        if (Plans.Count == 0 || !HostSide) return false;
+        var clerk = move.m_Clerk;
+        if (clerk == null) return false;
+        var plan = GetPlan(clerk);
+        if (plan == null || !plan.FetchingFloor) return false;
+        // Box in hand: it was picked up (or this is a later leg of the run), nothing left to check.
+        if (clerk.m_CurrentBox != null && clerk.m_CarryingBox) { plan.FetchingFloor = false; return false; }
+        var floor = plan.Floor;
+        if (floor == null) { plan.FetchingFloor = false; return false; }
+        if (IsOnFloor(clerk, floor)) return false;
+        plan.FetchingFloor = false;
+        Info($"{Name(clerk)}: the box it was walking back for (product {ProductOf(floor)}) is gone, stopping");
         return true;
     }
 
@@ -894,6 +986,8 @@ internal static class DoubleCarry
         MoveAside(clerk, stash, task.TargetDisplaySlot);
         plan.Floor = stash;
         plan.FloorRetryStart = -1f;
+        plan.FloorSince = Time.time;
+        plan.FetchingFloor = false;
         Info($"{Name(clerk)}: put box (product {ProductOf(stash)}) on the floor to unpack product {ProductOf(cur)}");
     }
 
@@ -1298,6 +1392,7 @@ internal static class DoubleCarry
         Plans.Clear();
         Stripped.Clear();
         Raised.Clear();
+        LoggedReserved.Clear();
         InIdleTick = false;
         _dropping = false;
     }
@@ -1426,5 +1521,35 @@ internal static class IdleTickPatch
     {
         DoubleCarry.InIdleTick = false;
         return __exception;
+    }
+}
+
+/// <summary>
+/// Every restocker street search goes through StorageStreet.GetBoxesFromStreet (CheckStreetForRequiredProduct and
+/// both street branches of PerformSearch call it); a clerk's set-down box is removed from the result while its
+/// owner is coming back for it.
+/// </summary>
+[HarmonyPatch(typeof(StorageStreet), nameof(StorageStreet.GetBoxesFromStreet))]
+internal static class StreetBoxesPatch
+{
+    private static void Postfix(ref Il2CppSystem.Collections.Generic.List<Box> __result)
+    {
+        try { DoubleCarry.HideReservedBoxes(__result); }
+        catch (Exception e) { Plugin.Logger.LogError($"[DoubleCarry] hiding the reserved box failed: {e}"); }
+    }
+}
+
+/// <summary>Sequence.Tick asks the running task every frame; MoveTo only ever aborts on an invalid path.</summary>
+[HarmonyPatch(typeof(MoveTo), nameof(MoveTo.ShouldAbort))]
+internal static class MoveToAbortPatch
+{
+    private static void Postfix(MoveTo __instance, ref SequenceTask.AbortStatus __result)
+    {
+        if (__result != SequenceTask.AbortStatus.Continue) return;
+        try
+        {
+            if (DoubleCarry.ShouldStopWalkingBack(__instance)) __result = SequenceTask.AbortStatus.AbortWithFailure;
+        }
+        catch (Exception e) { Plugin.Logger.LogError($"[DoubleCarry] walk-back check failed: {e}"); }
     }
 }
