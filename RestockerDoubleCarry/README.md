@@ -1,6 +1,6 @@
 # Restocker Double Carry
 
-Experienced restockers carry **two boxes per trip**, both when they restock shelves and when they take delivered boxes to storage. A restocker at level 10 or higher (configurable) works like this:
+Experienced restockers carry **two boxes per trip**, both when they restock shelves and when they take delivered boxes to storage. A restocker at level 10 or higher works like this:
 
 1. It picks up a box for its next job, as the game decides: a box for a product that needs restocking (from a storage rack, the outside delivery area or a delivery vehicle), or a delivered box that goes to storage.
 2. If there is a second job, it fetches a second box for it before leaving. The second box rides on top of the first. The second job can be:
@@ -34,10 +34,10 @@ All the restocker's own settings (use unlabeled racks, pick up boxes from the gr
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch. Turning it off takes effect right away; no restart needed. A restocker carrying two boxes at that moment puts the second one down, or takes it in hand if its hands are empty. |
-| Restockers | `MinimumLevel` | `10` | Restockers at this level or higher carry two boxes, for restocking and for taking deliveries to storage (1 to 100). |
-| Restockers | `StackSecondBox` | `true` | Shows the second box stacked on top of the first in the restocker's hands while it carries two. When one of the two boxes leaves the hands, the other one moves down into the hands. |
-| Diagnostics | `VerboseLogging` | `true` | Writes each step of a two-box trip to `BepInEx/LogOutput.log` (tag `[DoubleCarry]`). |
+| General | `Enabled` | `true` | Enable the mod. Turning it off takes effect right away; no restart needed. A restocker carrying two boxes at that moment puts the second one down, or takes it in hand if its hands are empty. |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (each step of a two-box trip, tag `[DoubleCarry]`, in `BepInEx/LogOutput.log`). |
+
+Fixed behaviour (not configurable): restockers at level 10 or higher carry two boxes, for restocking and for taking deliveries to storage, and the second box is shown stacked on top of the first in the restocker's hands while it carries two (when one of the two boxes leaves the hands, the other one moves down into the hands).
 
 ## Who needs it (multiplayer)
 

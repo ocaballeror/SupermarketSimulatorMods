@@ -122,7 +122,6 @@ internal static class RackMoveFix
             "or whose rack is currently being carried.");
         FinishTweensBeforePickup = cfg.Bind("RackMove", "FinishBoxTweensBeforePickup", true,
             "Before a rack is picked up, complete any in-flight box animations on it.");
-        RackDiagnostics.Bind(cfg);
     }
 
     /// <summary>Clear transient state; called whenever the patches are applied or removed.</summary>
@@ -404,7 +403,7 @@ internal static class RackMoveFix
             if (Object.FindObjectsOfType(Il2CppType.Of<Rack>()).Length == 0) { s_nextSweep = now + NoRackProbeInterval; return; }
             s_sweepUntil = now + SweepWindow;
             s_reported.Clear();
-            if (RackDiagnostics.Enabled.Value)
+            if (Plugin.VerboseLogging.Value)
                 Plugin.Logger.LogInfo($"[RackMove] Joined as a guest: checking for loose racked boxes for {SweepWindow:F0} s");
         }
         if (now > s_sweepUntil) return;
@@ -537,7 +536,7 @@ internal static class RackMoveFix
 
     private static void Reject(Box nb, string why)
     {
-        if (!RackDiagnostics.Enabled.Value || !s_reported.Add(nb.Pointer)) return;
+        if (!Plugin.VerboseLogging.Value || !s_reported.Add(nb.Pointer)) return;
         Plugin.Logger.LogInfo($"[RackMove] Not adopting loose networked box ({why}): {RackDiagnostics.Describe(nb)}");
     }
 
@@ -568,7 +567,7 @@ internal static class RackMoveFix
                 }
                 var net = slot.OwnRack?.OwnNetworkRack;
                 if (net == null) return;
-                if (RackDiagnostics.Enabled.Value)
+                if (Plugin.VerboseLogging.Value)
                     Plugin.Logger.LogInfo($"[RackMove] Box uid={d.UID} product={d.ProductID} picked up straight off rack " +
                                           $"{slot.OwnRack.ID}: removing it from the rack for everyone");
                 net.RemoveLocalRackedBox_Broadcast(slot.GetIndexFromRack(), d.UID); // runs here at once (RpcTarget.All)
@@ -613,7 +612,7 @@ internal static class RackMoveFix
                 box.NetworkBox.DisableNetworkTransformSync(true); // true = sync on (the name is inverted)
             if (slot != null && ListContains(slot.m_Boxes, box))
             {
-                if (RackDiagnostics.Enabled.Value)
+                if (Plugin.VerboseLogging.Value)
                     Plugin.Logger.LogInfo($"[RackMove] Box uid={d?.UID} product={d?.ProductID} picked up straight off rack " +
                                           $"{slot.OwnRack?.ID}: removing it from the rack slot first");
                 RemoveFromSlot(slot, box);
@@ -626,7 +625,7 @@ internal static class RackMoveFix
                 return;
             var copy = FindCopy(IndexLocalCopies(null), box, out _, out _);
             if (copy == null) return;
-            if (RackDiagnostics.Enabled.Value)
+            if (Plugin.VerboseLogging.Value)
                 Plugin.Logger.LogInfo($"[RackMove] Loose box uid={d?.UID} product={d?.ProductID} picked up next to its copy on rack " +
                                       $"{copy.Slot.OwnRack?.ID}: removing the copy");
             RemoveFromSlot(copy.Slot, copy.Box);
@@ -739,13 +738,13 @@ internal static class RackMoveFix
                     if (why != null)
                     {
                         if (!lasting) s_settledSince[b.Pointer] = now; // busy: wait for it to settle again
-                        else if (RackDiagnostics.Enabled.Value && s_hostReported.Add(b.Pointer))
+                        else if (Plugin.VerboseLogging.Value && s_hostReported.Add(b.Pointer))
                             Plugin.Logger.LogInfo($"[RackMove] Host: leaving racked box networked ({why}): {RackDiagnostics.Describe(b)}");
                         continue;
                     }
 
                     var d = b.Data;
-                    if (RackDiagnostics.Enabled.Value)
+                    if (Plugin.VerboseLogging.Value)
                         Plugin.Logger.LogInfo($"[RackMove] Host: turning networked box uid={d.UID} product={d.ProductID} on rack " +
                                               $"{rack.ID} into an ordinary racked box for everyone");
                     s_settledSince.Remove(b.Pointer);
@@ -813,7 +812,7 @@ internal static class RackMoveFix
                 if (carried) SetCarriedRenderState(__instance);
                 else if (IsRegistered(__instance)) __instance.ToggleInstanced(false);
 
-                if (RackDiagnostics.Enabled.Value)
+                if (Plugin.VerboseLogging.Value)
                     Plugin.Logger.LogInfo($"[RackMove] Blocked late instancing of box uid={__instance.Data?.UID}: " +
                                           (carried ? "its rack is being carried" : "box is not in a rack slot"));
                 return false;
@@ -867,7 +866,7 @@ internal static class RackMoveFix
                     if (boxes[i] != null)
                         completed += DOTween.Complete(boxes[i].transform, true);
             }
-            if (completed > 0 && RackDiagnostics.Enabled.Value)
+            if (completed > 0 && Plugin.VerboseLogging.Value)
                 Plugin.Logger.LogInfo($"[RackMove] Rack {rack.ID}: finished {completed} in-flight box tween(s) before pickup");
         }
         catch (Exception e) { Plugin.Logger.LogError($"[RackMove] Finishing box tweens before pickup failed: {e}"); }

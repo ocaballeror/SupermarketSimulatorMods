@@ -12,15 +12,7 @@ namespace SupermarketFixes.Patches;
 /// <summary>Consistency checks for racks and their boxes. Logging only; changes nothing.</summary>
 internal static class RackDiagnostics
 {
-    internal static ConfigEntry<bool> Enabled;
-
-    internal static void Bind(ConfigFile cfg)
-    {
-        Enabled = cfg.Bind("RackMove", "Diagnostics", true,
-            "Log rack/box consistency checks when racks are picked up / placed, and on F8.");
-    }
-
-    private static bool On => Plugin.Active && Enabled.Value;
+    private static bool On => Plugin.Active && Plugin.VerboseLogging.Value;
 
     internal static string Describe(Box box)
     {

@@ -33,8 +33,8 @@
  *     frame as CheckFurnitureType is treated as "from a box" and ignored.
  *
  * On Escape: move the piece to its original position/rotation, run the checks, and if valid, freeze the
- * placer (skip FurniturePlacer.Update) for ReturnDelaySeconds (default 0 = place in the same frame),
- * re-check, then invoke onUse(true).
+ * placer (skip FurniturePlacer.Update) for a short time only when the exact pose can't be sent (otherwise
+ * it places in the same frame), re-check, then invoke onUse(true).
  * If invalid, restore the hologram where it was.
  *
  * Multiplayer: purely local to the player who moves the furniture; the placement itself uses the
@@ -93,7 +93,7 @@ internal static class MoveCancel
 
     private static void Log(string msg)
     {
-        if (Plugin.Verbose.Value) Plugin.Logger.LogInfo("[MoveCancel] " + msg);
+        if (Plugin.VerboseLogging.Value) Plugin.Logger.LogInfo("[MoveCancel] " + msg);
     }
 
     // ---------------------------------------------------------------- capture
@@ -171,8 +171,7 @@ internal static class MoveCancel
 
         try
         {
-            if (Plugin.ShowHint.Value) EnsureHint();
-            else RemoveHint();
+            EnsureHint();
 
             if (_returning)
             {
@@ -220,7 +219,7 @@ internal static class MoveCancel
             return;
         }
 
-        float delay = Mathf.Max(0f, Plugin.ReturnDelay.Value);
+        float delay = 0f; // put it down at once when the exact pose can be sent
         string how = "offline";
         if (Photon.Pun.PhotonNetwork.IsConnected)
         {
@@ -228,7 +227,7 @@ internal static class MoveCancel
                 how = "exact position sent to other players";
             else
             {
-                delay = Mathf.Max(delay, MinOnlineDelay);
+                delay = MinOnlineDelay;
                 how = "no transform sync found, holding so the streamed position catches up";
             }
         }

@@ -187,7 +187,7 @@ internal static class Presence
             if (Online) Publish(Ready);
             ComputerFurniture.ApplyPrice();
 
-            if (Plugin.Verbose.Value && Online)
+            if (Plugin.VerboseLogging.Value && Online)
             {
                 var sig = Describe();
                 if (sig != _lastSignature) { _lastSignature = sig; Plugin.Debug("Other players: " + sig); }
@@ -226,7 +226,7 @@ internal static class Presence
         if (ReadBool(me, KeyMod) != modOn) Set(KeyMod, (Il2CppSystem.Object)modOn);
         if (modOn && PhotonNetwork.IsMasterClient)
         {
-            float price = Plugin.Price.Value;
+            float price = Plugin.Price;
             var cur = ReadFloat(me, KeyPrice);
             if (cur == null || Mathf.Abs(cur.Value - price) > 0.0001f) Set(KeyPrice, (Il2CppSystem.Object)price);
         }
@@ -253,7 +253,7 @@ internal static class Presence
             }
         }
         catch (Exception) { }
-        return Plugin.Price.Value;
+        return Plugin.Price;
     }
 
     /// <summary>The mod is being switched off: tell everyone, so a host's guard counts this client as unmodded.</summary>

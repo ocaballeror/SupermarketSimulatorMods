@@ -13,16 +13,17 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.autocourierload";
     public const string Name = "Auto Courier Load";
-    public const string Version = "0.2.0";
+    public const string Version = "0.2.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<float> ScanRadius;
-    internal static ConfigEntry<int> MaxBags;
-    internal static ConfigEntry<float> LeaveUnderSeconds;
-    internal static ConfigEntry<float> KeepScanningSeconds;
-    internal static ConfigEntry<bool> LeaveWhenFull;
-    internal static ConfigEntry<bool> Diagnostics;
+    internal static ConfigEntry<bool> VerboseLogging;
+
+    // Fixed values (no longer settings).
+    internal const float LeaveUnderSeconds = 60f;
+    // this one doesn't make sense. he always loads any bag that is dropped in his search radius
+    internal const float KeepScanningSeconds = 30f;
 
     /// <summary>True while the mod's patches are applied.</summary>
     internal static bool Active { get; private set; }
@@ -38,13 +39,9 @@ public class Plugin : BasePlugin
         ScanRadius = Config.Bind("AutoCourierLoad", "ScanRadius", 4f,
             new ConfigDescription(
                 "How far from the courier's parking space (in metres) he looks for closed, name-tagged " +
-                "delivery bags when he comes back from a delivery. Type a number, 0.5 to 20.",
+                "delivery bags.",
                 new ClampedFloat(0.5f, 20f)));
-        MaxBags = 0;
-        LeaveUnderSeconds = 60f;
-        LeaveWhenFull = true;
-        KeepScanningSeconds = 30f; // this one doesn't make sense. he always loads any bag that is dropped in his search radius
-        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);

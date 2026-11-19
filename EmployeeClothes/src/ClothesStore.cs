@@ -263,6 +263,49 @@ internal static class ClothesStore
         return null;
     }
 
+    // The "Apply to all" switch is one global value, kept as a line "#applyall<TAB>1" in the same file. The key starts
+    // with '#', so it can't clash with a save file name, and the per-save lines are left alone when it is rewritten.
+    // Old files without the line mean false; older versions ignore the line (they only look for their save's key).
+    private const string ApplyAllKey = "#applyall";
+    private static bool _applyAll;
+    private static bool _applyAllLoaded;
+
+    /// <summary>The "Apply to all" switch of the screen, remembered across game restarts (read once, written on change).</summary>
+    internal static bool ApplyToAll
+    {
+        get
+        {
+            if (!_applyAllLoaded)
+            {
+                _applyAllLoaded = true;
+                _applyAll = ReadLine(ApplyAllKey)?.Trim() == "1";
+            }
+            return _applyAll;
+        }
+        set
+        {
+            _applyAllLoaded = true;
+            if (_applyAll == value) return;
+            _applyAll = value;
+            if (IsGuest) return; // guests can't open the screen; never write from a guest
+            try
+            {
+                var lines = new List<string>();
+                if (File.Exists(FilePath))
+                    foreach (var line in File.ReadAllLines(FilePath))
+                    {
+                        int tab = line.IndexOf('\t');
+                        if (tab > 0 && line.Substring(0, tab) == ApplyAllKey) continue;
+                        if (!string.IsNullOrWhiteSpace(line)) lines.Add(line);
+                    }
+                if (value) lines.Add(ApplyAllKey + "\t1");
+                File.WriteAllLines(FilePath, lines);
+                Plugin.Debug($"Saved Apply to all: {value}");
+            }
+            catch (Exception e) { Plugin.Warn("Saving the Apply to all switch failed: " + e.Message); }
+        }
+    }
+
     /// <summary>Writes the current colors under the current save's key (host / solo only).</summary>
     internal static void Save()
     {
@@ -325,7 +368,7 @@ internal static class ClothesStore
         try
         {
             if (!PhotonNetwork.IsMasterClient || PhotonNetwork.CurrentRoom == null) return;
-            string want = Plugin.SyncToGuests.Value ? Serialize() : ""; // sharing off: make sure nothing stays published
+            string want = Plugin.SyncToGuests ? Serialize() : ""; // sharing off: make sure nothing stays published
             string have = RoomString() ?? "";
             if (want == have) return;
             SetRoomString(want);

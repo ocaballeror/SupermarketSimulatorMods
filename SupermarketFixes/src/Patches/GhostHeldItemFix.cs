@@ -77,7 +77,6 @@ internal static class GhostHeldItemFix
 {
     internal static ConfigEntry<bool> AutoRecover;
     internal static ConfigEntry<float> DelaySeconds;
-    internal static ConfigEntry<bool> Diagnostics;
 
     internal static void Bind(ConfigFile cfg)
     {
@@ -86,8 +85,6 @@ internal static class GhostHeldItemFix
         DelaySeconds = cfg.Bind("GhostHeldItem", "DelaySeconds", 2f,
             new ConfigDescription("How long a stray item must stay in your hands before it is dropped.",
                 new AcceptableValueRange<float>(0.5f, 10f)));
-        Diagnostics = cfg.Bind("GhostHeldItem", "Diagnostics", true,
-            "Log stray objects found in your hands and what was done about them.");
     }
 
     internal static void ResetState()
@@ -128,7 +125,7 @@ internal static class GhostHeldItemFix
         {
             try
             {
-                if (item == null || (!AutoRecover.Value && !Diagnostics.Value)) return;
+                if (item == null || (!AutoRecover.Value && !Plugin.VerboseLogging.Value)) return;
                 var p = HeldState.LocalPlayer();
                 if (p == null || !HeldState.SameObject(p.PlayerObjectHolder, __instance)) return;
                 InitLayers();
@@ -156,7 +153,7 @@ internal static class GhostHeldItemFix
     /// <summary>Called every frame from DiagnosticsBehaviour.</summary>
     internal static void Tick(float now)
     {
-        if (!AutoRecover.Value && !Diagnostics.Value) return;
+        if (!AutoRecover.Value && !Plugin.VerboseLogging.Value) return;
         if (now < s_nextCheck) return;
         s_nextCheck = now + CheckInterval;
         Scan(now, force: false, out _);
@@ -242,7 +239,7 @@ internal static class GhostHeldItemFix
                 if (!s_firstSeen.TryGetValue(key, out var since))
                 {
                     s_firstSeen[key] = now;
-                    if (Diagnostics.Value)
+                    if (Plugin.VerboseLogging.Value)
                         Plugin.Logger.LogWarning("[GhostHeld] " + (isCurrent
                                                      ? "Box in your hands with no interaction using it: "
                                                      : "Item in your hands that you are not holding: ") +
@@ -261,7 +258,7 @@ internal static class GhostHeldItemFix
                     if (force)
                         Plugin.Logger.LogWarning($"[GhostHeld] F9: can't drop {go.name} here, it would end up inside " +
                                                  $"{blocker}. Step back into open space and press F9 again.");
-                    else if (s_blockedLogged.Add(key) && Diagnostics.Value)
+                    else if (s_blockedLogged.Add(key) && Plugin.VerboseLogging.Value)
                         Plugin.Logger.LogInfo($"[GhostHeld] Waiting for free space to drop {go.name} (it overlaps {blocker})");
                     continue;
                 }
@@ -301,7 +298,7 @@ internal static class GhostHeldItemFix
     /// <summary>Anything else in the hands that isn't the held object: log once, don't touch.</summary>
     private static void ReportUnknown(GameObject go)
     {
-        if (!Diagnostics.Value) return;
+        if (!Plugin.VerboseLogging.Value) return;
         if (go.GetComponentInChildren<Renderer>() == null) return;
         if (!s_reported.Add(go.Pointer)) return;
         Plugin.Logger.LogWarning($"[GhostHeld] Unknown object in your hands that you are not holding: " +

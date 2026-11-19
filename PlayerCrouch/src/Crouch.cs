@@ -110,7 +110,7 @@ internal static class Crouch
         else _loggedBlocked = false;
 
         float before = LocalT;
-        LocalT = Mathf.MoveTowards(LocalT, target, Time.deltaTime / Mathf.Max(0.01f, Plugin.TransitionTime.Value));
+        LocalT = Mathf.MoveTowards(LocalT, target, Time.deltaTime / Mathf.Max(0.01f, Plugin.TransitionTime));
         if ((before == 0f) != (LocalT == 0f) || (before < 1f && LocalT == 1f))
             Plugin.Info(LocalT == 0f ? "Standing" : LocalT == 1f ? "Crouched" : "Crouching");
 
@@ -196,7 +196,7 @@ internal static class Crouch
         _camTarget = ResolveCamTarget(fpc);
         _nextCamResolve = Time.unscaledTime + 2f;
 
-        if (Plugin.Verbose.Value)
+        if (Plugin.VerboseLogging.Value)
         {
             string ccInfo = _cc != null
                 ? $"height={_standHeight:F2} center={_standCenter} radius={_cc.radius:F2} layer={_cc.gameObject.layer}"
@@ -280,13 +280,13 @@ internal static class Crouch
     private static void ApplyCollider()
     {
         if (_cc == null || !_ccCaptured) return;
-        if (!Plugin.ShrinkCollider.Value || LocalT <= 0f)
+        if (!Plugin.ShrinkCollider || LocalT <= 0f)
         {
             RestoreCollider();
             return;
         }
         float minH = _cc.radius * 2f + 0.05f;
-        float crouchH = Mathf.Max(minH, _standHeight * Plugin.CameraHeight.Value);
+        float crouchH = Mathf.Max(minH, _standHeight * Plugin.CameraHeight);
         float h = Mathf.Lerp(_standHeight, crouchH, LocalT);
         var c = _standCenter;
         c.y -= (_standHeight - h) * 0.5f;
@@ -354,7 +354,7 @@ internal static class Crouch
         if (_camTarget == null) return;
         float standY = _fpc.defaultCameraPosition.y;
         if (standY <= 0.05f) standY = (_camWritten ? _camLastWritten.y - _camLastOffset : _camTarget.localPosition.y);
-        float offset = -standY * (1f - Plugin.CameraHeight.Value) * LocalT;
+        float offset = -standY * (1f - Plugin.CameraHeight) * LocalT;
 
         if (!_camWritten && offset == 0f) return;
 
@@ -381,7 +381,7 @@ internal static class Crouch
 
     private static void SyncNetwork(bool crouched)
     {
-        bool share = Plugin.ShareWithOthers.Value;
+        bool share = Plugin.ShareWithOthers;
         try
         {
             if (!PhotonNetwork.InRoom || PhotonNetwork.OfflineMode) { _lastSent = null; return; }

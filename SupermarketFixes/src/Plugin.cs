@@ -12,10 +12,11 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.supermarketfixes";
     public const string Name = "Supermarket Fixes";
-    public const string Version = "0.11.0";
+    public const string Version = "0.11.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
+    internal static ConfigEntry<bool> VerboseLogging;
 
     /// <summary>True while the mod's patches are applied.</summary>
     internal static bool Active { get; private set; }
@@ -31,6 +32,7 @@ public class Plugin : BasePlugin
         _harmony = new Harmony(Guid);
 
         Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false, "Enable verbose logging for debugging purposes.");
         Patches.RackMoveFix.Bind(Config);
         Patches.GhostHeldItemFix.Bind(Config);
         Patches.StuckBoxFix.Bind(Config);

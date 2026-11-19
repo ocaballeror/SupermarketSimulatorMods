@@ -24,7 +24,7 @@
  * so we don't pose that model, to keep the two systems from fighting. Seated players are not crouching anyway.
  *
  * Crouch amount per player: the local player uses Crouch.LocalT; remote players follow the "oscar.crouch"
- * Photon player property of the PlayerInstance's PhotonView owner, smoothed over TransitionSeconds.
+ * Photon player property of the PlayerInstance's PhotonView owner, smoothed over TransitionTime.
  */
 using System;
 using System.Collections.Generic;
@@ -106,7 +106,7 @@ internal static class CrouchPose
         else
         {
             bool remote = false;
-            if (Plugin.AnimateOthers.Value)
+            if (Plugin.AnimateOthers)
             {
                 try
                 {
@@ -119,7 +119,7 @@ internal static class CrouchPose
             }
             s.LastRemote = remote;
             float target = remote ? 1f : 0f;
-            s.T = Mathf.MoveTowards(s.T, target, Time.deltaTime / Mathf.Max(0.01f, Plugin.TransitionTime.Value));
+            s.T = Mathf.MoveTowards(s.T, target, Time.deltaTime / Mathf.Max(0.01f, Plugin.TransitionTime));
         }
 
         if (s.T <= 0.001f) { s.Applied = false; return; }
@@ -283,7 +283,7 @@ internal static class CrouchPose
         float t = s.T;
 
         float legLen = (lUp.position - lLo.position).magnitude + (lLo.position - lFoot.position).magnitude;
-        float drop = legLen * Plugin.BodyDepth.Value * t;
+        float drop = legLen * Plugin.BodyDepth * t;
 
         Vector3 lFootPos = lFoot.position, rFootPos = rFoot.position;
         Quaternion lFootRot = lFoot.rotation, rFootRot = rFoot.rotation;
@@ -291,7 +291,7 @@ internal static class CrouchPose
 
         hips.position = hips.position - Vector3.up * drop - fwd * (drop * 0.25f);
 
-        float lean = Plugin.LeanAngle.Value * t;
+        float lean = Plugin.LeanAngle * t;
         if (spine != null && lean > 0.01f)
         {
             spine.rotation = Quaternion.AngleAxis(lean, right) * spine.rotation;

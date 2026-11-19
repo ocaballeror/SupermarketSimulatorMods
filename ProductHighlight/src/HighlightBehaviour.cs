@@ -112,14 +112,12 @@ public class HighlightBehaviour : MonoBehaviour
                 {
                     int pid = ProductOf(box);
                     description = $"box of product {pid}";
-                    if (Plugin.ShelvesForBox.Value && pid > 0) CollectShelves(pid);
-                    else description += " (shelf highlight off)";
+                    if (pid > 0) CollectShelves(pid);
                 }
                 else if (bag != null)
                 {
                     description = "paper bag";
-                    if (Plugin.ProductsForBag.Value) description += CollectOrderGroups(player, bag);
-                    else description += " (product highlight off)";
+                    description += CollectOrderGroups(player, bag);
                 }
                 else if (held != null) description = "something else";
             }

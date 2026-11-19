@@ -64,7 +64,6 @@ namespace SupermarketFixes.Patches;
 internal static class CourierOrdersFix
 {
     internal static ConfigEntry<bool> HideCourierOrders;
-    internal static ConfigEntry<bool> Diagnostics;
 
     internal static void Bind(ConfigFile cfg)
     {
@@ -73,9 +72,6 @@ internal static class CourierOrdersFix
             "are removed from your pending-orders notebook and from the new-orders counter, instead of " +
             "staying there until the customer receives the bag. They come back if the order is taken back " +
             "from the courier. Only affects your own screen: every player who wants this needs the mod.");
-        Diagnostics = cfg.Bind("CourierOrders", "Diagnostics", true,
-            "Log a [CourierOrders] line whenever an order is hidden from or shown again in the notebook. " +
-            "Turn off once the fix is confirmed.");
         HideCourierOrders.SettingChanged += (_, _) => OnSettingChanged();
     }
 
@@ -135,7 +131,7 @@ internal static class CourierOrdersFix
 
     private static void Log(string msg)
     {
-        if (Diagnostics != null && Diagnostics.Value) Plugin.Logger.LogInfo($"[CourierOrders] {msg}");
+        if (Plugin.VerboseLogging != null && Plugin.VerboseLogging.Value) Plugin.Logger.LogInfo($"[CourierOrders] {msg}");
     }
 
     internal static bool IsClaimed(int orderId)

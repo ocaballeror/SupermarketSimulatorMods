@@ -14,7 +14,7 @@ Three causes are fixed:
 - **Joining a game in progress:** boxes that had been put on racks earlier in the session reached the joining guest as loose boxes sitting where they were. The rack also got its own copy of each one, so moving the rack left a pickable box floating behind. Now a guest puts those boxes back into their rack within a few seconds of the store loading.
 - **Grabbing a box straight off a rack** (clicking the box itself, often one of those floating boxes) took the box but left the rack thinking it still had it. Players who joined later saw a ghost box there, and loading the save created a real duplicate. Now the box is removed from the rack properly, and its position is shared with other players again once it leaves the rack, as when it's taken from the rack the normal way (players with the mod).
 
-Ghost boxes already saved into a rack before this version are not removed automatically. F8 lists them as `STALE` (see `Diagnostics` below).
+Ghost boxes already saved into a rack before this version are not removed automatically. F8 lists them as `STALE` (see `Diagnostics` / `VerboseLogging` below).
 
 **For guests without the mod (optional, host setting, off by default):** with `DematerializeRackedBoxesOnHost` on, the host turns each box that has been resting on a rack for about 10 seconds into an ordinary racked box, the same kind the game creates when it loads a save, for every player. It uses the game's own network message, so guests without the mod handle it too. The host then has no "live" boxes on racks for a guest to receive as floating copies. This is experimental: the game ships with this mechanism switched off, and it hasn't been tested in-game yet. Boxes that are alone in their rack slot are left as they are, because the game's own message would delete such a box.
 
@@ -34,7 +34,7 @@ Sometimes holding left click with an open box on an empty shelf slot (often one 
 
 The same symptom with a **crate** (left click on an empty shelf slot that has no label places nothing until you deselect and reselect the crate) is also handled: if the crate's remembered product choice points at something that is no longer in the crate, it is repaired when you aim at such a slot.
 
-If it still happens, the log says why (see `Diagnostics` below). Please send those lines.
+If it still happens, the log says why (see `Diagnostics` / `VerboseLogging` below). Please send those lines.
 
 ### Bug #6: boxes stay floating after the box under them is taken
 
@@ -48,7 +48,7 @@ The cleaning lady walked right onto the middle of a floor stain and then mopped 
 
 While she cleans, the mod also checks where her mop really is and uses that for the next stains, so the alignment can improve after the first stain. The way she walks to her spot is unchanged, so she can still brush past corners on the way.
 
-With `Diagnostics` on, the log has `[JanitorAlign]` lines that say where she stood and how far her mop was from each stain. Please send those.
+With `VerboseLogging` on, the log has `[JanitorAlign]` lines that say where she stood and how far her mop was from each stain. Please send those.
 
 ### Bug #9: orders the courier already has stay in the pending list
 
@@ -56,7 +56,7 @@ In co-op, when a player handed an online-order bag to the courier, the order's n
 
 This only changes what your own screen shows, so every player who wants it needs the mod (see below).
 
-With `Diagnostics` on, the log has `[CourierOrders]` lines when an order is hidden or shown again. Please send those.
+With `VerboseLogging` on, the log has `[CourierOrders]` lines when an order is hidden or shown again. Please send those.
 
 ### F9: "my hands are stuck" key
 
@@ -68,32 +68,26 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes either of
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch. Turning it off removes every fix right away; no restart needed. |
+| General | `Enabled` | `true` | Enable the mod. Turning it off removes every fix right away; no restart needed. |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes. Turns on the extra `[RackMove]`, `[GhostHeld]`, `[StuckBox]`, `[FloatBox]`, `[BoxPlace]`, `[JanitorAlign]` and `[CourierOrders]` log lines (recoveries and failures are always logged). With it on, **F8** scans the whole store for orphan, duplicate and stale (ghost) rack boxes. |
 | RackMove | `AdoptNetworkedBoxesOnRebuild` | `true` | When a guest rebuilds a rack slot from network data, keeps its networked boxes in the slot instead of orphaning them. This is the main ghost-box fix. |
 | RackMove | `GuardDelayedInstancing` | `true` | Ignores delayed "draw this box as racked" calls for boxes no longer in a slot, or on a rack being carried. |
 | RackMove | `FinishBoxTweensBeforePickup` | `true` | Before a rack is picked up, finishes any box animations still running on it. |
 | RackMove | `AdoptRackedBoxesAfterJoining` | `true` | Guest only: after joining a game in progress, puts boxes the host has on racks back into their rack instead of leaving loose copies that float when the rack moves. |
 | RackMove | `RemoveFromRackOnDirectPickup` | `true` | When a box is picked up straight off a rack, removes it from the rack properly, so it doesn't come back as a ghost for players who join later or as a duplicate when the save is loaded. Matters most on the host. |
 | RackMove | `DematerializeRackedBoxesOnHost` | `false` | Host only, experimental. About 10 seconds after a box is put on a rack, turns it into an ordinary racked box for everyone, so guests without the mod can't get floating copies of it. Boxes alone in their slot are skipped. |
-| RackMove | `Diagnostics` | `true` | Logs `[RackMove]` consistency checks when racks are picked up or placed. **F8** scans the whole store for orphan, duplicate and stale (ghost) rack boxes. |
 | GhostHeldItem | `AutoRecover` | `true` | Drops items that are stuck in your hands without being held. |
 | GhostHeldItem | `DelaySeconds` | `2` | How long (0.5–10 s) a stray item must stay in your hands before it is dropped. |
-| GhostHeldItem | `Diagnostics` | `true` | Logs `[GhostHeld]` lines about stray objects in your hands. |
 | StuckBox | `AutoRecover` | `true` | Frees your controls when they stay locked onto a box that isn't in your hands. |
 | StuckBox | `StuckSeconds` | `2` | How long (0.5–10 s) that state must last before it is fixed. |
 | StuckBox | `RetryPickup` | `true` | After freeing your controls, tries once more to pick the box up the normal way. |
 | StuckBox | `RegrantToSameHolder` | `true` | Host only: if a player asks for a box the host thinks that player already holds, allows it instead of refusing. This lets a stuck player's retry succeed. |
-| StuckBox | `Diagnostics` | `true` | Logs extra `[StuckBox]` details: the result of the pickup retry and why a retry was skipped. Recoveries and failures are always logged. |
 | BoxPlace | `ResyncOpenState` | `true` | If the box in your hands is open but the game treats it as closed (clicking a shelf places nothing until you close and reopen the box), fixes it as soon as you hold left click. |
 | BoxPlace | `ReleaseStuckTake` | `true` | If the game still thinks you're holding right click (take) after you let go, which also stops placing, releases it. |
 | BoxPlace | `RepairCrateSelection` | `true` | If a crate refuses to put products on an empty shelf slot without a label until you deselect and reselect the crate, repairs the crate's product selection automatically. |
 | FloatingBox | `WakeUnsupportedBoxes` | `true` | Boxes that float after the box under them was taken are woken up so they fall. |
-| FloatingBox | `Diagnostics` | `true` | Logs `[FloatBox]` lines when a floating box is woken or when a floating box is found that isn't simply asleep. |
-| BoxPlace | `Diagnostics` | `true` | Logs `[BoxPlace]` lines explaining why nothing was placed when you hold left click on a shelf for 1.5 s. |
 | JanitorCleanAlign | `AlignToStain` | `true` | The cleaning lady aims her mop at the centre of the stain she cleans and stands where she fits, instead of standing on the stain (or inside a wall or shelf). Only needed on the host (or in single player). |
-| JanitorCleanAlign | `Diagnostics` | `true` | Logs `[JanitorAlign]` lines: where she stands for each stain and how far her mop was from it. |
 | CourierOrders | `HideCourierOrders` | `true` | Orders the courier has already taken (in the trunk or out for delivery) are removed from your pending-orders notebook and the new-orders counter. They come back if the order is taken back from the courier. Only affects your own screen. |
-| CourierOrders | `Diagnostics` | `true` | Logs `[CourierOrders]` lines when an order is hidden from or shown again in the notebook. |
 
 ## Who needs it (multiplayer)
 

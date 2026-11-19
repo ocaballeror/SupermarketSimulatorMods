@@ -1,11 +1,12 @@
 # Extra Computers
 
-Adds a **Computer** to the furniture shop ($1000 by default). Buy as many as you like. Each one arrives in a furniture box with a computer icon on it. Unbox it and place it anywhere, like any other furniture. It works like the store's own computer: shop, pricing, hiring, management, everything.
+Adds a **Computer** to the furniture shop ($1000). Buy as many as you like. Each one arrives in a furniture box with a computer icon on it. Unbox it and place it anywhere, like any other furniture. It works like the store's own computer: shop, pricing, hiring, management, everything.
 
 - **Every computer has its own screen state.** Each computer remembers which apps and tabs you left open on it; a computer you haven't used yet starts on the desktop. (Scroll positions, search text and dropdown choices are shared between computers. The cart, orders and money are shared, as always.)
 - **Every player has their own screen.** Each player sees only what they do on the computer they're using. Two players can use two computers at the same time, or one player can use an extra computer while another uses the store computer.
 - Changes (prices, orders, hires, ...) are shared exactly like changes made on the store computer. If two players have the same page open, one of them may see an older view until they reopen that page (the same as playing with the store computer alone).
 - Hold the use key to move an extra computer. It can be moved and boxed up like other furniture (and an unopened computer box can be sold like other furniture boxes). Placed extra computers are saved with the store like other furniture.
+- The price is the same for everybody: a guest with the mod sees and pays the host's price.
 - Only one player can use a given extra computer at a time. If somebody else is on it, you get the game's "in use by another player" message. A second extra computer, or the store computer, is always free for you.
 
 ## Settings
@@ -14,12 +15,9 @@ Adds a **Computer** to the furniture shop ($1000 by default). Buy as many as you
 
 | Section | Setting | Default | Meaning |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch, applied immediately. While it's off, the computer leaves the shop and placed computers stay as furniture but can't be used. **Don't load a store while it's off** (including starting the game with it off) unless you've boxed up every computer first: see "Removing or disabling the mod". |
-| ExtraComputers | `Price` | `1000` | Price of one computer in the furniture shop (type a number from 0 to 100000). The **host's** value is used by everybody: a guest with the mod sees and pays the host's price, whatever their own setting says. |
-| ExtraComputers | `Icon` | `Model` | Picture of the computer in the shop and on its box. `Model`: made from the computer's 3D model, like the other furniture pictures. `GameSymbol`: the game's own flat computer symbol. The shop shows a change after the store is loaded again. |
-| ExtraComputers | `IndependentScreens` | `true` | Each computer remembers its own open apps and tabs. Off: all computers share one screen, like the store computer's. |
+| General | `Enabled` | `true` | Enable the mod, applied immediately. While it's off, the computer leaves the shop and placed computers stay as furniture but can't be used. **Don't load a store while it's off** (including starting the game with it off) unless you've boxed up every computer first: see "Removing or disabling the mod". |
 | Multiplayer | `ProtectUnmoddedPlayers` | `true` | While any other player in the room doesn't have this mod, the computer is hidden in the shop, and the host refuses to buy it or to open computer boxes. The host's setting is what counts; a guest with the mod also applies its own setting to its own shop and its own box clicks. See below. |
-| Diagnostics | `VerboseLogging` | `true` | Logs how the computer furniture is built and each use (tag `[ExtraComputers]` in `BepInEx/LogOutput.log`). |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (tag `[ExtraComputers]` in `BepInEx/LogOutput.log`). |
 
 ## Multiplayer
 
@@ -36,6 +34,6 @@ Adds a **Computer** to the furniture shop ($1000 by default). Buy as many as you
 - **Removing or disabling the mod** (removing it, starting the game with `Enabled` off, or turning it off and then loading a store): first **box up every placed computer**, then sell or throw away all computer boxes (unopened, in storage, or in a pending delivery) and remove computers from the cart. This matters: without the mod, a placed computer (furniture id 917001) stops the game from loading the store's furniture. The game logs "Can't spawn furniture with id: 917001" (or "Furniture couldn't find : 917001") and then **every piece of furniture saved after that computer is missing** for that session, which can be a large part of the store. Saved computer boxes may raise errors while the save loads; treat them as lost. Turning `Enabled` off while the game is running is fine for the current store: the computer leaves the shop and placed computers can't be used (if you're on one, you're taken off it). A computer box bought earlier may not unbox correctly until the mod is turned on again, so turn it back on before opening one.
 - If the mod is installed and enabled but can't build the computer furniture (next point), placed computers in a loaded save are skipped for that session but kept in the save, and the rest of the store loads normally. They come back once the mod works again.
 - The shop name is English only ("Computer").
-- The game's furniture pictures don't include a computer, so by default the mod makes one from the store computer's 3D model when a store loads (or uses the game's flat computer symbol, see `Icon`). If that fails, a simple drawn monitor is shown instead.
+- The game's furniture pictures don't include a computer, so the shop and the box use the game's flat computer symbol. If that isn't available, the mod renders a picture from the store computer's 3D model when a store loads, and if that fails too, a simple drawn monitor is shown instead.
 - If the mod can't set up the computer furniture (the log says `Building the computer furniture failed`), the computer is hidden in the shop, buying it is refused and computer boxes stay closed, so you can't get stuck holding nothing. In multiplayer the other players treat that player as not having the mod. Send that log line to the author.
 - Portable Computer Mod also borrows the computer screen. Don't open it while you're using an extra computer.

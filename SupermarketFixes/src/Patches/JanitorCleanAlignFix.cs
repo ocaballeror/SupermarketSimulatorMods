@@ -61,7 +61,7 @@ namespace SupermarketFixes.Patches;
 ///   NavMeshAgent.nextPosition, so she stays on the NavMesh) and turns her (yaw only) so that the mop head
 ///   points at the stain centre. Nothing else moves or rotates her during the dirt-cleaning state.
 /// - While she cleans, the Tick measures where the mop head really is relative to her (the animation may
-///   swing it) and, if the average is plausible, uses that offset for the next stains. With Diagnostics on,
+///   swing it) and, if the average is plausible, uses that offset for the next stains. With VerboseLogging on,
 ///   each cleaning logs the mop head's average distance from the stain centre.
 /// - Not covered: the path she walks to the stand point is still planned by the game with its 0.05 m agent
 ///   radius, so she can brush walls and shelf corners on the way.
@@ -69,7 +69,6 @@ namespace SupermarketFixes.Patches;
 internal static class JanitorCleanAlignFix
 {
     internal static ConfigEntry<bool> AlignToStain;
-    internal static ConfigEntry<bool> Diagnostics;
 
     /// <summary>Mop head position relative to her feet in the prefab (right, forward), in metres.</summary>
     private static readonly Vector2 PrefabMopOffset = new(0.15f, 0.55f);
@@ -101,8 +100,6 @@ internal static class JanitorCleanAlignFix
         AlignToStain = cfg.Bind("JanitorCleanAlign", "AlignToStain", true,
             "The cleaning lady aims her mop at the centre of the stain she cleans and stands where she fits, " +
             "instead of standing on the stain (or inside a wall or shelf). Only needed on the host (or in single player).");
-        Diagnostics = cfg.Bind("JanitorCleanAlign", "Diagnostics", true,
-            "Log [JanitorAlign] lines: where she stands for each stain and how far her mop was from it.");
     }
 
     internal static void ResetState()
@@ -152,7 +149,7 @@ internal static class JanitorCleanAlignFix
 
     private static void Log(string msg)
     {
-        if (!Diagnostics.Value || s_logs >= MaxLogs) return;
+        if (!Plugin.VerboseLogging.Value || s_logs >= MaxLogs) return;
         s_logs++;
         Plugin.Logger.LogInfo($"[JanitorAlign] {msg}" + (s_logs == MaxLogs ? " (further lines are not logged)" : ""));
     }
@@ -189,7 +186,7 @@ internal static class JanitorCleanAlignFix
             s_plans[j.Pointer] = new Plan(stain, stand);
             string msg = $"Janitor {j.JanitorID} heads for a stain at {Fmt(stain)}: standing at {Fmt(stand)}, " +
                          $"{Flat(stand - stain).magnitude:F2} m from it, mop reach {s_offset.magnitude:F2} m ({how}).";
-            if (warn && Diagnostics.Value) Plugin.Logger.LogWarning($"[JanitorAlign] {msg}");
+            if (warn && Plugin.VerboseLogging.Value) Plugin.Logger.LogWarning($"[JanitorAlign] {msg}");
             else Log(msg);
         }
         else
@@ -371,7 +368,7 @@ internal static class JanitorCleanAlignFix
         if (j == null) return;
         bool hadPlan = s_plans.TryGetValue(j.Pointer, out var plan);
         s_plans.Remove(j.Pointer);
-        if (!AlignToStain.Value && !Diagnostics.Value) return;
+        if (!AlignToStain.Value && !Plugin.VerboseLogging.Value) return;
         var target = j.TargetObject;
         if (target == null) return;
 

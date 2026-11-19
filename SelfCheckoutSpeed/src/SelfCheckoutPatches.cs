@@ -261,7 +261,7 @@ internal static class SelfCheckoutPatches
             if (!rush && coro.IsPayment && !guest && InRoom())
                 after = Math.Max(after, Math.Min(before, MinOnlinePaymentWait));
             wait.m_Seconds = after;
-            if (Plugin.Verbose.Value)
+            if (Plugin.VerboseLogging.Value)
                 Plugin.Logger.LogInfo($"[SelfCheckout] {coro.Kind} wait {before:0.###}s -> {wait.m_Seconds:0.###}s" +
                                       (rush ? " (catching up with the host)" : ""));
         }
@@ -309,7 +309,7 @@ internal static class SelfCheckoutPatches
         int n = 0;
         foreach (var kv in Running)
             if (kv.Value == checkout && Rushed.Add(kv.Key)) n++;
-        if (n > 0 && Plugin.Verbose.Value)
+        if (n > 0 && Plugin.VerboseLogging.Value)
             Plugin.Logger.LogInfo($"[SelfCheckout] host finished a {what} before this game did; scanning the rest at once");
     }
 }

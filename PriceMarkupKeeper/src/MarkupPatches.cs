@@ -89,7 +89,6 @@ internal static class MarkupKeeper
     internal static void BeginDay(PriceManager pm)
     {
         Reset();
-        if (!Plugin.KeepMarkup.Value) return;
         // Defensive: guests never get here (PriceManager.Start doesn't subscribe the handler for them).
         if (!IsAuthority()) return;
         _ratio = pm.BulkMarkupRatio;
@@ -109,26 +108,21 @@ internal static class MarkupKeeper
         var so = idm != null ? idm.ProductSO(productID) : null;
         if (so == null || so.IsHiddenForCustomer) return false; // the bulk tab skips these too
 
-        bool onlyFollowing = Plugin.OnlyFollowingProducts.Value;
         var p = pm.GetPriceSetByPlayer(productID);
         if (p == null)
         {
-            if (!onlyFollowing) return true;
-            if (Plugin.Verbose.Value)
+            if (Plugin.VerboseLogging.Value)
                 Plugin.Logger.LogInfo($"[Markup] Product {productID}: no price set by the player, left alone");
             return false;
         }
         float expected = MarkupPrice(p.MarketPrice, _ratio);
         bool follows = Math.Abs(p.Price - expected) < Tolerance;
-        if (!follows && Plugin.Verbose.Value)
+        if (!follows && Plugin.VerboseLogging.Value)
         {
-            Plugin.Logger.LogInfo(onlyFollowing
-                ? $"[Markup] Product {productID}: price {p.Price:0.00} was set by hand " +
-                  $"(markup price would be {expected:0.00}), left alone"
-                : $"[Markup] Product {productID}: price {p.Price:0.00} doesn't match the markup price " +
-                  $"{expected:0.00}; OnlyProductsFollowingMarkup is off, so it is overridden");
+            Plugin.Logger.LogInfo($"[Markup] Product {productID}: price {p.Price:0.00} was set by hand " +
+                                  $"(markup price would be {expected:0.00}), left alone");
         }
-        return !onlyFollowing || follows;
+        return follows;
     }
 
     /// <summary>After the cost changed: apply the markup to the new market price.</summary>
@@ -136,13 +130,11 @@ internal static class MarkupKeeper
     {
         if (pm.CurrentCost(productID) == oldCost)
         {
-            if (Plugin.Verbose.Value)
+            if (Plugin.VerboseLogging.Value)
                 Plugin.Logger.LogInfo($"[Markup] Product {productID}: cost didn't actually change, left alone");
             return;
         }
-        var p = Plugin.OnlyFollowingProducts.Value
-            ? pm.GetPriceSetByPlayer(productID)
-            : pm.GetOrCreatePriceSetByPlayer(productID);
+        var p = pm.GetPriceSetByPlayer(productID);
         if (p == null) return;
 
         float market = p.MarketPrice;
@@ -151,7 +143,7 @@ internal static class MarkupKeeper
         float price = MarkupPrice(market, _ratio);
         p.Price = price;
         Changed[productID] = p;
-        if (Plugin.Verbose.Value)
+        if (Plugin.VerboseLogging.Value)
             Plugin.Logger.LogInfo($"[Markup] Product {productID}: market {market:0.00}, price {old:0.00} -> {price:0.00}");
     }
 
@@ -161,7 +153,7 @@ internal static class MarkupKeeper
         _tracking = false;
         // One summary line per day while verbose; it also proves the TryChangingBasePrices and
         // ChangeCurrentCost hooks fired (costCalls = products the game tried to change today).
-        if (Plugin.Verbose.Value)
+        if (Plugin.VerboseLogging.Value)
             Plugin.Logger.LogInfo($"[Markup] New day: the game tried to change {_costCalls} product(s), " +
                                   $"markup {_ratio:0.##}%, {Changed.Count} to reprice");
         if (Changed.Count == 0) return;
@@ -259,7 +251,7 @@ internal static class NewProductPricer
 
     internal static void OnLicenseUnlocked(int licenseID, string via)
     {
-        if (!Plugin.PriceNewProducts.Value || !IsAuthority()) return;
+        if (!IsAuthority()) return;
         var idm = NoktaSingleton<IDManager>.Instance;
         var pm = NoktaSingleton<PriceManager>.Instance;
         if (idm == null || pm == null) return;
@@ -290,7 +282,7 @@ internal static class NewProductPricer
                     if (pm.GetPriceSetByPlayer(id) != null)
                     {
                         skipped++;
-                        if (Plugin.Verbose.Value)
+                        if (Plugin.VerboseLogging.Value)
                             Plugin.Logger.LogInfo($"[Markup] New product {id}: already has a price, left alone");
                         continue;
                     }
@@ -302,7 +294,7 @@ internal static class NewProductPricer
                     if (market > 0f) p.Price = MarkupKeeper.MarkupPrice(market, ratio);
                     if (discount > 0) p.DiscountRate = discount; // as ApplyBulkDiscount does
                     changed.Add(p);
-                    if (Plugin.Verbose.Value)
+                    if (Plugin.VerboseLogging.Value)
                         Plugin.Logger.LogInfo($"[Markup] New product {id}: market {market:0.00}, price {p.Price:0.00}" +
                                               (discount > 0 ? $", discount {discount}%" : ""));
                 }
@@ -325,7 +317,7 @@ internal static class NewProductPricer
                                       $"at {ratio:0.##}% above market price" + (discount > 0 ? $", {discount}% discount" : "") +
                                       (PhotonNetwork.IsConnected ? " (sent to guests)" : ""));
             }
-            else if (Plugin.Verbose.Value)
+            else if (Plugin.VerboseLogging.Value)
                 Plugin.Logger.LogInfo($"[Markup] License {licenseID} unlocked ({via}): nothing to price ({skipped} already priced)");
         }
     }

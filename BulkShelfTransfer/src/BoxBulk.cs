@@ -116,7 +116,7 @@ internal static class BoxBulk
             Finish("box changed");
         }
 
-        if (!Plugin.Boxes.Value || !(take ? Plugin.BulkTake.Value : Plugin.BulkPlace.Value)) return false;
+        if (!Plugin.Boxes || !(take ? Plugin.BulkTake : Plugin.BulkPlace)) return false;
         if (!Bulk.ModifierHeld()) return false;
         if (!Bulk.IsLocal(bi.PlayerInstance)) return false;
         if (bi.IsWaitingAvailability) return false;

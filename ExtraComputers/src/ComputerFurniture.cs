@@ -42,7 +42,8 @@
  *    the player in an empty placing mode. v1.2.0-1.2.2 assumed the store computer's root carried the PhotonView
  *    and failed with "the store computer has no PhotonView on its root" (2026-11-16).
  *    The template is registered in Photon's DefaultPool.ResourceCache under PrefabId.
- *  - An icon rendered from the model (fallback: a drawn monitor icon). The game ships no computer icon.
+ *  - The icon: the game's flat computer symbol (icon_device_63), falling back to a render of the model, then a drawn
+ *    monitor. The game ships no computer icon.
  *  - If the template can't be built, computer boxes refuse to open (OpenBoxGate), so the player keeps the box.
  *
  * The furniture can then be bought, delivered in a box, unboxed, placed, moved, boxed up and saved
@@ -184,7 +185,7 @@ internal static class ComputerFurniture
             ApplyPrice();
             Plugin.Info($"Computer furniture registered: id {FurnitureId}, box {So.BoxSize}, price {So.Cost} " +
                         $"(definition copied from id {donor.ID})");
-            if (Plugin.Verbose.Value) LogFurnitureList(list);
+            if (Plugin.VerboseLogging.Value) LogFurnitureList(list);
         }
 
         bool listed = false;
@@ -310,7 +311,7 @@ internal static class ComputerFurniture
         var compPm = comp.m_PlacingMode;
         Transform compRoot = ComputerRoot(comp);
 
-        if (Plugin.Verbose.Value)
+        if (Plugin.VerboseLogging.Value)
             Plugin.Debug("Store computer hierarchy:\n" + Dump(compRoot) +
                          $"\n  PCCam={Path(compRoot, comp.m_PCCam?.transform)} Screen={Path(compRoot, comp.m_ComputerScreen?.transform)} " +
                          $"PlayerPosition={Path(compRoot, comp.m_PlayerPosition)} PlacingMode={Path(compRoot, compPm?.transform)} " +
@@ -380,7 +381,7 @@ internal static class ComputerFurniture
                      $"renderers {tplPm.m_Renderers?.Length ?? 0}, owner colliders {tplPm.m_OwnerCollider?.Count ?? 0}, " +
                      $"placing box {(tplPm.m_PlacingModeCollider == null ? "none" : tplPm.m_PlacingModeCollider.name)}, " +
                      $"zone canvas {(tplPm.m_InteractionZoneCanvas == null ? "none" : tplPm.m_InteractionZoneCanvas.name)}");
-        if (Plugin.Verbose.Value) Plugin.Debug("Computer furniture prefab:\n" + Dump(tpl.transform));
+        if (Plugin.VerboseLogging.Value) Plugin.Debug("Computer furniture prefab:\n" + Dump(tpl.transform));
     }
 
     /// <summary>
@@ -611,11 +612,11 @@ internal static class ComputerFurniture
 
     // ---------------------------------------------------------------- icon
 
-    /// <summary>The furniture shop's icons are renders in one atlas (T_IconAtlas_Furnitures), which has no computer, so
-    /// by default the icon is rendered from the computer's model in the same style. The game also has a flat white
-    /// computer symbol (sprite icon_device_63, a UI glyph), used when Icon = GameSymbol. A drawn placeholder is only a
-    /// stopgap: rendering is retried a few times, because the store computer may not exist yet when the shop first
-    /// asks for the icon.</summary>
+    /// <summary>The furniture shop's icons are renders in one atlas (T_IconAtlas_Furnitures), which has no computer.
+    /// Order of preference: the game's flat white computer symbol (sprite icon_device_63, a UI glyph), then
+    /// an icon rendered from the computer's model in the same style as the atlas, then a
+    /// drawn monitor. The drawn one is only a stopgap: rendering is retried a few times, because the store computer
+    /// may not exist yet when the shop first asks for the icon.</summary>
     internal static void EnsureIcon()
     {
         if (So == null) return;
@@ -623,7 +624,7 @@ internal static class ComputerFurniture
         {
             _iconRenderAttempts++;
             Texture2D tex = null;
-            if (Plugin.Icon.Value == IconStyle.GameSymbol) tex = IconMaker.FromGameSymbol();
+            tex = IconMaker.FromGameSymbol();
             if (tex == null)
             {
                 Transform model = EnsureTemplate() ? Template.transform : null;
@@ -646,14 +647,6 @@ internal static class ComputerFurniture
             _iconSprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
         }
         if (So.FurnitureIcon == null || So.FurnitureIcon.Pointer != _iconSprite.Pointer) So.FurnitureIcon = _iconSprite;
-    }
-
-    /// <summary>The Icon setting changed: make the icon again (the shop shows it after the next store load).</summary>
-    internal static void ResetIcon()
-    {
-        _iconRendered = false;
-        _iconRenderAttempts = 0;
-        EnsureIcon();
     }
 
     private static void SetIconTexture(Texture2D tex)

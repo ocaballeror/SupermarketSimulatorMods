@@ -139,7 +139,7 @@ internal static class DoubleCarry
 
     // ------------------------------------------------------------------ helpers
 
-    private static void Info(string msg) { if (Plugin.Verbose.Value) Plugin.Logger.LogInfo("[PlayerCarry] " + msg); }
+    private static void Info(string msg) { if (Plugin.VerboseLogging.Value) Plugin.Logger.LogInfo("[PlayerCarry] " + msg); }
 
     private static bool Same(UnityEngine.Object a, UnityEngine.Object b) => a != null && b != null && a.Pointer == b.Pointer;
 
@@ -268,7 +268,7 @@ internal static class DoubleCarry
         var pp = s_buyTarget;
         var p = LocalPlayer();
         if (pp == null || p == null) { CancelBuy("product or player gone"); return; }
-        if (!Plugin.Enabled.Value || !Plugin.BuyAtWholesale.Value) { CancelBuy("switched off"); return; }
+        if (!Plugin.Enabled.Value || !Plugin.BuyAtWholesale) { CancelBuy("switched off"); return; }
         if (Busy || Requesting) { CancelBuy("already getting a second box"); return; }
         var held = s_buyOver;
         var bi = p.BoxInteraction;
@@ -438,7 +438,7 @@ internal static class DoubleCarry
         }
 
         // Another player's hands: only make it look right (they hold the box under the new one).
-        if (!Plugin.RemoteStackVisuals.Value) return;
+        if (!Plugin.RemoteStackVisuals) return;
         var t = prev.transform;
         t.DOKill(false);
         t.DOLocalMove(UnderPosition(bottom, top, posOffset), StackTweenTime, false);
@@ -695,7 +695,7 @@ internal static class DoubleCarry
                 var target = LookedAtBox(p, held);
                 if (target == null)
                 {
-                    if (!Plugin.BuyAtWholesale.Value) return true;
+                    if (!Plugin.BuyAtWholesale) return true;
                     var pp = LookedAtPurchasable(p);
                     if (pp == null) return true;
                     if (Requesting)

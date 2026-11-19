@@ -44,7 +44,7 @@ internal static class TabUi
     private static int _kindIdx;                 // index into _kinds
     private static HrEmployeeKind[] _kinds = ClothesStore.Kinds;   // the unlocked types, refreshed at every Open
     private static HrEmployeeKind _lastKind = HrEmployeeKind.Restocker;
-    private static bool _applyAll;               // mirrors the config entry [Customization] ApplyToAll
+    private static bool _applyAll;               // mirrors ClothesStore.ApplyToAll (saved in the saves file)
     private static TabComponent _tab;            // the tab the panel lives in (its Unlocked content is hidden while open)
     private static bool _hidUnlocked, _unlockedWasActive;
     private static GameObject _prevBtn, _nextBtn;
@@ -556,14 +556,14 @@ internal static class TabUi
 
     // ------------------------------------------------------------------ the card
 
-    private static string PriceText() => "$" + Plugin.Price.Value.ToString("0.00", CultureInfo.InvariantCulture);
+    private static string PriceText() => "$" + Plugin.Price.ToString("0.00", CultureInfo.InvariantCulture);
 
     private static void UpdateCard()
     {
         if (_cardButton == null) return;
         bool guest = ClothesStore.IsGuest;
         // Like ChangeNameItem.UpdatePurchaseButton / CheckRequirements: the button is disabled while money is short.
-        _cardButton.interactable = !guest && !_open && Affordable(Plugin.Price.Value);
+        _cardButton.interactable = !guest && !_open && Affordable(Plugin.Price);
         if (_cardCost != null)
         {
             var s = guest ? "Host only" : PriceText();
@@ -582,7 +582,7 @@ internal static class TabUi
         try
         {
             if (ClothesStore.IsGuest || _panel == null || _open) return;
-            price = Plugin.Price.Value;
+            price = Plugin.Price;
             if (!Affordable(price)) { Plugin.Info("Not enough money for Employee Clothes"); UpdateCard(); return; }
             if (price > 0f)
             {
@@ -635,7 +635,7 @@ internal static class TabUi
     {
         for (int i = 0; i < Pending.Length; i++) Pending[i] = ClothesStore.Get((HrEmployeeKind)i);
         RefreshKinds();
-        _applyAll = Plugin.ApplyToAll.Value;   // remembered between sessions and game starts
+        _applyAll = ClothesStore.ApplyToAll;   // remembered across game restarts
         _open = true;
         _message = null;
         _polled = default;
@@ -654,7 +654,7 @@ internal static class TabUi
         _kindIdx = at >= 0 ? at : 0;
         _lastKind = _kinds[_kindIdx];
         string hr = null;
-        if (Plugin.Verbose != null && Plugin.Verbose.Value)   // diagnostic only; it searches all loaded HiringTab objects
+        if (Plugin.VerboseLogging != null && Plugin.VerboseLogging.Value)   // diagnostic only; it searches all loaded HiringTab objects
         {
             try { hr = HiringTabAvailability(); } catch (Exception) { }
         }
@@ -811,24 +811,8 @@ internal static class TabUi
         catch (Exception e) { Plugin.Warn("Apply to all switch failed: " + e.Message); }
     }
 
-    /// <summary>The player flipped the switch: remember it (config entry [Customization] ApplyToAll).</summary>
-    private static void SaveApplyAll()
-    {
-        try { if (Plugin.ApplyToAll != null && Plugin.ApplyToAll.Value != _applyAll) Plugin.ApplyToAll.Value = _applyAll; }
-        catch (Exception e) { Plugin.Warn("Saving the Apply to all setting failed: " + e.Message); }
-    }
-
-    /// <summary>The config entry was changed from outside (a config manager): follow it.</summary>
-    internal static void OnApplyAllConfigChanged()
-    {
-        try
-        {
-            if (Plugin.ApplyToAll == null || _applyAll == Plugin.ApplyToAll.Value) return;
-            _applyAll = Plugin.ApplyToAll.Value;
-            if (_open) { RefreshToggle(true); RefreshTexts(); }
-        }
-        catch (Exception e) { Plugin.Warn("Following the Apply to all setting failed: " + e.Message); }
-    }
+    /// <summary>The player flipped the switch: remember it (saved in oscar.employeeclothes.saves.txt).</summary>
+    private static void SaveApplyAll() => ClothesStore.ApplyToAll = _applyAll;
 
     private static void RefreshToggle(bool force = false)
     {

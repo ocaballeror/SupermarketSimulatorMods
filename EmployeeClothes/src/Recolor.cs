@@ -128,7 +128,7 @@ internal static class Recolor
                 info.BaseProp = prop;
                 string l = both.ToLowerInvariant();
                 info.Rule = RuleFor(l, tex.name ?? "");
-                if (Plugin.ShadedGarments.Value) info.Garment = GarmentShade(l);
+                if (Plugin.ShadedGarments) info.Garment = GarmentShade(l);
             }
         }
         catch (Exception e) { Plugin.Debug("Classifying a material failed: " + e.Message); }
@@ -151,22 +151,6 @@ internal static class Recolor
         if (lowerName.Contains("pants") || lowerName.Contains("trouser") || lowerName.Contains("_btm_") || lowerName.Contains("britney")) return 0.7f;
         if (lowerName.Contains("waistcoat")) return 0.8f;
         return 1f;
-    }
-
-    /// <summary>The ShadedGarments setting changed: reclassify and let the next sweep re-tint everything.</summary>
-    internal static void OnShadeSettingChanged()
-    {
-        // Variants keep the garment shade they were made with: put the originals back, drop the copies and let the next
-        // sweep rebuild them (cheap: the shade maps stay).
-        try
-        {
-            RestoreRegistry();
-            Preview.OnMaterialsReset();
-        }
-        catch (Exception e) { Plugin.Debug("Resetting after a settings change failed: " + e.Message); }
-        DestroyVariants();
-        InfoCache.Clear();
-        ClothesStore.Touch();
     }
 
     // ------------------------------------------------------------------ shade maps

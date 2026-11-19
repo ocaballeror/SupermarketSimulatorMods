@@ -65,13 +65,13 @@ namespace AutoCourierLoad;
 ///    hand-over: the bag's PhotonView is taken over if another client owns it and the player's "working on
 ///    this order" claim is cleared. Everything after that is vanilla (claim broadcast, holder broadcast,
 ///    ParcelAdded broadcast, trunk visuals), so guests, modded or not, see exactly what they see when the
-///    host hands a bag over. Loading stops at min(MaxBags, MaxOrderCount) or when the courier stops being
+///    host hands a bag over. Loading stops at MaxOrderCount or when the courier stops being
 ///    ready; the mod checks the conditions ReceiveBag checks first, because a failed ReceiveBag would throw
 ///    the bag into the drop area.
 ///  - After the last load (1.2 s later, a short pause so the trunk state has reached everybody) the mod decides whether he leaves:
 ///    one of the orders in his trunk has under LeaveUnderSeconds left (per the countdown above), or no
 ///    active order is left unclaimed by a courier (OrderManager.GeneratedOrderLists, not expired, all in
-///    CourierManager.m_ClaimedOrders), or the trunk is full (LeaveWhenFull). Then it calls
+///    CourierManager.m_ClaimedOrders), or the trunk is full. Then it calls
 ///    Courier.RequestDispatch(), the exact master-side effect of pressing E.
 ///  - A postfix on Courier.MoveBagToDropArea remembers the bags the courier himself put in the drop area (a
 ///    rejected hand-over, or a released parcel); they are not loaded again until someone moves them, so the
@@ -130,7 +130,7 @@ internal static class AutoLoad
 
     private static void Log(string msg)
     {
-        if (Plugin.Diagnostics != null && Plugin.Diagnostics.Value) Plugin.Logger.LogInfo($"[AutoCourier] {msg}");
+        if (Plugin.VerboseLogging != null && Plugin.VerboseLogging.Value) Plugin.Logger.LogInfo($"[AutoCourier] {msg}");
     }
 
     private static bool IsGuest => PhotonNetwork.IsConnectedAndSlave;
@@ -210,7 +210,7 @@ internal static class AutoLoad
 
         // Even "0 = only when he arrives" lasts a moment, so that bags that were lying there before count as settled.
         // While he waits with something loaded, keep looking: the bag he is waiting for may arrive late.
-        bool scanning = v.Scans == 0 || v.Loaded > 0 || now - v.ReadyAt <= Math.Max(Plugin.KeepScanningSeconds.Value, MinScanWindow);
+        bool scanning = v.Scans == 0 || v.Loaded > 0 || now - v.ReadyAt <= Math.Max(Plugin.KeepScanningSeconds, MinScanWindow);
         if (scanning)
         {
             v.Scans++;
@@ -237,15 +237,14 @@ internal static class AutoLoad
         return active != null && active.Pointer == idle.Pointer;
     }
 
-    /// <summary>How many bags this courier may hold: his trunk limit, optionally lowered by MaxBags.</summary>
+    /// <summary>How many bags this courier may hold: his trunk limit.</summary>
     private static int Capacity(CourierNpc c)
     {
         int cap;
         try { cap = c.MaxOrderCount; }
         catch (Exception) { cap = FallbackTrunk; }
         if (cap < 1) cap = FallbackTrunk;
-        int user = Plugin.MaxBags.Value;
-        return user > 0 ? Math.Min(cap, user) : cap;
+        return cap;
     }
 
     // ---- finding bags -----------------------------------------------------------------------------
@@ -383,21 +382,18 @@ internal static class AutoLoad
         if (!IsIdle(c) || !c.CanDispatch || !c.HasDeliverableParcel) return false;
 
         string reason = null;
-        float threshold = Plugin.LeaveUnderSeconds.Value;
-        if (threshold > 0f)
+        float threshold = Plugin.LeaveUnderSeconds;
+        var parcels = c.m_Parcels;
+        for (int i = 0; parcels != null && i < parcels.Count; i++)
         {
-            var parcels = c.m_Parcels;
-            for (int i = 0; parcels != null && i < parcels.Count; i++)
-            {
-                var order = parcels[i]?.Order;
-                if (order == null) continue;
-                float left = TimeLeft(order);
-                if (left < threshold) { reason = $"order #{order.ID} has only {Math.Max(left, 0f):0} s left"; break; }
-            }
+            var order = parcels[i]?.Order;
+            if (order == null) continue;
+            float left = TimeLeft(order);
+            if (left < threshold) { reason = $"order #{order.ID} has only {Math.Max(left, 0f):0} s left"; break; }
         }
         if (reason == null && NoOrderWaiting())
             reason = "his trunk covers every active order";
-        if (reason == null && Plugin.LeaveWhenFull.Value && (c.IsFull || c.ParcelCount >= Capacity(c)))
+        if (reason == null && (c.IsFull || c.ParcelCount >= Capacity(c)))
             reason = "his trunk is full";
         if (reason == null) return false;
 

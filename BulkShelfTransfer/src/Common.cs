@@ -46,11 +46,11 @@ internal static class Bulk
     }
 
     /// <summary>Time between steps. Online at least 0.02 s, so a high frame rate can't flood the room with RPCs.</summary>
-    internal static float Interval => Math.Max(PhotonNetwork.IsConnected ? 0.02f : 0f, Plugin.SecondsBetweenItems.Value);
+    internal static float Interval => Math.Max(PhotonNetwork.IsConnected ? 0.02f : 0f, Plugin.SecondsBetweenItems);
 
     internal static void Info(string msg)
     {
-        if (Plugin.Verbose.Value) Plugin.Logger.LogInfo("[Bulk] " + msg);
+        if (Plugin.VerboseLogging.Value) Plugin.Logger.LogInfo("[Bulk] " + msg);
     }
 
     private static readonly HashSet<string> LoggedErrors = new();
@@ -131,7 +131,7 @@ internal static class TweenBoost
     /// <summary>Start capturing tweens. Returns true if this call opened the scope (pass it to <see cref="End"/>).</summary>
     internal static bool Begin()
     {
-        if (Plugin.AnimationSpeed.Value <= 1.001f) return false;
+        if (Plugin.AnimationSpeed <= 1.001f) return false;
         if (_depth > 0 && _frame != Time.frameCount) _depth = 0; // a scope leaked (exception in the game method)
         if (_depth++ > 0) return true;
         _frame = Time.frameCount;
@@ -152,7 +152,7 @@ internal static class TweenBoost
         if (--_depth > 0) return;
         try
         {
-            float speed = Plugin.AnimationSpeed.Value;
+            float speed = Plugin.AnimationSpeed;
             var list = Playing();
             if (list == null) return;
             for (int i = 0; i < list.Count; i++)

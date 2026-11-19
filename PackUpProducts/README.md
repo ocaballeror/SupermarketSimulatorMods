@@ -19,9 +19,9 @@ The box is a normal game box: it is saved with your store, has the correct produ
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch. Takes effect right away. |
+| General | `Enabled` | `true` | Enable the mod. Takes effect right away. |
 | General | `TriggerAction` | `Take` | The game input action that packs. `Take` is the game's own Take action, right mouse button by default, and follows any key you rebind it to in the game's controls. Other action names of the game's Player controls also work. |
-| Diagnostics | `VerboseLogging` | `true` | Logs every step as `[PackUp]` lines in `BepInEx/LogOutput.log`, including why a click on a shelf was ignored. |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes: logs every step as `[PackUp]` lines in `BepInEx/LogOutput.log`, including why a click on a shelf was ignored. |
 
 ## Cost
 

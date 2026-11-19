@@ -17,11 +17,11 @@ Only the tags on boxes and furniture boxes get bigger. The label icons on shelve
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch. Takes effect right away: tags go back to normal size and the hover panel disappears. |
+| General | `Enabled` | `true` | Enable the mod. Takes effect right away: tags go back to normal size and the hover panel disappears. |
 | Tags | `ScaleMultiplier` | `2` | A number you type in: 1 = normal size, 2 = twice as big, 1.5 is fine too, from 0.5 to 5. On small boxes the tag is shrunk so it stays on the lid (never below the original size). Applies at once, also to boxes already in the store. If your PC uses a decimal comma, type `1,5`. |
 | Hover | `ShowHoverText` | `true` | Show the hover panel. |
-| Hover | `TextSize` | `22` | Text size of the hover panel, 8 to 48; the whole panel scales with it and with your screen resolution. |
-| Diagnostics | `VerboseLogging` | `true` | Logs what the mod does (`[ClearTags]` lines in `BepInEx/LogOutput.log`). |
+| Hover | `TextSize` | `30` | Text size of the hover panel, 8 to 48; the whole panel scales with it and with your screen resolution. |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (`[ClearTags]` lines in `BepInEx/LogOutput.log`). |
 
 The words in the hover panel ("Quantity", "Box price", "Price") are English whatever the game language; product and furniture names follow the game language. Brand names are shown as the game stores them.
 

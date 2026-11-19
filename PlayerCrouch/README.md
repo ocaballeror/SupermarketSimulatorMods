@@ -16,19 +16,13 @@ Optional toggle mode: press once to crouch and again to stand. In this mode, jum
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch. Turning it off stands you up and removes the feature right away; no restart needed. |
+| General | `Enabled` | `true` | Enable the mod. Turning it off stands you up and removes the feature right away; no restart needed. |
 | Controls | `Key` | `LeftCtrl` | Keyboard key used to crouch. |
 | Controls | `GamepadButton` | `None` | Gamepad button used to crouch (None = none). Left stick press is already sprint and right stick press is ping. |
 | Controls | `ToggleMode` | `false` | `false`: hold to crouch. `true`: press to crouch, press again (or jump) to stand. |
-| Crouch | `SpeedMultiplier` | `0.5` | Walking speed while crouched, as a fraction of normal speed (0.1 to 1). |
-| Crouch | `CameraHeight` | `0.65` | Eye height while crouched, as a fraction of standing eye height (0.3 to 0.95). |
-| Crouch | `TransitionSeconds` | `0.2` | How long crouching down or standing up takes (0.05 to 1 s). |
-| Crouch | `ShrinkCollider` | `true` | Shorter collision shape while crouched. |
-| Animation | `BodyDepth` | `0.4` | How low the character's hips go, as a fraction of leg length (0.1 to 0.6). |
-| Animation | `LeanAngle` | `15` | Forward lean of the upper body, in degrees (0 to 40). |
-| Multiplayer | `ShareCrouchState` | `true` | Tells other players when you crouch, so modded players see your character crouch. |
-| Multiplayer | `AnimateOtherPlayers` | `true` | Shows other modded players crouching. |
-| Diagnostics | `VerboseLogging` | `false` | Writes `[Crouch]` lines to `BepInEx/LogOutput.log`. |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (`[Crouch]` lines in `BepInEx/LogOutput.log`). |
+
+Fixed values (not configurable): you walk at half speed, your eye height drops to 55% of standing height, going down or up takes 0.2 s, and your collision shape shrinks while crouched. Your character's hips drop by 40% of leg length and lean forward 15 degrees. Your crouch state is shared with other players, and other modded players are shown crouching.
 
 ## Who needs it (multiplayer)
 

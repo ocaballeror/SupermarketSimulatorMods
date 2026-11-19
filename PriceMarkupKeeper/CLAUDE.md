@@ -4,6 +4,8 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
+v1.1.2: settings reduced (commit "simplify mod settings"). Only `Enabled` and `VerboseLogging` (the cfg key `[Diagnostics] VerboseLogging` already existed, so existing cfgs keep their stored value; the default is now false for new configs) remain; `KeepMarkup`, `OnlyFollowingProducts` and `PriceNewProducts` are now always on, and their off-branches (reprice hand-priced products too, create price sets for unpriced products) were removed as dead code.
+
 v1.1.1 (rework, not yet tested in-game): newly unlocked products get the markup (and the saved bulk discount) as soon as their license is bought (user request after the 2026-11-15 session). Review round 1 (1.1.1): `EnsurePricingDataComplete` before the loop (`GetOrCreatePriceSetByPlayer` throws on a missing `pricingDatas` entry before the pricing tab was opened), per-product try/catch with `FinishBulkPricingApply` in a `finally` so whatever was priced is always sent, entries created with an unusable market price are still sent, the bulk discount is applied too (the original request covers "pricing or discount" rules). Not changed: the authority check `!IsConnected || IsMasterClient` (same as the in-game-confirmed daily repricing).
 
 v1.0.2: daily repricing **confirmed working in-game by the user (2026-11-15).**
@@ -51,5 +53,5 @@ v1.0.2: daily repricing **confirmed working in-game by the user (2026-11-15).**
 2. Look in `LogOutput.log` for `[Markup] New day: the game tried to change N product(s), markup 5%, K to reprice`. It appears once per day, even when N = 0, and it is the proof that the `TryChangingBasePrices` and `ChangeCurrentCost` detours fire through the `OnStartedNewDay` delegate. If it never appears, the delegate detour doesn't work: report it. (N can be 0 on days the game skips price changes.)
 3. For days with K > 0, expect `[Markup] Product <id>: market X, price A -> B` lines and `Repriced K product(s) ... (sent to guests)` when online. Check that the pricing tab shows B = X * 1.05 and the price tags changed.
 4. A product priced by hand shows `price ... was set by hand ... left alone` and keeps its price.
-5. Nit 3 check: turn `OnlyProductsFollowingMarkup` off, set one product's price by hand, wait for its cost to change. Its log line says `doesn't match the markup price ...; ... overridden`, and it is forced to the markup price. With no bulk markup ever applied (ratio 0) that means exactly market price for every changed product. This is intended and matches the README, but it is aggressive.
+5. (Removed in 1.1.2: the "reprice hand-priced products too" mode is gone; only products that still follow the markup are repriced.)
 6. Guest (unmodded, online): after the host's `Repriced ... (sent to guests)` line, the guest's pricing tab and price tags should show the new prices without reloading. Not verifiable from the dumps, so confirm in-game; if tags stay stale, the extra `BulkPricingApplied_RPC` isn't refreshing them and `BasePricesChanged_Broadcast` alone is in effect.

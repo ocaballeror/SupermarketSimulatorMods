@@ -4,6 +4,8 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
+v1.1.2 (2026-11-18): settings reduced (user commit "simplify mod settings"). `SpeedUpEmployeeHelp` is gone (employee help always follows the multiplier; its `Plugin` constant and the off-branch were removed as dead code); remaining settings are `Enabled`, `SpeedMultiplier` and `VerboseLogging` (the cfg key `[Diagnostics] VerboseLogging` already existed, so existing cfgs keep their stored value; the default is now **false** for new configs; only the C# field was renamed from `Verbose`). No behaviour change otherwise.
+
 v1.1.1: v1.1.0 plus review round 1 (see "Review round 1" below). Not yet tested in-game.
 
 v1.1.0 (rework after the 2026-11-15 in-game test):

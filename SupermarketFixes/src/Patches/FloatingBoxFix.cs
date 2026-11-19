@@ -27,13 +27,12 @@ namespace SupermarketFixes.Patches;
 /// fall. A supported box is left alone (its slab hits the box or floor it rests on), so the cost is one
 /// overlap query per sleeping loose box; the scene-wide scan runs only every 5 s. Remote clients only see the result through the game's transform sync.
 ///
-/// Diagnostics: an unsupported box that is NOT asleep or is kinematic is logged once ([FloatBox]) with its
+/// VerboseLogging: an unsupported box that is NOT asleep or is kinematic is logged once ([FloatBox]) with its
 /// state, so a different cause (for example a box stuck kinematic) can be identified from the log.
 /// </summary>
 internal static class FloatingBoxFix
 {
     internal static ConfigEntry<bool> WakeUnsupported;
-    internal static ConfigEntry<bool> Diagnostics;
 
     /// <summary>Safety net for boxes that leave a pile in ways we don't see (clerks, trash, despawn). Slow on purpose:
     /// FindObjectsOfType walks every box in the scene, racked ones included.</summary>
@@ -48,8 +47,6 @@ internal static class FloatingBoxFix
     {
         WakeUnsupported = cfg.Bind("FloatingBox", "WakeUnsupportedBoxes", true,
             "Boxes in a pile that stay floating after the box under them was taken are woken up so they fall.");
-        Diagnostics = cfg.Bind("FloatingBox", "Diagnostics", true,
-            "Log [FloatBox] lines when a floating box is woken, or when one is found that is not simply asleep.");
     }
 
     internal static void ResetState()
@@ -170,7 +167,7 @@ internal static class FloatingBoxFix
 
         rb.WakeUp();
         s_woken++;
-        if (Diagnostics.Value && s_woken <= MaxWakeLogs)
+        if (Plugin.VerboseLogging.Value && s_woken <= MaxWakeLogs)
             Plugin.Logger.LogInfo($"[FloatBox] Woke a sleeping box with nothing under it ({HeldState.Role}): {Describe(box, rb, bounds)}" +
                                   (s_woken == MaxWakeLogs ? " (further wake-ups are not logged)" : ""));
     }
@@ -193,7 +190,7 @@ internal static class FloatingBoxFix
 
     private static void LogOther(Box box, Rigidbody rb, Bounds b, string what)
     {
-        if (!Diagnostics.Value || s_otherLogs >= MaxOtherLogs || !s_seenOther.Add(box.Pointer)) return;
+        if (!Plugin.VerboseLogging.Value || s_otherLogs >= MaxOtherLogs || !s_seenOther.Add(box.Pointer)) return;
         s_otherLogs++;
         Plugin.Logger.LogInfo($"[FloatBox] Box {what} ({HeldState.Role}): {Describe(box, rb, b)}");
     }

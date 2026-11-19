@@ -31,22 +31,32 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.playercrouch";
     public const string Name = "Player Crouch";
-    public const string Version = "1.0.3";
+    public const string Version = "1.0.4";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<Key> CrouchKey;
     internal static ConfigEntry<CrouchPadButton> PadButton;
     internal static ConfigEntry<bool> ToggleMode;
-    internal static ConfigEntry<float> SpeedMultiplier;
-    internal static ConfigEntry<float> CameraHeight;
-    internal static ConfigEntry<float> TransitionTime;
-    internal static ConfigEntry<bool> ShrinkCollider;
-    internal static ConfigEntry<float> BodyDepth;
-    internal static ConfigEntry<float> LeanAngle;
-    internal static ConfigEntry<bool> ShareWithOthers;
-    internal static ConfigEntry<bool> AnimateOthers;
-    internal static ConfigEntry<bool> Verbose;
+    internal static ConfigEntry<bool> VerboseLogging;
+
+    // Fixed tuning values (not exposed as settings).
+    /// <summary>Walk speed multiplier while crouched.</summary>
+    internal const float SpeedMultiplier = 0.5f;
+    /// <summary>Crouched camera/body height as a fraction of standing height.</summary>
+    internal const float CameraHeight = 0.55f;
+    /// <summary>Seconds to go from standing to fully crouched (and back).</summary>
+    internal const float TransitionTime = 0.2f;
+    /// <summary>Shrink the CharacterController while crouched so the player fits under low obstacles.</summary>
+    internal const bool ShrinkCollider = true;
+    /// <summary>How far the body of other players drops when crouching, as a fraction of leg length.</summary>
+    internal const float BodyDepth = 0.4f;
+    /// <summary>Forward lean of other players' bodies when crouching, in degrees.</summary>
+    internal const float LeanAngle = 15f;
+    /// <summary>Tell other players (via a player property) that the local player is crouching.</summary>
+    internal const bool ShareWithOthers = true;
+    /// <summary>Animate other players that share their crouch state.</summary>
+    internal const bool AnimateOthers = true;
 
     internal static bool Active { get; private set; }
 
@@ -66,17 +76,7 @@ public class Plugin : BasePlugin
         ToggleMode = Config.Bind("Controls", "ToggleMode", false,
             "false = hold the key to stay crouched. true = press once to crouch, again to stand up.");
 
-        SpeedMultiplier = 0.5f;
-        CameraHeight = 0.55f;
-        TransitionTime = 0.2f;
-        ShrinkCollider = true;
-
-        BodyDepth = 0.4f
-        LeanAngle = 15f;
-        ShareWithOthers = true;
-        AnimateOthers = true;
-
-        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
@@ -120,7 +120,7 @@ public class Plugin : BasePlugin
 
     internal static void Info(string msg)
     {
-        if (Verbose.Value) Logger.LogInfo("[Crouch] " + msg);
+        if (VerboseLogging.Value) Logger.LogInfo("[Crouch] " + msg);
     }
 
     public override bool Unload()

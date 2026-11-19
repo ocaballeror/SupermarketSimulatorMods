@@ -25,7 +25,7 @@ internal static class MoveSpeedPatch
         {
             if (!Crouch.IsCrouching || __instance.Pointer != Crouch.LocalFpcPtr) return;
             float move = __instance.MoveSpeed, sprint = __instance.SprintSpeed;
-            float crouchSpeed = move * Plugin.SpeedMultiplier.Value;
+            float crouchSpeed = move * Plugin.SpeedMultiplier;
             float t = Crouch.LocalT;
             __state = new Saved { Set = true, Move = move, Sprint = sprint };
             __instance.MoveSpeed = Mathf.Lerp(move, crouchSpeed, t);

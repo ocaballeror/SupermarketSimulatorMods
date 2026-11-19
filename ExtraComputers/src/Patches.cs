@@ -437,7 +437,6 @@ internal static class StoreComputerScreenPatch
             if (ComputerSession.Active) return;
             ComputerUiState.DropPending();
             if (ComputerSession.Lingering) ComputerSession.FinishLinger("store computer used"); // it needs its own camera back
-            if (!Plugin.IndependentScreens.Value) return;
             if (__instance.IsOccupied || __instance.OpenPC || __instance.IsInPlacingMode) return;
             ComputerUiState.Apply(__instance, ComputerUiState.StoreKey);
         }
@@ -450,11 +449,8 @@ internal static class StoreComputerScreenPatch
         if (__result)
         {
             ComputerSession.StoreSessionOpen = true;
-            if (Plugin.IndependentScreens.Value)
-            {
-                try { ComputerUiState.Finish(__instance); }
-                catch (Exception e) { Plugin.Error("Opening the store computer's windows failed: " + e.Message); }
-            }
+            try { ComputerUiState.Finish(__instance); }
+            catch (Exception e) { Plugin.Error("Opening the store computer's windows failed: " + e.Message); }
         }
     }
 }

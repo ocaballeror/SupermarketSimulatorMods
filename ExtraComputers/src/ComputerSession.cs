@@ -149,11 +149,8 @@ internal static class ComputerSession
         }
 
         // This computer's own screen (apps and tabs it was left with, or the clean desktop).
-        if (Plugin.IndependentScreens.Value)
-        {
-            try { ComputerUiState.Apply(comp, _screenKey); }
-            catch (Exception e) { Plugin.Error("Setting up this computer's screen failed: " + e); }
-        }
+        try { ComputerUiState.Apply(comp, _screenKey); }
+        catch (Exception e) { Plugin.Error("Setting up this computer's screen failed: " + e); }
 
         // Vanilla InstantInteract writes IsOccupied-related state (OccupiedPlayer at +0xD8) for the local player;
         // nobody clears it for an extra computer (the broadcast that would is skipped), so put both back.
@@ -184,11 +181,8 @@ internal static class ComputerSession
         }
 
         // The windows this computer had open go up now, like a click on the desktop icons with the PC already open.
-        if (Plugin.IndependentScreens.Value)
-        {
-            try { ComputerUiState.Finish(comp); }
-            catch (Exception e) { Plugin.Error("Opening this computer's windows failed: " + e); }
-        }
+        try { ComputerUiState.Finish(comp); }
+        catch (Exception e) { Plugin.Error("Opening this computer's windows failed: " + e); }
 
         // PlayerInteraction.Interact activates the interaction of m_CurrentInteractable's type right after
         // this returns; point it at the store computer so ComputerInteraction takes over as usual.
@@ -283,7 +277,7 @@ internal static class ComputerSession
 
     private static void SaveScreen(Computer comp, int key)
     {
-        if (!Plugin.IndependentScreens.Value || comp == null) return;
+        if (comp == null) return;
         try { ComputerUiState.Capture(comp, key); }
         catch (Exception e) { Plugin.Error("Saving this computer's screen failed: " + e.Message); }
     }

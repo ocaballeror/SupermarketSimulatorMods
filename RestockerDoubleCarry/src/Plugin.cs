@@ -12,13 +12,14 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.restockerdoublecarry";
     public const string Name = "Restocker Double Carry";
-    public const string Version = "1.2.0";
+    public const string Version = "1.2.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
-    internal static ConfigEntry<int> MinimumLevel;
-    internal static ConfigEntry<bool> StackVisuals;
-    internal static ConfigEntry<bool> Verbose;
+    internal static ConfigEntry<bool> VerboseLogging;
+
+    /// <summary>Restockers at this level or higher carry two boxes.</summary>
+    internal const int MinimumLevel = 10;
 
     /// <summary>True while the mod's patches are applied.</summary>
     internal static bool Active { get; private set; }
@@ -31,15 +32,13 @@ public class Plugin : BasePlugin
         _harmony = new Harmony(Guid);
 
         Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
-        MinimumLevel = 10;
-        StackVisuals = true;
-        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
 
         SetActive(Enabled.Value);
-        Log.LogInfo($"{Name} {Version} loaded ({(Active ? "enabled" : "disabled")}, minimum level {MinimumLevel.Value})");
+        Log.LogInfo($"{Name} {Version} loaded ({(Active ? "enabled" : "disabled")}, minimum level {MinimumLevel})");
     }
 
     private void SetActive(bool on)

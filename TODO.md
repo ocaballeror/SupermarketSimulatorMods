@@ -19,9 +19,9 @@ This issue mostly affects the other computer (the guest, not the host) during on
 
 ## Bug #2: Ghost Item Remaining in Player's Hands
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `SupermarketFixes/src/Patches/GhostHeldItemFix.cs`  
-**Review:** 2026-11-15, 1 round, hash `d48d7436015a`  
+**Review:** 2026-11-15, 1 round, hash `d48d7436015a` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test + logs, including the host's `[BoxDiag] DropBox_RPC` lines.
 
 Sometimes, a player holds an item and then puts it down on the floor, but a ghost image of the item remains in their hands.
@@ -32,9 +32,9 @@ This does not interfere with gameplay, but it blocks the player's view and looks
 
 ## Bug #3: Player Gets Stuck When Buying Boxes from Wholesale Stores
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `SupermarketFixes/src/Patches/StuckBoxFix.cs`  
-**Review:** 2026-11-15, 1 round, hash `2858032d1b39`  
+**Review:** 2026-11-15, 1 round, hash `2858032d1b39` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test + logs.
 
 When buying boxes from wholesale stores, sometimes the box remains stationary at the location where it was purchased.
@@ -64,9 +64,9 @@ There is currently no additional information available, as no specific cause or 
 
 ## Bug #5: Unable to Put Products on Shelves Without an Existing Label
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `SupermarketFixes/src/Patches/BoxPlaceFix.cs`, `SupermarketFixes/src/Patches/CratePlaceFix.cs`  
-**Review:** 2026-11-16, 1 round, hash `226e9b1da17c` (both files)  
+**Review:** 2026-11-16, 1 round, hash `226e9b1da17c` (both files) (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of the crate fix (v0.7.2); send the `[CratePlace]` / `[BoxPlace]` log lines.
 
 Sometimes, players cannot put items from a crate onto a new shelf that does not yet have a label for that product.
@@ -82,9 +82,9 @@ The current workaround is:
 
 ## Bug #6: Boxes Sometimes Remain Floating When Removing Boxes from a Stack
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `SupermarketFixes/src/Patches/FloatingBoxFix.cs`  
-**Review:** 2026-11-16, 1 round, hash `73d25a3a447c`  
+**Review:** 2026-11-16, 1 round, hash `73d25a3a447c` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of v0.8.0 (host and guest); send the `[FloatBox]` lines.
 
 When there is a pile of boxes, such as after placing a large online order, sometimes removing the box directly underneath another box does not cause the upper box to fall.
@@ -97,9 +97,9 @@ This does not seem to be related to Bug #1.
 
 ## Bug #7: Cleaning Lady Is Visually Misaligned When Cleaning Stains
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `SupermarketFixes/src/Patches/JanitorCleanAlignFix.cs`  
-**Review:** 2026-11-16, 2 rounds (after a rework for user feedback), hash `2369a4e50bdb`  
+**Review:** 2026-11-16, 2 rounds (after a rework for user feedback), hash `2369a4e50bdb` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of v0.10.1 on the host; send the `[JanitorAlign]` lines.
 
 The cleaning lady successfully cleans stains on the floor, but she is not visually aligned with the stain.
@@ -108,9 +108,9 @@ It looks as though she is cleaning the wrong section of the floor, even though t
 
 ## Bug #8: Cleaning Lady Ignores Collisions with Shelves and Walls
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `SupermarketFixes/src/Patches/JanitorCleanAlignFix.cs` (shared with Bug #7)  
-**Review:** 2026-11-16, reviewed with Bug #7, hash `2369a4e50bdb`  
+**Review:** 2026-11-16, reviewed with Bug #7, hash `2369a4e50bdb` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test together with Bug #7 (stains next to shelves, walls, trash bins).
 
 Possibly related to Bug #7.
@@ -123,9 +123,9 @@ Overlapping with other characters is acceptable, since the game mostly ignores c
 
 ## Bug #9: Delivered Orders Remain in the Other Player's Pending Orders
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `SupermarketFixes/src/Patches/CourierOrdersFix.cs`  
-**Review:** 2026-11-17, 2 rounds, hash `551de09e87f9`  
+**Review:** 2026-11-17, 2 rounds, hash `551de09e87f9` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of v0.11.0 (host and modded guest); send the `[CourierOrders]` lines from both.
 
 In multiplayer, when a player gives an online order bag to the courier, the order disappears from the active order count on that player's screen, but not on the other player's screen.
@@ -142,9 +142,9 @@ Currently, orders are only removed when they have been delivered to the customer
 
 ## Improvement #1: Make Global Pricing Settings Persist Across Days
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `PriceMarkupKeeper/`  
-**Review:** 2026-11-16, 1 round, hash `b88bc963388e`  
+**Review:** 2026-11-16, 1 round, hash `b88bc963388e` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of v1.1.1 (buy a license after applying a bulk markup; check the new products' prices).
 
 Make prices respect the global settings configured through the pricing tab on the computer.
@@ -166,9 +166,9 @@ Make paint cans last twice as long as they currently do.
 
 ## Improvement #3: Add Player Crouching
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `PlayerCrouch/`  
-**Review:** 2026-11-16, 1 round, hash `13bd134104b2`  
+**Review:** 2026-11-16, 1 round, hash `13bd134104b2` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of v1.0.3 (crouch pose visible on the other player's screen); send the `Model for player` log lines.
 
 Allow players to crouch by pressing `Ctrl`.
@@ -181,9 +181,9 @@ The mod works, but there is no animation for the player crouching, so it does no
 
 ## Improvement #4: Make Self-Checkout Machines Faster
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `SelfCheckoutSpeed/`  
-**Review:** 2026-11-16, 1 round, hash `59ec1550c17b`  
+**Review:** 2026-11-16, 1 round, hash `59ec1550c17b` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of v1.1.1 on host and a modded guest (same checkout pace on both screens).
 
 Make customers using self-checkout machines 2x faster.
@@ -200,9 +200,9 @@ Allow values up to `10x`.
 
 ## Improvement #5: Allow Level 10 Restockers to Carry Two Boxes
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `RestockerDoubleCarry/`  
-**Review:** 2026-11-16, 2 rounds, hash `b0f7219e16b7`  
+**Review:** 2026-11-16, 2 rounds, hash `b0f7219e16b7` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of v1.2.0 (storage-only and mixed two-box trips); send the `[DoubleCarry]` lines.
 
 Make level 10 restockers capable of carrying two product boxes at a time.
@@ -262,9 +262,9 @@ Also, add this functionality to the list of help keys displayed on the side of t
 
 ## Improvement #7: Add Additional Computers as Placeable Furniture
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `ExtraComputers/`  
-**Review:** 2026-11-16, 2 rounds, hash `0aaf4c52c65f`  
+**Review:** 2026-11-16, 2 rounds, hash `0aaf4c52c65f` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of v1.3.0 (steps in the mod's `CLAUDE.md`); send the `[ExtraComputers]` lines.
 
 Create a new furniture type: the computer.
@@ -305,9 +305,9 @@ Make grid mode the default placement mode when placing furniture of any kind.
 
 ## Improvement #9: Add Bulk Item Transfer Between Shelves and Containers
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `BulkShelfTransfer/`  
-**Review:** 2026-11-16, 1 round, hash `f718cb4574da`  
+**Review:** 2026-11-16, 1 round, hash `f718cb4574da` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of v0.2.0 (paper-bag bulk take); send the `[Bulk] bag` lines.
 
 Allow players to transfer multiple products at once using `Shift + Right Click`.
@@ -361,9 +361,9 @@ Shift-clicking should work with paper bags for delivery too.
 
 ## Improvement #10: Allow Players to Carry Two Boxes at Once
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `PlayerDoubleCarry/`  
-**Review:** 2026-11-16, 1 round, hash `2f772873f0e7`  
+**Review:** 2026-11-16, 1 round, hash `2f772873f0e7` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of v0.2.0 (buying a second box at the wholesale store); send the `[PlayerCarry]` log lines.
 
 Allow players to pick up and carry two boxes at a time.
@@ -394,18 +394,18 @@ Features:
 
 ## Improvement #12: Auto courier load
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `AutoCourierLoad/`  
-**Review:** 2026-11-17, 2 rounds, hash `f6d2236f16f8`  
+**Review:** 2026-11-17, 2 rounds, hash `f6d2236f16f8` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of v0.2.0 on the host (steps in the mod's `CLAUDE.md`); send the `[AutoCourier]` lines.
 
 When the courier comes back from a delivery, he scans a small area around and including his regular parking space, and if there are any delivery bags that are closed and tagged with the customer's name whose delivery is active at the moment, he immediately takes it and loads it in his trunk. This works for up to 3 bags at a time (or whatever his trunk limit happens to be). if the bags he collected cover all the active online orders at the moment, or if one of those deliveries has less than one minute left, he leaves for delivery, as if the player went to him and pressed E to send him.
 
 ## Improvement #13: Highlight same products
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `ProductHighlight/`  
-**Review:** 2026-11-18, 3 rounds, hash `bd7f0b2cb6ff`  
+**Review:** 2026-11-18, 3 rounds, hash `bd7f0b2cb6ff` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of v0.1.2 on host and guest (steps in the mod's `CLAUDE.md`); send the `[Highlight]` lines.
 
 Currently, hen holding a box of products, the game highlights boxes of the same type that are in the storage racks, with a green outline. Do the same for shelves/fridges/freezers that are labeled with this type of product, even if they're empty at the moment. Unlike the storage, where the boxes are highlighted, mark the whole shelf/fridge/freezer in this case, since the shelves could all be empty but we still want to find where those products would go, based on their labels.
@@ -418,9 +418,9 @@ needs to be updated to match
 
 ## Improvement #14: Pack up products
 
-**Status:** reviewed  
+**Status:** in-progress  
 **Code:** `PackUpProducts/`  
-**Review:** 2026-11-18, 3 rounds, hash `c3e406fbf94f`  
+**Review:** 2026-11-18, 3 rounds, hash `c3e406fbf94f` (stale: settings reduced and code changed 2026-11-18; needs re-review)
 **Waiting on:** In-game test of v0.1.2 on the host, then a modded guest (steps in the mod's `CLAUDE.md`); send the `[PackUp]` lines.
 
 Right clicking on a product that is in a shelf/fridge/freezer currently does nothing, as

@@ -112,7 +112,7 @@ internal static class CrateBulk
 
         if (mine) Finish("button pressed again", stopLoop: true);
         if (Loops.Count < 2) return true;
-        if (!Plugin.Crates.Value || !(take ? Plugin.BulkTake.Value : Plugin.BulkPlace.Value)) return true;
+        if (!Plugin.Crates || !(take ? Plugin.BulkTake : Plugin.BulkPlace)) return true;
         if (!Bulk.ModifierHeld() || !Bulk.IsLocal(ci.PlayerInstance)) return true;
         var slot = ci.m_CurrentDisplaySlot;
         if (slot == null || ci.m_CurrentVendingSlot != null) return true; // only shelves; vending/baker/guard stay vanilla

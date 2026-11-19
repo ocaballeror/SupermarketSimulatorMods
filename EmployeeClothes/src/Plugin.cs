@@ -83,8 +83,8 @@
  *    picker in the NameChangeCanvas; its Image material is reset so it makes its own), 12 swatches (a fallback if the
  *    picker's shader doesn't work), an "Apply to all" switch (a clone of the game's own ToggleSwitch from the HR tab:
  *    a Slider + handle Button + on/off colors; its gamepad glyph and caption are removed and onValueChanged is ours),
- *    Apply, Reset and Done. The switch state is the config entry [Customization] ApplyToAll (kept across type switches,
- *    Apply, Reset and game starts). The type switcher only offers the unlocked types, worked out each time the panel
+ *    Apply, Reset and Done. The switch state is ClothesStore.ApplyToAll (kept across type switches,
+ *    Apply, Reset and game starts; stored as the line "#applyall<TAB>1" in oscar.employeeclothes.saves.txt, not in the cfg). The type switcher only offers the unlocked types, worked out each time the panel
  *    opens (ClothesStore.UnlockedKinds): the HR tab hides the ice cream helper unless DLCTestController.IceCreamDLC and the
  *    baker unless DLCTestController.BakeryDLC (HiringTab.RefreshAvailability); on top of that a type needs a hired employee
  *    (EmployeeManager.IsEmployeeHired) or a hire slot (HrHiring.SlotIds) with no unmet requirement (HrHiring.MissingCount
@@ -129,16 +129,17 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.employeeclothes";
     public const string Name = "Employee Clothes";
-    public const string Version = "1.0.6";
+    public const string Version = "1.0.7";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
-    internal static ConfigEntry<float> Price;
-    internal static ConfigEntry<bool> ApplyToAll;
-    internal static ConfigEntry<bool> ShadedGarments;
-    internal static ConfigEntry<bool> SyncToGuests;
-    internal static ConfigEntry<float> PreviewLight;
-    internal static ConfigEntry<bool> Verbose;
+    internal static ConfigEntry<bool> VerboseLogging;
+
+    // Fixed values (no longer settings).
+    internal const float Price = 1000f;
+    internal const bool ShadedGarments = true;
+    internal const bool SyncToGuests = true;
+    internal const float PreviewLight = 30f;
 
     /// <summary>True while the patches are applied and the mod does its work.</summary>
     internal static bool Active { get; private set; }
@@ -151,18 +152,10 @@ public class Plugin : BasePlugin
         _harmony = new Harmony(Guid);
 
         Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
-        Price = 1000f;
-        ApplyToAll = false;
-        ShadedGarments = true;
-        SyncToGuests = true;
-        PreviewLight = 30f;
-        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
-        PreviewLight.SettingChanged += (_, _) => Preview.ApplyLightSetting();
-        ApplyToAll.SettingChanged += (_, _) => TabUi.OnApplyAllConfigChanged();
-        ShadedGarments.SettingChanged += (_, _) => Recolor.OnShadeSettingChanged();
 
         ClassInjector.RegisterTypeInIl2Cpp<PanelWatcher>();
         AddComponent<ClothesDriver>();
@@ -219,6 +212,6 @@ public class Plugin : BasePlugin
     internal static void Error(string msg) => Logger?.LogError("[EmployeeClothes] " + msg);
     internal static void Debug(string msg)
     {
-        if (Verbose != null && Verbose.Value) Logger?.LogInfo("[EmployeeClothes] " + msg);
+        if (VerboseLogging != null && VerboseLogging.Value) Logger?.LogInfo("[EmployeeClothes] " + msg);
     }
 }

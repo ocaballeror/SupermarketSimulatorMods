@@ -12,12 +12,12 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.paintcancapacity";
     public const string Name = "Paint Can Capacity";
-    public const string Version = "1.0.2";
+    public const string Version = "1.0.3";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<float> Multiplier;
-    internal static ConfigEntry<bool> Verbose;
+    internal static ConfigEntry<bool> VerboseLogging;
 
     /// <summary>True while the mod's patches are applied.</summary>
     internal static bool Active { get; private set; }
@@ -38,7 +38,7 @@ public class Plugin : BasePlugin
                 "How many times longer a paint can lasts. 2 = twice as many walls per can. " +
                 "Applies to cans bought after the change; cans you already own keep the paint they have.",
                 new AcceptableValueRange<float>(1f, 10f)));
-        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);

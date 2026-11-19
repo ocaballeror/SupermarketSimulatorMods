@@ -5,6 +5,7 @@ empty or not). While they hold an online-order paper bag, outline the product gr
 
 ## Status
 
+- v0.1.3: settings reduced (commit "simplify mod settings"). Only `Enabled` and `VerboseLogging` (the cfg key `[Diagnostics] VerboseLogging` already existed, so existing cfgs keep their stored value; the default is now false for new configs) remain; the former `ShelvesForBox` and `ProductsForOrderBag` settings are always on (the off-branches and the "(shelf highlight off)" description text were removed as dead code). Their `SettingChanged` refresh hooks are gone; `Enabled` still triggers `RequestRefresh`.
 - v0.1.2 (review round 2): `m_Displays` is read first and the native empty-slot lookup is skipped when it is null/empty (guest NRE fix); the guest scan re-checks `IsPlacingMode` per tick; the placing-mode "still held" test also needs the object within 5 m of the holder. **Not tested in-game.**
 - v0.1.1 (review round 1): outlines persist while placing (placing mode unparents the held object); the display-type filter also applies in bag mode; failed displays are warned once per hold; submesh loop as the game's; order lines of one product are merged before subtracting the bag; fallback scan for labeled shelves when `DisplayManager.m_Displays` is empty (guest). **Not tested in-game.**
 - v0.1.0: written and builds. **Not tested in-game**; everything below marked "unverified" is untested. No Harmony patches at all.
@@ -17,7 +18,7 @@ empty or not). While they hold an online-order paper bag, outline the product gr
 
 | File | What |
 |---|---|
-| `src/Plugin.cs` | Config (`Enabled`, `ShelvesForBox`, `ProductsForOrderBag`, `VerboseLogging`), `[Highlight]` log helper, attaches the behaviour. |
+| `src/Plugin.cs` | Config (`Enabled`, `VerboseLogging`), `[Highlight]` log helper, attaches the behaviour. |
 | `src/HighlightBehaviour.cs` | The 0.25 s poll: what is held, which displays/slots qualify, create/destroy outlines. Doc comment has the mechanism. |
 | `src/OutlineHandle.cs` | One owned `Outlinable` on a child GameObject (same recipe as the game's `HighlightManager`). |
 
@@ -88,9 +89,9 @@ Purely local: reads the local player's hands and the local `DisplayManager`/slot
 4. Place an online order (several products, some on shelves, one nowhere). Pick up an open paper bag with that order selected in the notebook (or a tagged bag): the **products** on the shelves for the order's items get outlined
    (groups of products, not the shelves); an empty shelf labeled for an ordered product gets nothing; a product not on any shelf: nothing. Log: `paper bag for order #N (M product(s) still needed): 0 shelves, K product groups outlined`.
    Put one ordered product into the bag: when the bag holds the full quantity that product's groups drop out. Take the last product off a shelf group: its outline goes. Put the bag down: all gone.
-5. Toggle `Enabled`, `ShelvesForBox`, `ProductsForOrderBag` in the config manager while holding: outlines vanish/return at once.
+5. Toggle `Enabled` in the config manager while holding: outlines vanish/return at once.
 6. Multiplayer: as host and as guest (guest with the mod, host without, and the other way round): your outlines only on your screen; the other player sees nothing different.
 7. With Whole Truck Highlight installed (as on the host): carry a box to the truck, the truck outline still works.
 
-Send back the `[Highlight]` lines from `BepInEx/LogOutput.log` (the `outline created` lines say how many targets were accepted: `0 target(s)` means the renderers were rejected) and a screenshot of a highlighted
+Send back the `[Highlight]` lines from `BepInEx/LogOutput.log` (turn on `VerboseLogging` in the cfg first; it's off by default) (the `outline created` lines say how many targets were accepted: `0 target(s)` means the renderers were rejected) and a screenshot of a highlighted
 shelf and of highlighted product groups. If nothing shows but the log says shelves were outlined, the outline draws nothing for that kind of renderer: tell me which one.

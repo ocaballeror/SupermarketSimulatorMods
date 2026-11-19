@@ -10,7 +10,7 @@ When your courier comes back from a delivery, he **picks up the finished deliver
 4. Once he has loaded something, he leaves for the delivery, exactly as if you had pressed E on him, as soon as one of these is true:
    - the bags in his trunk cover **every active online order** (there is nothing else to wait for);
    - one of the orders in his trunk has **less than a minute left** (the countdown on the order's note);
-   - optionally, his trunk is **full** (`LeaveWhenFull`, off by default: with more active orders than trunk slots he waits for you or for a deadline).
+   - his trunk is **full**, even if other orders are still active.
 
 Bags that you hold, bags in his trunk, open bags and bags without a name tag are left alone. A bag the courier himself just put back in his drop area (for example because he refused it) is not loaded again until somebody moves it.
 
@@ -22,13 +22,9 @@ If he finds nothing, he simply waits at his spot like before, and you can still 
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch. Takes effect right away, no restart. |
+| General | `Enabled` | `true` | Enable the mod. Takes effect right away, no restart. |
 | AutoCourierLoad | `ScanRadius` | `4` | How far from his parking space (metres, 0.5 to 20) he looks for bags. |
-| AutoCourierLoad | `MaxBags` | `0` | The most bags he loads this way. 0 = as many as his trunk holds. A number higher than his trunk size changes nothing. Bags you hand him yourself count too. It also sets what counts as "full" for `LeaveWhenFull`. |
-| AutoCourierLoad | `LeaveUnderSeconds` | `60` | He leaves at once when an order in his trunk has less than this many seconds left (0 to 600). 0 = never leave because of a deadline. |
-| AutoCourierLoad | `LeaveWhenFull` | `false` | He also leaves as soon as his trunk is full (or `MaxBags` is reached), even if other orders are still active. Off: he leaves only when his trunk covers every active order or an order is about to run out. |
-| AutoCourierLoad | `KeepScanningSeconds` | `30` | After he is back, bags you put down at his spot within this many seconds are still picked up (0 to 600). 0 = only the first moments after he arrives. Once he has loaded something he keeps looking for as long as he waits. |
-| Diagnostics | `Diagnostics` | `true` | Writes `[AutoCourier]` lines to `BepInEx/LogOutput.log`. Turn off once it works for you. |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (`[AutoCourier]` lines in `BepInEx/LogOutput.log`). |
 
 ## Who needs it (multiplayer)
 

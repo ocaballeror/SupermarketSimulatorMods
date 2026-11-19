@@ -27,7 +27,7 @@ public class ClearTagsBehaviour : MonoBehaviour
         try
         {
             float now = Time.unscaledTime;
-            if (Plugin.Active && Plugin.Verbose.Value && now >= _nextSweep)
+            if (Plugin.Active && Plugin.VerboseLogging.Value && now >= _nextSweep)
             {
                 _nextSweep = now + SweepInterval;
                 TagScaler.ResizeAll("sweep", logMissed: true);

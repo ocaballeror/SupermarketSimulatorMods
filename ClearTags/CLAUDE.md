@@ -5,6 +5,7 @@ style (icon, brand + name; on a box also quantity and box price) when the crossh
 
 ## Status
 
+- v0.3.4 (settings reduced, commit "simplify mod settings"): the remaining settings are `Enabled`, `ScaleMultiplier`, `ShowHoverText`, `TextSize` (default now 30, was 22) and `VerboseLogging` (the cfg key `[Diagnostics] VerboseLogging` already existed, so existing cfgs keep their stored value; default now off for new configs; the box sweep diagnostic only runs when it is on). The descriptions were shortened by the user. Nothing was turned into a constant.
 - v0.3.3 (review of 0.3.2): fix, no hover on **vending price tags**. `VendingPriceTag` is a subclass of `PriceTag` (stub `class VendingPriceTag : PriceTag`, dump "base: PriceTag"), so `GetComponent<PriceTag>()` also returned vending tags, the vending branch was never reached, and the shelf branch read the inherited `DisplaySlot`, which is null for them (`VendingPriceTag.EnableTag` writes only `m_VendingSlot`, +0x68). `Resolve` now looks up `VendingPriceTag` first, then `PriceTag`. **Not yet tested in-game.**
 - v0.3.2 (user's in-game test of 0.3.1: tag size, location and hover fine): `Hover/TextSize` default 18 -> 22 (the whole panel scales with it: padding, gaps, icon, separator and title are all derived from the size; only the 40-unit offset below the crosshair is fixed); the hover also works on the **price tag** of a shelf item (`PriceTag`) and of a vending machine item (`VendingPriceTag`), same content as the slot's Label (`HoverInfo.ProductData(id)` is shared by all three). **Not yet tested in-game.**
 - v0.3.1 (review round 1 of 0.3.0): the tag size is now capped per box so it really fits the lid (0.3.0 only shifted/centred it, so the 8x8x8, 20x10x7 and anything at 3x+ still hung over);
@@ -204,11 +205,11 @@ live in `RackSlotData`, which is what the rack tag reads).
    and the panel looks like the key-hint list on the left (rounded, same font).
 6. Crosshair on a shelf label, a rack label and a vending label: panel with icon and name only (no quantity, no price). **New in 0.3.2, vending part fixed in 0.3.3:** the same on the **price tag** of a shelf item and of a vending machine item (log `hover (shelf price tag): ...` / `hover (vending price tag): ...`; check both, the vending one did nothing in 0.3.2); racks have no price tag. If the price tag doesn't react, tell me whether the crosshair shows the vanilla price-edit hint there (then the collider is hit but the mod's component lookup failed).
 7. Furniture box (order furniture): its icon (if the sprite exists), name and `Price:`; a paint-can box: name only, no errors in the logs.
-8. `TextSize` default is now 22 (the panel is bigger than in 0.3.1); try 12 / 30 and another resolution/window size: the panel scales; the hover stays off when the crosshair is beside the tag.
+8. `TextSize` default is now 30 (was 22 in 0.3.2); try 12 / 30 and another resolution/window size: the panel scales; the hover stays off when the crosshair is beside the tag.
 9. If the panel never shows but a plain dark text does, send the `[ClearTags]` warnings (`hover panel attempt N failed`, `hover panel failed`).
 10. Multiplayer (host with the mod, guest without, and the other way round): nothing different for the other player.
 
-Send back the `[ClearTags]` lines from `BepInEx/LogOutput.log` (the `hover panel created` line, `tag kept on its box face`, `hover (...)` lines, any warnings) and a screenshot of the panel
+Send back the `[ClearTags]` lines from `BepInEx/LogOutput.log` (turn on `VerboseLogging` in the cfg first; it's off by default) (the `hover panel created` line, `tag kept on its box face`, `hover (...)` lines, any warnings) and a screenshot of the panel
 and of a big tag on a small box.
 
 ## Scope notes

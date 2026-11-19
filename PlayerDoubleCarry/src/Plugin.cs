@@ -12,13 +12,15 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.playerdoublecarry";
     public const string Name = "Player Double Carry";
-    public const string Version = "0.2.0";
+    public const string Version = "0.2.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
-    internal static ConfigEntry<bool> RemoteStackVisuals;
-    internal static ConfigEntry<bool> BuyAtWholesale;
-    internal static ConfigEntry<bool> Verbose;
+    internal static ConfigEntry<bool> VerboseLogging;
+
+    // Fixed behaviour (not exposed as settings).
+    internal const bool RemoteStackVisuals = true;
+    internal const bool BuyAtWholesale = true;
 
     /// <summary>True while the mod's patches are applied.</summary>
     internal static bool Active { get; private set; }
@@ -35,9 +37,7 @@ public class Plugin : BasePlugin
         _harmony = new Harmony(Guid);
 
         Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
-        BuyAtWholesale = true;
-        RemoteStackVisuals = true;
-        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);

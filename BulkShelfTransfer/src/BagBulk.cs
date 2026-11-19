@@ -60,7 +60,7 @@ internal static class BagBulk
 
     internal static bool TryStart(OnlineOrderInteraction oi, bool take)
     {
-        if (!Plugin.PaperBags.Value || !(take ? Plugin.BulkTake.Value : Plugin.BulkPlace.Value)) return false;
+        if (!Plugin.PaperBags || !(take ? Plugin.BulkTake : Plugin.BulkPlace)) return false;
         if (!Bulk.ModifierHeld()) return false;
         // From here on the player asked for a bulk move: say why one doesn't start (the first in-game test
         // showed no bag burst at all and no clue why).

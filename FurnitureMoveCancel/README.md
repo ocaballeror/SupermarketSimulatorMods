@@ -6,6 +6,7 @@ Picked up a shelf, fridge, freezer, rack, checkout or other furniture by mistake
 - The key appears in the key hints list on the side of the screen while you move furniture, labelled with the game's own "Cancel" text. Despite the label, it puts the furniture back where it was; it does not box it up.
 - If nothing happens right after picking something up, press Escape again: the game ignores placing for a very short moment after pickup. The mod gives no on-screen message when the key does nothing.
 - New furniture you just unpacked from a box has no previous spot, so the key does nothing for it.
+- The furniture is put down immediately at its original spot.
 - The key follows the game's own "Back" key binding.
 
 ## Settings
@@ -14,10 +15,8 @@ Picked up a shelf, fridge, freezer, rack, checkout or other furniture by mistake
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch. Turning it off removes the feature right away; no restart needed. |
-| FurnitureMoveCancel | `ShowHint` | `true` | Shows the Escape key in the key hints list while moving furniture. |
-| FurnitureMoveCancel | `ReturnDelaySeconds` | `0` | Optional pause at the original spot before the furniture is put down (0 to 2 s). 0 = immediately. |
-| Diagnostics | `VerboseLogging` | `false` | Writes `[MoveCancel]` lines to `BepInEx/LogOutput.log`. |
+| General | `Enabled` | `true` | Enable the mod. Turning it off removes the feature right away; no restart needed. |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (`[MoveCancel]` lines in `BepInEx/LogOutput.log`). |
 
 ## Who needs it (multiplayer)
 

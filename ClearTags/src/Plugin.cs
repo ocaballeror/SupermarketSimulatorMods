@@ -12,14 +12,14 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.cleartags";
     public const string Name = "Clear Tags";
-    public const string Version = "0.3.3";
+    public const string Version = "0.3.4";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<float> TagScale;
     internal static ConfigEntry<bool> HoverText;
     internal static ConfigEntry<float> HoverTextSize;
-    internal static ConfigEntry<bool> Verbose;
+    internal static ConfigEntry<bool> VerboseLogging;
 
     /// <summary>True while the box patches are applied (the master switch is on).</summary>
     internal static bool Active { get; private set; }
@@ -33,8 +33,7 @@ public class Plugin : BasePlugin
         Logger = Log;
         _harmony = new Harmony(Guid);
 
-        Enabled = Config.Bind("General", "Enabled", true,
-            "Enable the mod.");
+        Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
         TagScale = Config.Bind("Tags", "ScaleMultiplier", 2f,
             new ConfigDescription(
                 "How much bigger the product icon tag on every box is drawn.",
@@ -42,9 +41,9 @@ public class Plugin : BasePlugin
         HoverText = Config.Bind("Hover", "ShowHoverText", true,
             "Show a small panel (product icon and name; on a box also the quantity and the box price) while looking at a label");
         HoverTextSize = Config.Bind("Hover", "TextSize", 30f,
-            new ConfigDescription("Size of the hover panel text."),
+            new ConfigDescription("Size of the hover panel text.",
                 new ClampedFloat(8f, 48f)));
-        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
@@ -103,7 +102,7 @@ public class Plugin : BasePlugin
 
     internal static void Info(string msg)
     {
-        if (Verbose != null && Verbose.Value) Logger.LogInfo("[ClearTags] " + msg);
+        if (VerboseLogging != null && VerboseLogging.Value) Logger.LogInfo("[ClearTags] " + msg);
     }
 
     public override bool Unload()

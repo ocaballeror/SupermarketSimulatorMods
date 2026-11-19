@@ -24,10 +24,10 @@ As a guest, the host has to approve the second box like any pickup. If the host 
 
 | Section | Setting | Default | Description |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch, applies immediately. If you carry two boxes (or are waiting for the host to approve one) when you turn it off, that is finished first: the second box still comes back to your hands when you put the first one down. |
-| Carry | `BuySecondBoxAtWholesale` | `true` | At the wholesale store, hold left click on a product while holding a closed box to buy a second box and carry both. |
-| Carry | `ShowOtherPlayersStack` | `true` | Show the two boxes another player carries stacked instead of inside each other. Cosmetic, only affects what you see. |
-| Diagnostics | `VerboseLogging` | `true` | Log each step (tag `[PlayerCarry]` in `BepInEx/LogOutput.log`). |
+| General | `Enabled` | `true` | Enable the mod. Applies immediately. If you carry two boxes (or are waiting for the host to approve one) when you turn it off, that is finished first: the second box still comes back to your hands when you put the first one down. |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (tag `[PlayerCarry]` in `BepInEx/LogOutput.log`). |
+
+Always on (not configurable): buying a second box at the wholesale store, and showing the two boxes another modded player carries stacked.
 
 ## Multiplayer
 

@@ -14,18 +14,21 @@ Discounts set from the pricing tab are a percentage of the selling price, so the
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch. Turning it off restores normal behaviour right away; no restart needed. |
-| Pricing | `KeepMarkupOnPriceChanges` | `true` | Reprice products whose market price changed at the start of the day, using the markup you last applied from the bulk pricing tab. |
-| Pricing | `OnlyProductsFollowingMarkup` | `true` | Only reprice products whose price still matched your markup before the change. Prices you typed in by hand for single products are left alone. Turn it off to reprice every product whose market price changed, **including ones you priced by hand** (with no markup ever applied from the pricing tab, that means exactly market price). |
-| Pricing | `PriceNewlyUnlockedProducts` | `true` | When a product license is bought (by anyone in the session), give its new products your markup on top of their market price right away, plus your bulk discount if you applied one. If you never applied a markup, they get exactly the market price (instead of selling at cost). Products that already have a price are left alone. |
-| Diagnostics | `VerboseLogging` | `false` | Logs every repriced or skipped product as `[Markup]` lines in `BepInEx/LogOutput.log`. |
+| General | `Enabled` | `true` | Enable the mod. Turning it off restores normal behaviour right away; no restart needed. |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (every repriced or skipped product as `[Markup]` lines in `BepInEx/LogOutput.log`). |
+
+Fixed behaviour (not configurable):
+
+- Products whose market price changed at the start of the day are repriced using the markup you last applied from the bulk pricing tab.
+- Only products whose price still matched your markup before the change are repriced. Prices you typed in by hand for single products are left alone.
+- When a product license is bought (by anyone in the session), its new products get your markup on top of their market price right away, plus your bulk discount if you applied one. If you never applied a markup, they get exactly the market price (instead of selling at cost). Products that already have a price are left alone.
 
 ## Using it
 
 1. Apply a markup once from the computer's pricing tab (bulk pricing). The game remembers that percentage in your save.
 2. From then on, whenever a product's market price changes at the start of a day, its price follows, and newly unlocked products start at your markup.
 
-If prices already drifted before you installed the mod, apply the markup from the pricing tab once more to line everything up again. With `OnlyProductsFollowingMarkup` on, products that don't match the markup count as priced by hand and are left alone.
+If prices already drifted before you installed the mod, apply the markup from the pricing tab once more to line everything up again. Products that don't match the markup count as priced by hand and are left alone.
 
 If you never used the bulk pricing tab, the saved markup is 0%, so products priced exactly at market price will keep following the market price.
 
@@ -36,6 +39,6 @@ If you never used the bulk pricing tab, the saved markup is 0%, so products pric
 
 ## Notes
 
-- Products unlocked before you installed this version (or with `PriceNewlyUnlockedProducts` off) may still have no price set; apply the markup from the pricing tab once to price them.
+- Products unlocked before you installed this version may still have no price set; apply the markup from the pricing tab once to price them.
 - Products whose cost doesn't actually change that day are never touched.
 - Compatible with other mods that don't change pricing.

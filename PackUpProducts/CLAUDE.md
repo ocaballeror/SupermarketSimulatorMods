@@ -4,6 +4,7 @@ Improvement #14 (`TODO.md`). Empty hands + right click (`Take`) on a stocked `Di
 
 ## Status
 
+- v0.1.3 (2026-11-18): settings standardised. `Enabled` has the standard description; only the C# field was renamed (`Verbose` -> `VerboseLogging`); the cfg key `[Diagnostics] VerboseLogging` already existed, so existing cfgs keep their stored value, and the default is now **false** for new configs (standard description). `TriggerAction` unchanged. Turn `VerboseLogging` on before collecting the `[PackUp]` log lines.
 - v0.1.2 (review round 2, not tested in-game): after the host's `Setup` the box icon (`m_IconUI`, which `Setup` always switches on) is hidden again on an open box; `BoxInteraction.UpdateOpeningBoxHint()` after our open (swaps the "open" hint for "close"); `Release()` never touches a box that is under the hold point and also runs when packing is abandoned (mod disabled, player gone); the host's handled set is keyed by `actor|viewId.seq` (PUN reuses view ids) and pruned to what the guests still list.
 - v0.1.1 (review round 1, not tested in-game): guest box is spawned **closed** and opened with the vanilla open after the pickup (the host's copy of a client-spawned box has default data, see below); the host sets its copy of the box up before saving it; the guest-to-host save channel is now a list of recent view ids (was one last-value property); the guest's box is kinematic until held; hands-empty guard checked against the prefab data.
 - v0.1.0 written and builds. **Not tested in-game**; nothing below about runtime behaviour is confirmed. Assumed (from the dumps) rather than seen: every numbered claim under "Open questions".
@@ -64,7 +65,7 @@ Improvement #14 (`TODO.md`). Empty hands + right click (`Take`) on a stocked `Di
 6. Guest (both modded): does the box appear in the guest's hands (closed, then `Opened the new box`), does the host log `Set up the host's copy of the box` and `Saving the box ... packed` with product and size filled in (not -1), and is the count the same on both screens? Does the open animation play once on both?
 7. Does the `Take` action name exist (`There is no input action called "Take"` would say otherwise)?
 
-## In-game test steps (send back the `[PackUp]` lines of `BepInEx/LogOutput.log`, from both machines online)
+## In-game test steps (send back the `[PackUp]` lines of `BepInEx/LogOutput.log`, from both machines online; turn on `VerboseLogging` in the cfg first, it's off by default)
 
 1. Alone: stand at a stocked shelf with empty hands, right click a product. Expect `Packing <name> ... into a _XxYxZ box [offline]`, `Spawned the box: ...`, `Took a product from the slot: slot N -> N-1, box 1`. You hold an open box with one product. Right click again: a second product goes in. Also try a fridge/freezer slot, a bottle, a small item and a big item (different box sizes), and a bakery product.
 2. Put the box on the floor, save, reload: the box is still there with its products. Count the shelf plus box products before and after: the sum never changes.

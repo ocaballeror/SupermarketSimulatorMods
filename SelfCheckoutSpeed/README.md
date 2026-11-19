@@ -5,7 +5,7 @@ Customers get through **self checkout machines faster**: 2x by default, adjustab
 This speeds up everything a customer waits for at the machine:
 - scanning each item;
 - paying;
-- an employee (customer helper) scanning the items for a customer who needs help (can be turned off).
+- an employee (customer helper) scanning the items for a customer who needs help.
 
 ## Settings
 
@@ -13,10 +13,9 @@ This speeds up everything a customer waits for at the machine:
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Switches the speed-up on or off when you host or play solo. Takes effect right away. As a guest you always run at the host's speed (see below). |
+| General | `Enabled` | `true` | Enable the mod. Switches the speed-up on or off when you host or play solo. Takes effect right away. As a guest you always run at the host's speed (see below). |
 | SelfCheckout | `SpeedMultiplier` | `2` | A number you type in: 1 = normal, 2 = twice as fast, 1.5 is fine too, up to 10 (a bigger number becomes 10). If your PC uses a decimal comma, type `1,5`. Changes apply from the next item scanned. |
-| SelfCheckout | `SpeedUpEmployeeHelp` | `true` | Also speeds up employees scanning for customers who need help at a self checkout, by the same multiplier. |
-| Diagnostics | `VerboseLogging` | `false` | Logs every shortened wait as `[SelfCheckout]` lines in `BepInEx/LogOutput.log`. Very chatty. |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (every shortened wait as `[SelfCheckout]` lines in `BepInEx/LogOutput.log`; very chatty). |
 
 ## Who needs it (multiplayer)
 

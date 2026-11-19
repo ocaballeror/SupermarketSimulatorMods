@@ -17,7 +17,7 @@ It works with:
 
 The game's own rules apply unchanged: a box only takes one kind of product and only if it is the right box size, a shelf slot only takes one kind of product of the right display type (an empty slot is relabelled as usual), and the box, bag, crate and slot capacities are respected. If the game refuses (wrong product, wrong box size, full), you get the game's usual warning and nothing moves.
 
-The products still fly between the shelf and the container with the game's normal animation, only much faster (configurable), so it takes a fraction of a second.
+The products still fly between the shelf and the container with the game's normal animation, only played faster, so each product's flight is shortened to fit between the transfers.
 
 Vending machines, the baker's crate and the security guard's crate are left as they are (hold the button as usual). Clicking without Shift works exactly as before.
 
@@ -27,18 +27,11 @@ Vending machines, the baker's crate and the security guard's crate are left as t
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch. Turning it off removes the mod's effect immediately; no restart needed. |
+| General | `Enabled` | `true` | Enable the mod. Turning it off removes the mod's effect immediately; no restart needed. |
 | Keys | `ModifierKey` | `LeftShift` | Key to hold while clicking. The clicks themselves are the game's **Take** (right click) and **Use** (left click) bindings, so if you rebind those in the game's settings the mod follows. `None` makes every Take/Use click a bulk transfer. |
-| Keys | `BulkTake` | `true` | Modifier + Take fills the container from the shelf. |
-| Keys | `BulkPlace` | `true` | Modifier + Use empties the container onto the shelf. |
-| Containers | `Boxes` | `true` | Use bulk transfer with product boxes. |
-| Containers | `PaperBags` | `true` | Use bulk transfer with online-order paper bags. |
-| Containers | `Crates` | `true` | Use bulk transfer with the multi-product crate. |
-| Speed | `SecondsBetweenItems` | `0.02` | Time between two products (0 to 0.5 s; 0 = one per frame offline; online it is never below 0.02 s). |
-| Speed | `AnimationSpeed` | `5` | How much faster the products fly (1 = the game's normal speed, up to 20). Only the products are sped up, and only on your own screen. |
-| Diagnostics | `VerboseLogging` | `true` | Writes `[Bulk]` lines to `BepInEx/LogOutput.log` for each bulk transfer. |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (`[Bulk]` lines in `BepInEx/LogOutput.log` for each bulk transfer). |
 
-The modifier is a keyboard key; there is no gamepad shortcut.
+Products are moved one every 0.2 seconds (never faster than 0.02 s online). The modifier is a keyboard key; there is no gamepad shortcut.
 
 ## Who needs it (multiplayer)
 

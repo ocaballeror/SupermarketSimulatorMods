@@ -12,10 +12,10 @@ Shows you where the product in your hands belongs, with the same green outline t
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Master switch. Takes effect right away: every outline this mod drew disappears. |
-| Highlight | `ShelvesForBox` | `true` | Outline the shelves, fridges and freezers labeled with the product of the box you hold. |
-| Highlight | `ProductsForOrderBag` | `true` | Outline the product groups an online-order bag still needs. |
-| Diagnostics | `VerboseLogging` | `true` | Logs what the mod does (`[Highlight]` lines in `BepInEx/LogOutput.log`); only when something changes. |
+| General | `Enabled` | `true` | Enable the mod. Takes effect right away: every outline this mod drew disappears. |
+| Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (`[Highlight]` lines in `BepInEx/LogOutput.log`, only when something changes). |
+
+Both highlights described above (shelves for a box, product groups for an order bag) are always on.
 
 ## Who needs it (multiplayer)
 

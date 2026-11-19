@@ -12,13 +12,11 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.furnituremovecancel";
     public const string Name = "Furniture Move Cancel";
-    public const string Version = "1.0.2";
+    public const string Version = "1.0.3";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
-    internal static ConfigEntry<bool> ShowHint;
-    internal static ConfigEntry<float> ReturnDelay;
-    internal static ConfigEntry<bool> Verbose;
+    internal static ConfigEntry<bool> VerboseLogging;
 
     internal static bool Active { get; private set; }
 
@@ -30,10 +28,7 @@ public class Plugin : BasePlugin
         _harmony = new Harmony(Guid);
 
         Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
-        ShowHint = true;
-            "Show the Escape key in the list of key hints while moving furniture.");
-        ReturnDelay = 0f;
-        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);

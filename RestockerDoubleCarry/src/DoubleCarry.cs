@@ -183,7 +183,7 @@ internal static class DoubleCarry
 
     internal static void Info(string msg)
     {
-        if (Plugin.Verbose.Value) Plugin.Logger.LogInfo("[DoubleCarry] " + msg);
+        if (Plugin.VerboseLogging.Value) Plugin.Logger.LogInfo("[DoubleCarry] " + msg);
     }
 
     internal static bool HostSide => !PhotonNetwork.IsConnectedAndSlave;
@@ -1005,7 +1005,7 @@ internal static class DoubleCarry
         if (!restock && rack == null) return;   // e.g. an empty box to throw away
 
         int level = Level(clerk);
-        if (level < Plugin.MinimumLevel.Value) return;
+        if (level < Plugin.MinimumLevel) return;
 
         int p1 = bt.ProductID;
         if (p1 < 0) return;
@@ -1112,7 +1112,7 @@ internal static class DoubleCarry
     /// Stacks every box in the clerk's hands that isn't the current one on top of it.
     /// <paramref name="previous"/> is the box that was current before this CarryBox call (or Zero).
     /// </summary>
-    internal static void ArrangeStack(ClerkT clerk, IntPtr previous, bool stack = true)
+    internal static void ArrangeStack(ClerkT clerk, IntPtr previous)
     {
         var holder = clerk.BoxHolder;
         if (holder == null || holder.childCount < 1) return;
@@ -1134,7 +1134,6 @@ internal static class DoubleCarry
             if (Raised.Remove(cur.Pointer)) MoveTo(cur.transform, Vector3.zero, Duration(clerk));
             Extent(cur, Vector3.zero, out top, out cx, out cz);
             haveBase = true;
-            if (!stack) return;   // option off: only undo a lift this mod made
         }
         else
         {
@@ -1157,7 +1156,7 @@ internal static class DoubleCarry
             if (!holding && box.Pointer == previous) continue;
 
             var b = Bounds(box, out var s);
-            bool lift = haveBase && stack;
+            bool lift = haveBase;
             Vector3 pos = lift
                 ? new Vector3(cx - b.center.x * s.x, top - (b.center.y - b.extents.y) * s.y + 0.005f, cz - b.center.z * s.z)
                 : Vector3.zero; // lowest remaining box goes where the hands are
@@ -1403,8 +1402,7 @@ internal static class CarryBoxPatch
 
     private static void Postfix(ClerkT __instance, IntPtr __state)
     {
-        // With StackSecondBox off this still lowers boxes the mod lifted earlier (the option can change mid-trip).
-        try { DoubleCarry.ArrangeStack(__instance, __state, Plugin.StackVisuals.Value); }
+        try { DoubleCarry.ArrangeStack(__instance, __state); }
         catch (Exception e) { Plugin.Logger.LogError($"[DoubleCarry] stacking boxes failed: {e}"); }
     }
 }

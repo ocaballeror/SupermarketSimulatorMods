@@ -51,14 +51,13 @@ namespace SupermarketFixes.Patches;
 ///    Done in a BoxInteraction.Update prefix, so placing starts in the same frame.
 ///  - ReleaseStuckTake: if m_holdingTake is set but the Take action hasn't been pressed for 0.5 s,
 ///    clear it. (The game never simulates a held Take; ClickSimulate only fakes Use.)
-///  - Diagnostics: if Use is held on a display slot for 1.5 s and the box's product count didn't change,
+///  - VerboseLogging: if Use is held on a display slot for 1.5 s and the box's product count didn't change,
 ///    log one line with every placing condition, so a remaining cause can be identified from the log.
 /// </summary>
 internal static class BoxPlaceFix
 {
     internal static ConfigEntry<bool> ResyncOpenState;
     internal static ConfigEntry<bool> ReleaseStuckTake;
-    internal static ConfigEntry<bool> Diagnostics;
 
     /// <summary>Extra time on top of the game's own open delay before we consider its callback lost.</summary>
     private const float OpenDelayMargin = 0.15f;
@@ -75,8 +74,6 @@ internal static class BoxPlaceFix
         ReleaseStuckTake = cfg.Bind("BoxPlace", "ReleaseStuckTake", true,
             "If the game still thinks you are holding the take button (right click) after you let go of " +
             "it, which also stops you from placing items, release it.");
-        Diagnostics = cfg.Bind("BoxPlace", "Diagnostics", true,
-            "Log [BoxPlace] lines explaining why nothing was placed when you hold left click on a shelf.");
     }
 
     internal static void ResetState()
@@ -158,7 +155,7 @@ internal static class BoxPlaceFix
             }
         }
 
-        if (Diagnostics.Value) TrackPress(bi, box, now);
+        if (Plugin.VerboseLogging.Value) TrackPress(bi, box, now);
     }
 
     private static void CheckStuckTake(BoxInteraction bi, PlayerInstance player, Box box, float now)
@@ -189,7 +186,7 @@ internal static class BoxPlaceFix
     }
 
     /// <summary>
-    /// Diagnostics: one log line per "held Use on a display slot for a while and nothing was placed".
+    /// VerboseLogging: one log line per "held Use on a display slot for a while and nothing was placed".
     /// Runs before vanilla Update, so the slot is the one targeted during the previous frame.
     /// </summary>
     private static void TrackPress(BoxInteraction bi, Box box, float now)

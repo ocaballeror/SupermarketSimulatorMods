@@ -73,7 +73,7 @@ internal static class PaintPatches
         SoAmounts[key] = s;
         if (current == s.Applied) return false;
         data.paintAmount = s.Applied;
-        if (Plugin.Verbose.Value)
+        if (Plugin.VerboseLogging.Value)
             Plugin.Logger.LogInfo($"[PaintCan] type {so.ID} ({SafeName(so)}): new cans start with {s.Applied} paint (vanilla {s.Original})");
         return true;
     }
@@ -169,7 +169,7 @@ internal static class PaintPatches
         catch (Exception e)
         {
             // renderer not ready (pooled/inactive); Initialize will set the fill on reuse
-            if (Plugin.Verbose.Value) Plugin.Logger.LogInfo($"[PaintCan] RefreshFill skipped: {e.Message}");
+            if (Plugin.VerboseLogging.Value) Plugin.Logger.LogInfo($"[PaintCan] RefreshFill skipped: {e.Message}");
         }
     }
 
@@ -203,7 +203,7 @@ internal static class PaintPatches
             {
                 // Initialize copies data.paintAmount into paintCount and computes the fill right after.
                 EnsureScaled(__instance, data, data != null ? data.paintAmount : 0);
-                if (Plugin.Verbose.Value && data != null)
+                if (Plugin.VerboseLogging.Value && data != null)
                     Plugin.Logger.LogInfo($"[PaintCan] can initialized: paint {data.paintAmount}/{__instance.m_MaxPaintCount}");
             }
             catch (Exception e) { Plugin.Logger.LogError($"[PaintCan] Initialize prefix: {e}"); }

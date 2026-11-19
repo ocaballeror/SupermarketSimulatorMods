@@ -12,14 +12,11 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.pricemarkupkeeper";
     public const string Name = "Price Markup Keeper";
-    public const string Version = "1.1.1";
+    public const string Version = "1.1.2";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
-    internal static ConfigEntry<bool> KeepMarkup;
-    internal static ConfigEntry<bool> OnlyFollowingProducts;
-    internal static ConfigEntry<bool> PriceNewProducts;
-    internal static ConfigEntry<bool> Verbose;
+    internal static ConfigEntry<bool> VerboseLogging;
 
     internal static bool Active { get; private set; }
 
@@ -39,10 +36,7 @@ public class Plugin : BasePlugin
         _harmony = new Harmony(Guid);
 
         Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
-        KeepMarkup = true;
-        OnlyFollowingProducts = true;
-        PriceNewProducts = true;
-        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);

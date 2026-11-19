@@ -197,11 +197,14 @@ Typical loop for a task:
 - A `[General] Enabled` config entry is the master switch. Its `SettingChanged` handler unpatches or re-applies everything live, so the mod can be hot-unloaded from a config manager without a restart (see `SupermarketFixes/src/Plugin.cs` for a reference implementation). Reset any static patch state when toggling.
 - **Deploy the compiled dll into the root of `BepInEx/plugins/`, not a per-mod subfolder.** The csproj `DeployToGame` target copies to `$(BepInExDir)/plugins`; keep it that way in every mod, and tell players to do the same in the README. A leftover copy in a subfolder would load twice.
 - Apply each `[HarmonyPatch]` class individually and log failures, so one broken patch (for example after a game update) doesn't disable the others.
-- Give every fix or feature its own config entry, with a description that a player can understand.
+- **Keep the settings few.** A mod must not grow a pile of configuration options. Add a setting only for something that is genuinely valuable to players (a key binding, a multiplier or price people will really want to tune, a compatibility switch). Everything else is a constant in the code: a tuning value, a sub-feature switch, a cosmetic choice, or a "keep the old behaviour" toggle. Pick the sensible default and hardcode it (`internal const`, or a plain static if the code assigns it at runtime). When in doubt, leave the setting out; the user has already trimmed these once (commit "simplify mod settings").
+- **Every mod has exactly these two standard settings, with these exact definitions** (the description text is fixed, don't reword it):
+  - `Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");` on by default.
+  - `VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false, "Enable verbose logging for debugging purposes.");` **off by default**, even while a fix is unconfirmed. Name the field `VerboseLogging`. Gate every diagnostic log line on it, and prefix log lines with a tag such as `[RackMove]`.
+  - SupermarketFixes is the exception to "few settings": each fix has its own entries in a section named after the bug (it is several fixes in one mod).
 - Configurable numbers (e.g. speed multipliers) use `ConfigEntry<float>` with a range. Settings show up in BepInExConfigManager and in Mod Settings Tool (the in-game "Mods" tab) automatically.
   - Mod Settings Tool picks the control by reflection: an `AcceptableValues` property → dropdown; `MinValue`/`MaxValue` properties (i.e. `AcceptableValueRange`) → **slider**; no acceptable values → text field. The user wants typed numbers, not sliders (2026-11-15): use a clamp-only `AcceptableValueBase` subclass without those property names (`SelfCheckoutSpeed/src/ClampedFloat.cs`). Its `IsValid` must accept out-of-range numbers: Mod Settings Tool calls `IsValid` on typed input and silently reverts on false; BepInEx then clamps through `Clamp`. It parses with the current culture (decimal comma on some PCs).
-- Diagnostics/logging can default to on while a fix is unconfirmed. **Default it to off once the user confirms the fix works.** Prefix log lines with a tag such as `[RackMove]`.
-- Don't break vanilla behaviour when a feature is turned off: every patch checks its config entry and falls through to the original.
+- Don't break vanilla behaviour when a feature is turned off: every patch checks `Enabled` and falls through to the original.
 
 ## 7. Game knowledge that lives in a mod's docs
 

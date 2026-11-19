@@ -13,20 +13,22 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.bulkshelftransfer";
     public const string Name = "Bulk Shelf Transfer";
-    public const string Version = "0.2.0";
+    public const string Version = "0.2.1";
 
     internal static ManualLogSource Logger;
 
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<Key> ModifierKey;
-    internal static ConfigEntry<bool> BulkTake;
-    internal static ConfigEntry<bool> BulkPlace;
-    internal static ConfigEntry<bool> Boxes;
-    internal static ConfigEntry<bool> PaperBags;
-    internal static ConfigEntry<bool> Crates;
-    internal static ConfigEntry<float> SecondsBetweenItems;
-    internal static ConfigEntry<float> AnimationSpeed;
-    internal static ConfigEntry<bool> Verbose;
+    internal static ConfigEntry<bool> VerboseLogging;
+
+    // Fixed values (no longer settings).
+    internal const bool BulkTake = true;
+    internal const bool BulkPlace = true;
+    internal const bool Boxes = true;
+    internal const bool PaperBags = true;
+    internal const bool Crates = true;
+    internal const float SecondsBetweenItems = 0.02f;
+    internal const float AnimationSpeed = 5f;
 
     internal static bool Active { get; private set; }
 
@@ -42,19 +44,9 @@ public class Plugin : BasePlugin
         ModifierKey = Config.Bind("Keys", "ModifierKey", Key.LeftShift,
             "Hold this key while clicking to move everything at once. Modifier + Take (default right click) " +
             "fills the box / paper bag / crate from the shelf you look at; modifier + Use (default left click) " +
-            "empties it onto the shelf".)
-        BulkTake = true;
-            "Modifier + Take moves all matching products from the shelf into the held container.");
-        BulkPlace = true;
+            "empties it onto the shelf.");
 
-        Boxes = true;
-        PaperBags = true;
-        Crates = true;
-
-        SecondsBetweenItems = 0.2f;
-        AnimationSpeed = 5f;
-
-        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);

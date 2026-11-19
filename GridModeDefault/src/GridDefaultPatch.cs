@@ -85,7 +85,7 @@ internal static class GridDefaultPatch
                 _seeded = __instance.Pointer;
                 _original = __instance.m_GridEnabledPreference;
             }
-            else if (Plugin.RememberToggle.Value) return;
+            else if (Plugin.RememberToggle) return;
 
             bool before = __instance.m_GridEnabledPreference;
             __instance.m_GridEnabledPreference = true;
@@ -99,7 +99,7 @@ internal static class GridDefaultPatch
 
     internal static void Log(string msg)
     {
-        if (Plugin.Verbose != null && Plugin.Verbose.Value) Plugin.Logger.LogInfo($"[GridMode] {msg}");
+        if (Plugin.VerboseLogging != null && Plugin.VerboseLogging.Value) Plugin.Logger.LogInfo($"[GridMode] {msg}");
     }
 }
 

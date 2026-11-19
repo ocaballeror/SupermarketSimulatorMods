@@ -62,7 +62,6 @@ internal static class StuckBoxFix
     internal static ConfigEntry<float> StuckSeconds;
     internal static ConfigEntry<bool> RetryPickup;
     internal static ConfigEntry<bool> RegrantToSameHolder;
-    internal static ConfigEntry<bool> Diagnostics;
 
     /// <summary>The game's own pickup wait times out after 3 s; a wait twice that long is stuck.</summary>
     private const float MaxWaitSeconds = 6f;
@@ -86,9 +85,6 @@ internal static class StuckBoxFix
         RegrantToSameHolder = cfg.Bind("StuckBox", "RegrantToSameHolder", true,
             "Host only: when a player asks to pick up a box the host thinks that same player is already " +
             "holding, allow it instead of refusing. Lets a stuck player's retry succeed.");
-        Diagnostics = cfg.Bind("StuckBox", "Diagnostics", true,
-            "Log extra details: the result of the pickup retry and why a retry was skipped. " +
-            "Recoveries and failures are always logged.");
     }
 
     internal static void ResetState()
@@ -224,14 +220,14 @@ internal static class StuckBoxFix
             string skip = RetrySkipReason(p, box);
             if (skip != null)
             {
-                if (Diagnostics.Value) Plugin.Logger.LogInfo($"[StuckBox] Not retrying the pickup: {skip}");
+                if (Plugin.VerboseLogging.Value) Plugin.Logger.LogInfo($"[StuckBox] Not retrying the pickup: {skip}");
                 return;
             }
             s_retried = box.Pointer;
             s_retriedAt = Time.unscaledTime;
             pi.SetCurrentInteractable(box.Cast<IInteractable>());
             pi.Interact(false, false);
-            if (Diagnostics.Value)
+            if (Plugin.VerboseLogging.Value)
                 Plugin.Logger.LogInfo($"[StuckBox] Retried pickup: {HeldState.DescribePlayer(p)}");
         }
         catch (Exception e)

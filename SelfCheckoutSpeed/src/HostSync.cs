@@ -43,8 +43,7 @@ internal static class HostSync
     }
 
     private static float LocalSelf() => Plugin.Enabled.Value ? Plugin.SpeedMultiplier.Value : 1f;
-    private static float LocalHelp() =>
-        Plugin.Enabled.Value && Plugin.SpeedUpEmployeeHelp.Value ? Plugin.SpeedMultiplier.Value : 1f;
+    private static float LocalHelp() => LocalSelf();   // employee help follows the same multiplier
 
     private static float Effective(string key, float local)
     {

@@ -93,6 +93,8 @@ Logs are needed to debug crashes, especially guest crashes. After a crash, **bef
 | macOS (native) | `~/Library/Logs/Nokta Games/Supermarket Simulator/Player.log` (and `Player-prev.log`) | `~/Library/Logs/DiagnosticReports/` (files mentioning Supermarket Simulator) |
 | Linux host (Proton) | `~/.local/share/Steam/steamapps/compatdata/2670630/pfx/drive_c/users/steamuser/AppData/LocalLow/Nokta Games/Supermarket Simulator/Player.log` | same prefix, `AppData/Local/Temp/Nokta Games/Supermarket Simulator/Crashes/` |
 
+Every mod's own diagnostic lines (tags such as `[GhostHeld]`, `[AutoCourier]`) are written only when its `VerboseLogging` setting is on (`[Diagnostics]` section of its cfg in `BepInEx/config/`; off by default). Turn it on before reproducing a problem.
+
 With BepInEx installed, also collect `BepInEx/LogOutput.log` and `BepInEx/ErrorLog.log` from the game folder. `ErrorLog.log` captures fatal .NET errors such as access violations.
 
 During online play the game writes its own `[BoxDiag]` lines to `Player.log`, even without mods: box pickups, host grant or refusal, timeouts, and `WATCHDOG MISMATCH` when a held box is out of sync. For box-related bugs, send those lines from the machine where the bug happened.

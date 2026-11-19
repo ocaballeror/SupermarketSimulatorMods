@@ -12,12 +12,15 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "oscar.gridmodedefault";
     public const string Name = "Grid Mode Default";
-    public const string Version = "1.0.2";
+    public const string Version = "1.0.3";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
-    internal static ConfigEntry<bool> RememberToggle;
-    internal static ConfigEntry<bool> Verbose;
+    internal static ConfigEntry<bool> VerboseLogging;
+
+    // Fixed value (no longer a setting).
+    /// <summary>true: the grid starts on and stays off once the player turns it off (the game's own behaviour). false: it starts on every time furniture is picked up or placed.</summary>
+    internal const bool RememberToggle = true;
 
     internal static bool Active { get; private set; }
 
@@ -29,8 +32,7 @@ public class Plugin : BasePlugin
         _harmony = new Harmony(Guid);
 
         Enabled = Config.Bind("General", "Enabled", true, "Enable the mod.");
-        RememberToggle = true;
-        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", true,
+        VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);

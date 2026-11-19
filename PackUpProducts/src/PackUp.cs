@@ -99,7 +99,7 @@ internal static class PackUp
 
     private static void Vlog(string msg)
     {
-        if (Plugin.Verbose.Value) Plugin.Logger.LogInfo("[PackUp] " + msg);
+        if (Plugin.VerboseLogging.Value) Plugin.Logger.LogInfo("[PackUp] " + msg);
     }
 
     private static bool Same(Il2CppObjectBase a, Il2CppObjectBase b) => a != null && b != null && a.Pointer == b.Pointer;

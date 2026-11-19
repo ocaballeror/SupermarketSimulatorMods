@@ -119,7 +119,7 @@ internal static class Preview
 
     internal static void ApplyLightSetting()
     {
-        float v = Plugin.PreviewLight?.Value ?? 30f;
+        float v = Plugin.PreviewLight;
         if (_light1 != null) _light1.intensity = v;
         if (_light2 != null) _light2.intensity = v * 0.7f;
     }
@@ -225,7 +225,7 @@ internal static class Preview
             _shown = true;
             _cam.enabled = true;
             _needApply = true;
-            if (_diagCount < 4 && Plugin.Verbose != null && Plugin.Verbose.Value)
+            if (_diagCount < 4 && Plugin.VerboseLogging != null && Plugin.VerboseLogging.Value)
             {
                 _diagPending = true;
                 _diagAt = Time.unscaledTime + 0.7f;
