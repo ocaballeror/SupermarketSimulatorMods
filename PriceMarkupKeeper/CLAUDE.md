@@ -4,7 +4,7 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
-v1.1.3: plugin GUID changed from the old `<prefix>.pricemarkupkeeper` to `flamboyanthopper.pricemarkupkeeper` (commit "Rename oscar prefix to flamboyanthopper"), which also renames the cfg file to `flamboyanthopper.pricemarkupkeeper.cfg`. Existing installs start with a fresh cfg at the default values (`Enabled` true, `VerboseLogging` false); the old cfg file is left behind unused and can be deleted. No behaviour change.
+v1.1.3: plugin GUID changed from the old `<prefix>.pricemarkupkeeper` to `flamboyanthopper.pricemarkupkeeper` (commit 37476db), which also renames the cfg file to `flamboyanthopper.pricemarkupkeeper.cfg`. Existing installs start with a fresh cfg at the default values (`Enabled` true, `VerboseLogging` false); the old cfg file is left behind unused and can be deleted. No behaviour change.
 
 v1.1.2: settings reduced (commit "simplify mod settings"). Only `Enabled` and `VerboseLogging` remain (the default of `VerboseLogging` became false); `KeepMarkup`, `OnlyFollowingProducts` and `PriceNewProducts` are now always on, and their off-branches (reprice hand-priced products too, create price sets for unpriced products) were removed as dead code.
 
