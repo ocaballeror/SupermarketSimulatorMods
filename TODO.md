@@ -200,10 +200,10 @@ Allow values up to `10x`.
 
 ## Improvement #5: Allow Level 10 Restockers to Carry Two Boxes
 
-**Status:** implemented  
+**Status:** reviewed  
 **Code:** `RestockerDoubleCarry/`  
-**Review:** 2026-11-16, 2 rounds, hash `b0f7219e16b7` (stale: settings reduced and code changed 2026-11-18; needs re-review)
-**Waiting on:** In-game test of v1.3.0 (a dropped box is not taken by other restockers; no walk back for a missing box); send the `[DoubleCarry]` lines.
+**Review:** 2026-11-19, 2 rounds, hash `a91366ab2a58`
+**Waiting on:** In-game test of v1.3.1 (a dropped box is not taken by other restockers; no walk back for a missing box, including when regrouping with leftovers); send the `[DoubleCarry]` lines.
 
 Make level 10 restockers capable of carrying two product boxes at a time.
 
