@@ -20,8 +20,8 @@ v1.0.x host behaviour (coroutine speed-up) was confirmed in-game.
 ## How it works
 
 - Four scanning coroutines are postfixed (`MoveNext`); the yielded `WaitForSeconds.m_Seconds` is divided by the multiplier. Unity reads it after `MoveNext` returns. Payment coroutines are deliberately **not** patched (user request, 1.2.0).
-  - `SelfCheckout.<<StartSelfCheckout>g__Scanning|23_0>d`: customer scanning, per item `m_CustomerScanningInterval` (host and guests).
-  - `<<StartCustomerHelperCheckout>g__Scanning|24_0>d`: employee scanning (host), per item `CustomerHelper.CurrentScanInterval`.
+  - `SelfCheckout.<<StartSelfCheckout>g__Scanning|23_0>d`: customer scanning (host and guests). Loop: scan animation, yield `m_CustomerScanningInterval`, then `ProductScanned` on resume, so the first wait comes before the first item. When the belt is empty it yields a final 1 s and ends; that wait delays nothing.
+  - `<<StartCustomerHelperCheckout>g__Scanning|24_0>d`: employee scanning (host), per item `CustomerHelper.CurrentScanInterval` (same order: wait, then `ProductScanned`). After `FinishHelperCheckout_Broadcast` there is a final 1 s wait that is **not** idle: the step after it releases the employee (`GrantXp`, `AssignControllable`, `HelpControllable`, `SafeRemove`, `SyncAll`). It is divided like every other wait, so at 10x the employee is free after ~0.1 s instead of 1 s. Intended: it is employee help, not payment.
   - `<<StartCustomerHelperCheckoutOrder>g__ScanningOrder|51_0>d`: the guest copy of employee scanning.
   - `AutomatedCheckout.<<StartCashierCheckout>g__Scanning|22_0>d`: cashier employee scanning (host only), per item `Cashier.ScanningInterval` (see "Cashier").
 - The classes have obfuscated interop names; they're found at startup by native name (looking in the nested types of `SelfCheckout` and `AutomatedCheckout`). The log reports `n/4` patched. The cashier coroutine gets the postfix only (the guest catch-up prefix is for the `SelfCheckout` ones).

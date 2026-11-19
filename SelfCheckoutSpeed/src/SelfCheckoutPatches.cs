@@ -7,10 +7,10 @@
  *   Checkout.StartCheckout puts the customer's products on the belt instantly, then
  *   Checkout.StartSelfCheckout -> SelfCheckout.StartSelfCheckout starts the coroutine
  *   <StartSelfCheckout>g__Scanning|23_0, which loops:
- *       customer scan animation, Checkout.ProductScanned(next product),
- *       yield new WaitForSeconds(m_CustomerScanningInterval)        // per item
- *   and when the belt is empty: yield new WaitForSeconds(1f), after which the coroutine just ends
- *   (that wait delays nothing).
+ *       customer scan animation, yield new WaitForSeconds(m_CustomerScanningInterval),   // per item
+ *       and only when it resumes: Checkout.ProductScanned(next product)
+ *   (so the first wait comes before the first item), and when the belt is empty:
+ *   yield new WaitForSeconds(1f), after which the coroutine just ends (that wait delays nothing).
  *   The last ProductScanned -> Checkout.FinishedScanning (host only) -> customer pays immediately ->
  *   SelfCheckout.FinishSelfCheckout starts <FinishSelfCheckout>g__Payment|26_0:
  *       yield new WaitForSeconds(2f); hand card, complete checkout, broadcast finish to guests.
@@ -20,8 +20,12 @@
  *
  *   A customer who needs help is served by a customer helper employee instead:
  *   <StartCustomerHelperCheckout>g__Scanning|24_0 (host) scans each item and yields
- *   WaitForSeconds(CustomerHelper.CurrentScanInterval), then FinishHelperCheckout_Broadcast and a final
- *   1 s wait. Guests run <StartCustomerHelperCheckoutOrder>g__ScanningOrder|51_0 with the same per-item
+ *   WaitForSeconds(CustomerHelper.CurrentScanInterval) (same order: wait first, then ProductScanned), then
+ *   FinishHelperCheckout_Broadcast and a final 1 s wait. Unlike the self checkout's final wait, this one is
+ *   NOT idle: the step after it (state 2) releases the employee (GrantXp, AssignControllable,
+ *   HelpControllable, SafeRemove, SyncAll). It is divided like every other wait (the postfix doesn't tell
+ *   them apart), so at 10x the employee is free for the next customer after ~0.1 s instead of 1 s. That is
+ *   intended (employee help is faster) and isn't payment. Guests run <StartCustomerHelperCheckoutOrder>g__ScanningOrder|51_0 with the same per-item
  *   wait.
  *
  *   Cashier employees (regular checkout) use AutomatedCheckout: Checkout.StartCheckout (host only; the

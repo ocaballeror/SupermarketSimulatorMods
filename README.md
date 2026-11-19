@@ -17,7 +17,7 @@ Each mod folder has its own `README.md` (what it does, its settings, who needs i
 | [Paint Can Capacity](PaintCanCapacity) | Improvement #2 | Paint cans last longer (2x by default, configurable) |
 | [Price Markup Keeper](PriceMarkupKeeper) | Improvement #1 | Prices keep your global markup when market prices change; new products start at it |
 | [Player Crouch](PlayerCrouch) | Improvement #3 | Hold Ctrl to crouch; the character model crouches too (visible to modded players) |
-| [Self Checkout Speed](SelfCheckoutSpeed) | Improvement #4 | Faster self-checkout customers and employee help (configurable, follows the host) |
+| [Self Checkout Speed](SelfCheckoutSpeed) | Improvement #4 | Faster scanning at self checkouts, employee help and cashiers (configurable, follows the host; payment unchanged) |
 | [Restocker Double Carry](RestockerDoubleCarry) | Improvement #5 | High-level restockers fetch two boxes per trip |
 | [Furniture Move Cancel](FurnitureMoveCancel) | Improvement #6 | Escape puts moved furniture back where it was |
 | [Extra Computers](ExtraComputers) | Improvement #7 | Buyable extra computers, each with its own screen |
