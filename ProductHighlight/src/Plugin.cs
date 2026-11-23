@@ -10,7 +10,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.producthighlight";
     public const string Name = "Product Highlight";
-    public const string Version = "0.1.4";
+    public const string Version = "0.1.5";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
