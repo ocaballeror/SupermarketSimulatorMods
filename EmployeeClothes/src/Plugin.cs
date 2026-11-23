@@ -112,7 +112,7 @@
  *    A new game must not inherit the slot's old colors: a postfix on SaveManager.Clear (reset of the game data: main
  *    menu start, new game, restart after game over) empties the colors and sets "fresh", so the Save(string) that
  *    follows a new game writes "no colors" (removes the line); a postfix on SaveManager.ApplySaveData (loading an
- *    existing save) clears "fresh" again, because the main menu's own Clear comes before a load. The colors of the
+ *    existing save) clears "fresh" again, a safety net for the main menu's own Clear coming before a load (OnNewScene resets it too). The colors of the
  *    previous save are dropped as soon as a scene starts (IDManager.Awake) instead of when the next Tick loads the new
  *    key. The "Apply to all" switch is global and is written at once (it costs nothing).
  *
