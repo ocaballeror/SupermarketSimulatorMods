@@ -382,10 +382,10 @@ It should also work at the wholesale store. When the player is holding a box and
 
 ## Improvement #11: More clear tags
 
-**Status:** implemented  
+**Status:** reviewed  
 **Code:** `ClearTags/`  
-**Review:** 2026-11-17, 1 round (v0.3.x rework), hash `66fadc5d8622` (stale: code changed in v0.3.2 and v0.3.3; 0.3.2 review found the vending price tag bug, fixed in 0.3.3)  
-**Waiting on:** In-game test of v0.3.6 (hover on any part of a racked box; steps in the mod's `CLAUDE.md`); send the `[ClearTags]` lines.
+**Review:** 2026-11-23, 3 rounds, hash `03ad0b6b1be6`
+**Waiting on:** In-game test of v0.3.8 (hover on any part of a racked box; steps in the mod's `CLAUDE.md`); send the `[ClearTags]` lines.
 
 Features:
 - Make the tags on boxes that show a small icon of what's inside 2x bigger. This number is configurable in the settings.
