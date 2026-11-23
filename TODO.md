@@ -403,10 +403,10 @@ When the courier comes back from a delivery, he scans a small area around and in
 
 ## Improvement #13: Highlight same products
 
-**Status:** in-progress  
+**Status:** reviewed  
 **Code:** `ProductHighlight/`  
-**Review:** 2026-11-18, 3 rounds, hash `bd7f0b2cb6ff` (stale: settings reduced and code changed 2026-11-18; needs re-review)
-**Waiting on:** In-game test of v0.1.2 on host and guest (steps in the mod's `CLAUDE.md`); send the `[Highlight]` lines.
+**Review:** 2026-11-23, 2 rounds, hash `6bbd8905880d`
+**Waiting on:** In-game test of v0.1.5 on host and guest (steps in the mod's `CLAUDE.md`); send the `[Highlight]` lines.
 
 Currently, hen holding a box of products, the game highlights boxes of the same type that are in the storage racks, with a green outline. Do the same for shelves/fridges/freezers that are labeled with this type of product, even if they're empty at the moment. Unlike the storage, where the boxes are highlighted, mark the whole shelf/fridge/freezer in this case, since the shelves could all be empty but we still want to find where those products would go, based on their labels.
 
