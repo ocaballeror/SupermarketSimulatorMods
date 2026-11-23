@@ -4,6 +4,8 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
+v1.0.4: GUID renamed from `oscar.` to `flamboyanthopper.`. The config file name changes with it, so existing settings reset to the defaults.
+
 v1.0.3: settings reduced (user's request). Only `Enabled` and `VerboseLogging` (default false) remain. `RememberToggle` (true) is now a `const` in `Plugin.cs`; the `false` path in `GridDefaultPatch` is kept but unreachable unless the constant is changed.
 
 v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switches `VerboseLogging` to default off (existing configs keep their value).
@@ -26,7 +28,6 @@ Local only: GridManager only wires the local player's placer and input; nothing 
 - Grid areas come from `GridManager.BuildAllAreas`: manual `GridAreaAnchor`s plus auto-discovery of objects tagged `Floor`, `Storage Floor` and `Ceiling`. Which furniture prefab uses which placing tag lives in prefab assets, not in the dumps, so which types get no grid can only be found in-game (test step 6). Disabling the mod live restores only the preference; a piece already held keeps its grid until placed.
 - Furniture without matching surface areas (log line "No matching active areas" from the game) stays in free placement; that's the game's rule, not the mod's.
 - Grid size (`m_CurrentCellSizeIndex`) is untouched.
-- Not confirmed in-game: that the delegate target patch is hit (look for the `[GridMode]` line).
 
 ## In-game test
 

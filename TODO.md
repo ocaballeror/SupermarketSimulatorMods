@@ -304,8 +304,10 @@ However, if implementing synchronization is straightforward, or even simpler tha
 
 ## Improvement #8: Make Grid Mode the Default for Furniture Placement
 
-**Status:** done 2026-11-15  
-**Code:** `GridModeDefault/`
+**Status:** reviewed  
+**Code:** `GridModeDefault/`  
+**Review:** 2026-11-23, 1 round, hash `c4dcd1e5c4f3`  
+**Waiting on:** Nothing; code unchanged by the review (docs only). Already confirmed in-game 2026-11-15.
 
 Make grid mode the default placement mode when placing furniture of any kind.
 
