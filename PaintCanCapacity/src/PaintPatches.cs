@@ -81,8 +81,10 @@ internal static class PaintPatches
     /// <summary>The vanilla m_MaxPaintCount for a can type, from its untouched prefab; -1 if unknown.</summary>
     private static int VanillaMax(int productId)
     {
-        if (!NoktaSingleton<IDManager>.HasInstance) return -1;
-        var so = NoktaSingleton<IDManager>.Instance?.BucketSo(productId);
+        // Call Instance directly: HasInstance is only true once Instance has filled its cache (stale after a reload).
+        var idm = NoktaSingleton<IDManager>.Instance;
+        if (idm == null) return -1;
+        var so = idm.BucketSo(productId);
         var prefab = so != null ? so.BucketPrefab : null;
         return prefab != null ? prefab.m_MaxPaintCount : -1;
     }

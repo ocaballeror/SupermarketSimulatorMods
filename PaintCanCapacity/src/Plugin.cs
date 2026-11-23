@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.paintcancapacity";
     public const string Name = "Paint Can Capacity";
-    public const string Version = "1.0.5";
+    public const string Version = "1.0.6";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

@@ -4,6 +4,8 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
+v1.0.6: review nits. `VanillaMax` calls `NoktaSingleton<IDManager>.Instance` directly with a null check instead of gating on `HasInstance` (which is only true once `Instance` has cached the object, so it can be false after a save reload). README wording for `Enabled` corrected.
+
 v1.0.5: review fixes. `CapacityMultiplier` now uses the clamp-only `ClampedFloat` (text field in Mod Settings Tool instead of a slider; same 1..10 range). `ApplyToAll` / `RestoreAll` catch exceptions per object, and `RestoreAll` only forgets a can type's record once it was restored, instead of clearing all records.
 
 v1.0.4: GUID renamed from `oscar.paintcancapacity` to `flamboyanthopper.paintcancapacity`. This also changes the BepInEx config file name, so an old `oscar.paintcancapacity.cfg` is ignored and the multiplier resets to the default 2.

@@ -10,7 +10,7 @@ The liquid level shown inside the can is scaled too: a new can shows the same fi
 
 | Section | Setting | Default | What it does |
 |---|---|---|---|
-| General | `Enabled` | `true` | Enable the mod. Turning it off restores normal paint cans right away (including cans waiting in the game's reuse pool); no restart needed. |
+| General | `Enabled` | `true` | Enable the mod. Turning it off right away restores normal capacity for newly bought cans and the normal liquid-level scale (including cans waiting in the game's reuse pool); no restart needed. Cans that already hold extra paint keep it (see Notes). |
 | Paint | `CapacityMultiplier` | `2` | How many times longer a can lasts (1 to 10). Type a number; decimals such as 1.5 work, and values outside the range are clamped. |
 | Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (`[PaintCan]` lines in `BepInEx/LogOutput.log`). |
 
@@ -23,5 +23,5 @@ The liquid level shown inside the can is scaled too: a new can shows the same fi
 ## Notes
 
 - Only cans **bought after** installing the mod (or changing the multiplier) get the extra paint. Cans you already own keep the paint they have. They paint the normal number of walls. Their liquid level is shown relative to a new can's larger capacity, so at 2x they look about 40% full instead of 80%, and they drain at the same rate per wall as new cans.
-- If you remove the mod, cans holding extra paint keep it and show as completely full until they drop below normal capacity. Nothing breaks.
+- If you remove the mod or turn it off, cans holding extra paint keep it and show as completely full until they drop below normal capacity. Nothing breaks.
 - Compatible with other mods that don't change paint cans.
