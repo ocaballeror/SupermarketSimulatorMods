@@ -23,7 +23,7 @@
  *     Persistence: loose boxes are saved from InventoryManager.Boxes, which vanilla fills with
  *     InventoryManager.AddBox(box.Data) in Box.Setup(newBox: true). Setup(newBox: true) also resets the count
  *     to a full box (ProductAmountOnPurchase), so we call AddBox ourselves instead.
- *     Online the box gets its UID from IDManager.GenerateBoxUniqueID (like delivery boxes), not the view id.
+ *     Online the box gets its UID from IDManager.GenerateBoxUniqueID, as delivery boxes do (not the view id).
  *  5. Into the hands: PlayerInteraction.SetCurrentInteractable(box) + Interact(false, false), the same
  *     simulated click the wholesale purchase uses on a freshly spawned box (PurchasableProduct.Purchase). It
  *     runs Box.InstantInteract: offline Box.PickUp(); host NetworkBox.AvailabilityCallback_RPC(own user id)
@@ -93,8 +93,6 @@ internal static class PackUp
         _actionsPtr = IntPtr.Zero;
         Network.Reset();
     }
-
-    internal static void Log(string msg) => Plugin.Logger.LogInfo("[PackUp] " + msg);
 
     internal static void Warn(string msg) => Plugin.Logger.LogWarning("[PackUp] " + msg);
 
@@ -318,9 +316,9 @@ internal static class PackUp
         try
         {
             var data = new BoxData(size, pos, rot, true, pid, 0);
-            // Online the master keeps a UID > 0 from the data; otherwise it would become the PhotonView id, which
-            // PUN reuses across sessions and so can collide with a saved box's UID. Take one from the same counter
-            // the delivery boxes use. Offline SpawnBox generates it itself.
+            // Online the master keeps a UID > 0 from the data; otherwise it would become the PhotonView id.
+            // Take one from the counter the delivery boxes use instead, for consistency with them. Offline
+            // SpawnBox generates it itself.
             if (PhotonNetwork.IsConnected && NoktaSingleton<IDManager>.HasInstance)
             {
                 int uid = NoktaSingleton<IDManager>.Instance.GenerateBoxUniqueID();
