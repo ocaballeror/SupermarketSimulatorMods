@@ -418,10 +418,10 @@ needs to be updated to match
 
 ## Improvement #14: Pack up products
 
-**Status:** in-progress  
+**Status:** reviewed  
 **Code:** `PackUpProducts/`  
-**Review:** 2026-11-18, 3 rounds, hash `c3e406fbf94f` (stale: settings reduced and code changed 2026-11-18; needs re-review)
-**Waiting on:** In-game test of v0.1.2 on the host, then a modded guest (steps in the mod's `CLAUDE.md`); send the `[PackUp]` lines.
+**Review:** 2026-11-23, 2 rounds, hash `c84550d497b2`
+**Waiting on:** In-game test of v0.1.5 on the host, then a modded guest (steps in the mod's `CLAUDE.md`); send the `[PackUp]` lines.
 
 Right clicking on a product that is in a shelf/fridge/freezer currently does nothing, as
 it requires the user to use the crate tool or a paper bag to pack products in a specific
