@@ -37,7 +37,8 @@ namespace PlayerDoubleCarry;
 ///    hands; anything else under their hold point is destroyed with their avatar.
 ///
 /// Mechanism:
-///  - OnUse prefix (local player): in exactly the "would open the held box" case, if the player looks at
+///  - OnUse prefix (local player): in exactly the "nothing targeted" case (the held box may be open or
+///    closed; an open held box is closed when stacked), if the player looks at
 ///    another loose, closed box (same ray as PlayerInteraction.Raycast), call that box's InstantInteract instead,
 ///    i.e. the normal pickup path, so the host grants it and every client (unmodded ones included) runs
 ///    HoldObject for it. With two boxes carried, OnUse(true) with nothing targeted and OnTake(true) are
@@ -58,10 +59,13 @@ namespace PlayerDoubleCarry;
 ///    HoldObject for this player, the host keeps it occupied), offline Box.PickUp(player); then bind the
 ///    local box interaction like PlayerInteraction.Interact does (SetCurrentInteraction(BOX)).
 ///    PlayerInteraction.Interact is blocked in that short window so nothing else is picked up meanwhile.
+///    The top box only counts as released when BoxInteraction no longer holds it; if it turns out to be held
+///    normally again during the delay (a transient disable), the carry state is re-armed.
 ///  - On other players' machines (modded): the HoldObject postfix only lowers the displaced box under the new
 ///    one (cosmetic). Unmodded machines keep both boxes at the same spot in that player's hands.
-///  - Wholesale store (rework 2026-11-15): holding one closed box and holding Use on a wholesale product
-///    (PurchasableProduct, the hold-to-buy interactable) for its Duration buys a box and stacks it. The
+///  - Wholesale store (rework 2026-11-15): holding one box and holding Use on a wholesale product
+///    (PurchasableProduct, the hold-to-buy interactable) for its Duration buys a box and stacks it (the held
+///    box may be open). The
 ///    game's purchase is PurchasableProduct.HoldingInteract -> CanBePurchased (money, license) -> Purchase:
 ///    spend, BoxGenerator.SpawnBoxLocalMarket at the product (online: SpawnNetworkBoxClient, a networked
 ///    box spawned by the buyer, returned synchronously), NetworkBox.Setup_Broadcast, then a simulated click
@@ -71,9 +75,11 @@ namespace PlayerDoubleCarry;
 ///    interaction), the spawned box is caught in a SpawnBoxLocalMarket postfix, and it is then requested as
 ///    the second box exactly like a loose box (RequestSecondBox -> InstantInteract), so the host-grant,
 ///    refusal and stacking paths are the same.
-///  - OnPlayerLeftRoom prefix (every modded client): before the leaving player's avatar is destroyed, release
+///  - OnPlayerLeftRoom prefix (master only): before the leaving player's avatar is destroyed, release
 ///    every box under their hold point that isn't their BoxInteraction.m_Box (unparent, solid, not occupied,
-///    transform sync on; physics on the host), so the box isn't destroyed with the avatar.
+///    transform sync on, physics on), so the box isn't destroyed with the avatar on the host. Guests don't do
+///    this: with an unmodded host the box is gone there, and a guest-side copy would stay behind as a
+///    kinematic phantom nobody can pick up.
 /// </summary>
 internal static class DoubleCarry
 {
@@ -92,6 +98,7 @@ internal static class DoubleCarry
     private static float s_requestedAt;
     private static bool s_frozen;            // we re-set IsWaitingAvailability after the game's timeout
     private static Box s_top;                // current box (the game's held box) while two are carried
+    private static Box s_releasedTop;        // the top box after it was seen leaving (re-armed if held again)
     private static Box s_bottom;             // the box kept under it
     private static Vector3 s_bottomLocal;    // bottom box pose in m_ObjectHolder space
     private static Quaternion s_bottomRot = Quaternion.identity;
@@ -125,6 +132,7 @@ internal static class DoubleCarry
         s_requestedOver = null;
         s_frozen = false;
         s_top = null;
+        s_releasedTop = null;
         s_bottom = null;
         s_topReleasedAt = -1f;
         s_waitLogged = false;
@@ -185,8 +193,11 @@ internal static class DoubleCarry
         return true;
     }
 
-    /// <summary>The exact OnUse(true) branch in which the game opens the held box.</summary>
-    private static bool WouldOpenBox(BoxInteraction bi) => NothingTargeted(bi) && !bi.m_Box.IsOpen;
+    /// <summary>
+    /// A click here may take another box: the OnUse(true) branch in which the game opens a closed held box (or
+    /// does nothing for an open one). An open held box is closed when stacked.
+    /// </summary>
+    private static bool CanTakeSecond(BoxInteraction bi) => NothingTargeted(bi);
 
     /// <summary>The loose box the player is looking at, if any (same ray as PlayerInteraction.Raycast).</summary>
     private static Box LookedAtBox(PlayerInstance p, Box held)
@@ -272,7 +283,7 @@ internal static class DoubleCarry
         if (Busy || Requesting) { CancelBuy("already getting a second box"); return; }
         var held = s_buyOver;
         var bi = p.BoxInteraction;
-        if (!HeldNormally(p, held) || bi == null || !WouldOpenBox(bi)) { CancelBuy("the box in your hands changed"); return; }
+        if (!HeldNormally(p, held) || bi == null || !CanTakeSecond(bi)) { CancelBuy("the box in your hands changed"); return; }
         var looked = LookedAtPurchasable(p);
         if (looked == null || looked.Pointer != pp.Pointer) { CancelBuy("looked away"); return; }
         if (!UseHeld(p)) { CancelBuy("the button is no longer held"); return; }
@@ -397,7 +408,13 @@ internal static class DoubleCarry
              $"({(!Online ? "offline" : PhotonNetwork.IsMasterClient ? "host" : "guest, asking the host")})");
         // The game's own pickup: offline and on the host this holds the box right away (HoldObject postfix
         // stacks it); a guest gets PickUP_RPC from the host, or a refusal (CancelPatch).
-        target.InstantInteract();
+        try { target.InstantInteract(); }
+        catch (Exception e)
+        {
+            // Don't let the OnUse prefix fall through to vanilla (it would open the held box); forget the request.
+            Plugin.Logger.LogError($"[PlayerCarry] Picking up the second box failed: {e}");
+            if (Same(s_requested, target)) ForgetRequest(p);
+        }
     }
 
     /// <summary>HoldObject prefix: a late grant for the requested box while the first box is being placed.</summary>
@@ -422,20 +439,38 @@ internal static class DoubleCarry
     /// <summary>HoldObject postfix: <paramref name="prev"/> was the held object before <paramref name="item"/>.</summary>
     internal static void AfterHold(PlayerObjectHolder holder, GameObject item, Vector3 posOffset, Vector3 rotOffset, GameObject prev)
     {
-        if (prev == null || item == null || prev.Pointer == item.Pointer) return;
-        var hold = holder.m_ObjectHolder;
-        if (hold == null || !Same(prev.transform.parent, hold) || !prev.activeInHierarchy) return;
-        var bottom = prev.GetComponent<Box>();
-        var top = item.GetComponent<Box>();
-        if (bottom == null || top == null) return;
-
+        if (item == null) return;
         var owner = holder.m_PlayerInstance;
-        if (owner != null && owner.IsLocalPlayerInstance)
+        bool local = owner != null && owner.IsLocalPlayerInstance;
+        var hold = holder.m_ObjectHolder;
+        Box bottom = null, top = null;
+        if (prev != null && prev.Pointer != item.Pointer && hold != null &&
+            Same(prev.transform.parent, hold) && prev.activeInHierarchy)
         {
-            if (!Same(top, s_requested) || !Same(bottom, s_requestedOver)) return;   // not ours: leave it to the game
-            Stack(owner, hold, bottom, top, posOffset, rotOffset);
-            return;
+            bottom = prev.GetComponent<Box>();
+            top = item.GetComponent<Box>();
         }
+
+        if (local)
+        {
+            var req = s_requested;
+            if (!ReferenceEquals(req, null) && req != null && item.Pointer == req.gameObject.Pointer)
+            {
+                if (bottom != null && top != null && Same(bottom, s_requestedOver))
+                {
+                    Stack(owner, hold, bottom, top, posOffset, rotOffset);
+                }
+                else
+                {
+                    // The requested box arrived but the first box is gone (dropped during a late grant): the game
+                    // holds it normally, so the request is over.
+                    Info($"{Describe(req)} arrived without the first box in your hands; no stack");
+                    ForgetRequest(owner);
+                }
+            }
+            return;   // not ours: leave it to the game
+        }
+        if (bottom == null || top == null) return;
 
         // Another player's hands: only make it look right (they hold the box under the new one).
         if (!Plugin.RemoteStackVisuals) return;
@@ -452,6 +487,7 @@ internal static class DoubleCarry
         s_requestedOver = null;
         s_frozen = false;
         s_top = top;
+        s_releasedTop = null;
         s_bottom = bottom;
         s_topReleasedAt = -1f;
         s_waitLogged = false;
@@ -470,6 +506,8 @@ internal static class DoubleCarry
             top.CloseBox(false);
             if (bi != null) bi.m_IsBoxOpen = false;
         }
+        // Best effort: CloseBox is ignored for 0.7 s after an open/close (m_InAnimationTransition), so the bottom
+        // box can stay open. Harmless: every use is blocked while two are carried.
         if (bottom.IsOpen) bottom.CloseBox(false);
 
         var t = bottom.transform;
@@ -533,8 +571,19 @@ internal static class DoubleCarry
         {
             if (s_top != null && bi.Enable && Same(bi.m_Box, s_top)) return;   // still carrying both
             Info($"Top box left your hands ({Describe(s_top)}); taking {Describe(s_bottom)} next");
+            s_releasedTop = s_top;
             s_top = null;
             s_topReleasedAt = now;
+            return;
+        }
+        if (s_releasedTop != null && HeldNormally(p, s_releasedTop))
+        {
+            // BoxInteraction was only disabled for a moment: the top box is still (or again) in the hands.
+            Info($"{Describe(s_releasedTop)} is held again; still carrying two");
+            s_top = s_releasedTop;
+            s_releasedTop = null;
+            s_topReleasedAt = -1f;
+            s_waitLogged = false;
             return;
         }
         if (now - s_topReleasedAt < PromoteDelay) return;
@@ -557,13 +606,15 @@ internal static class DoubleCarry
             ForgetRequest(p);
             return;
         }
-        if (!s_frozen) return;
         var bi = p.BoxInteraction;
         if (bi == null || !Same(bi.m_Box, s_requestedOver))
         {
-            s_frozen = false;   // the first box is gone some other way; nothing to unfreeze
+            // The first box is gone some other way: a grant would no longer stack, so the request is moot.
+            Info("The first box left your hands before the second one arrived; forgetting the request");
+            ForgetRequest(p);
             return;
         }
+        if (!s_frozen) return;
         if (!bi.IsWaitingAvailability)
         {
             // Cleared by a late reply that didn't hand us the box (a late refusal skips the cancel).
@@ -580,6 +631,24 @@ internal static class DoubleCarry
             bi.IsWaitingAvailability = false;
             s_frozen = false;
         }
+    }
+
+    /// <summary>Plugin unload while two boxes are carried: put the bottom box back under the hold point.</summary>
+    internal static void AbandonStack()
+    {
+        try
+        {
+            var p = LocalPlayer();
+            var holder = p != null ? p.PlayerObjectHolder : null;
+            var hold = holder != null ? holder.m_ObjectHolder : null;
+            if (!ReferenceEquals(s_bottom, null) && s_bottom != null && hold != null)
+            {
+                s_bottom.transform.DOKill(false);
+                s_bottom.transform.SetParent(hold, true);
+            }
+        }
+        catch (Exception e) { Plugin.Logger.LogError($"[PlayerCarry] Unload cleanup failed: {e}"); }
+        ResetState();
     }
 
     /// <summary>Make the bottom box the held box again, on every client.</summary>
@@ -619,7 +688,7 @@ internal static class DoubleCarry
         Info($"Second box back in your hands: {Describe(box)} (held={HeldNormally(p, box)})");
     }
 
-    /// <summary>Release boxes the leaving player carried besides their bound box (see class comment).</summary>
+    /// <summary>Release boxes the leaving player carried besides their bound box (master only, see class comment).</summary>
     private static void RescueLeavingPlayersBoxes(PlayerInstance leaving)
     {
         var holder = leaving.PlayerObjectHolder;
@@ -627,7 +696,6 @@ internal static class DoubleCarry
         if (hold == null) return;
         var bi = leaving.BoxInteraction;
         var bound = bi != null ? bi.m_Box : null;
-        bool master = PhotonNetwork.IsMasterClient;
 
         var boxes = new List<Box>();
         for (int i = 0; i < hold.childCount; i++)
@@ -653,16 +721,13 @@ internal static class DoubleCarry
                 nb.IsNetworkOccupied = false;
                 nb.DisableNetworkTransformSync(true);   // despite the name: true turns sync back on
             }
-            if (master)
+            var rb = b.RigidBody;
+            if (rb != null)
             {
-                var rb = b.RigidBody;
-                if (rb != null)
-                {
-                    rb.isKinematic = false;
-                    rb.interpolation = RigidbodyInterpolation.Interpolate;
-                }
+                rb.isKinematic = false;
+                rb.interpolation = RigidbodyInterpolation.Interpolate;
             }
-            Plugin.Logger.LogInfo($"[PlayerCarry] {leaving.name} left while carrying {Describe(b)}; put it down");
+            Info($"[PlayerCarry] {leaving.name} left while carrying {Describe(b)}; put it down");
         }
     }
 
@@ -688,7 +753,7 @@ internal static class DoubleCarry
                     LogBlocked("Can't open or use a box while carrying two; put the top one down first");
                     return false;
                 }
-                if (!WouldOpenBox(__instance)) return true;
+                if (!CanTakeSecond(__instance)) return true;
                 if (!Plugin.Enabled.Value) return true;
                 var held = __instance.m_Box;
                 if (!HeldNormally(p, held)) return true;
@@ -899,7 +964,7 @@ internal static class DoubleCarry
         }
     }
 
-    /// <summary>A player leaving with two boxes: don't let the second one be destroyed with their avatar.</summary>
+    /// <summary>A player leaving with two boxes: don't let the second one be destroyed with their avatar (host only).</summary>
     [HarmonyPatch(typeof(PlayerInstance), nameof(PlayerInstance.OnPlayerLeftRoom))]
     private static class PlayerLeftPatch
     {
@@ -907,6 +972,8 @@ internal static class DoubleCarry
         {
             try
             {
+                // Master only: a guest-side copy would stay behind as a kinematic phantom if the host is unmodded.
+                if (!PhotonNetwork.IsMasterClient) return;
                 if (otherPlayer == null || __instance == null || __instance.IsLocalPlayerInstance) return;
                 // The leaving player may already be gone from the room's player list, so compare the actor
                 // number stored on the view (and the user id the game remembers) rather than view.Owner.

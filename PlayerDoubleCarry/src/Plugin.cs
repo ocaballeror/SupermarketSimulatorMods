@@ -12,15 +12,15 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.playerdoublecarry";
     public const string Name = "Player Double Carry";
-    public const string Version = "0.2.2";
+    public const string Version = "0.2.3";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
     internal static ConfigEntry<bool> VerboseLogging;
 
     // Fixed behaviour (not exposed as settings).
-    internal const bool RemoteStackVisuals = true;
-    internal const bool BuyAtWholesale = true;
+    internal static readonly bool RemoteStackVisuals = true;
+    internal static readonly bool BuyAtWholesale = true;
 
     /// <summary>True while the mod's patches are applied.</summary>
     internal static bool Active { get; private set; }
@@ -117,7 +117,7 @@ public class Plugin : BasePlugin
     {
         _harmony?.UnpatchSelf();
         Active = false;
-        DoubleCarry.ResetState();
+        DoubleCarry.AbandonStack();
         return true;
     }
 }
