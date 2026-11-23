@@ -79,6 +79,8 @@ internal static class CrouchPose
         public Vector3 LookLastOffset;
         public bool LoggedDims;
         public float NextLookFind;
+        public Rig LegRigL, LegRigR;      // cached parents of the leg constraints, for Driven()
+        public bool LoggedNoPivot, LoggedNoLook;
     }
 
     private static readonly Dictionary<IntPtr, State> States = new();
@@ -161,6 +163,7 @@ internal static class CrouchPose
                 s.Animator = a;
                 s.Applied = false;
                 s.IkHandler = ikHandler;
+                s.LegRigL = s.LegRigR = null;
                 Plugin.Info($"Model for player (remote): animator '{a.name}' ({from}) human={a.isHuman} " +
                             $"onRoot={a.transform == inst.transform} {DescribeLegIk(s.IkHandler)}");
             }
@@ -184,7 +187,7 @@ internal static class CrouchPose
             return;
         }
 
-        bool ik = LegIkActive(s.IkHandler);
+        bool ik = LegIkActive(s);
         if (ik != s.SkippedForIk)
         {
             s.SkippedForIk = ik;
@@ -258,17 +261,19 @@ internal static class CrouchPose
         return null;
     }
 
-    private static bool LegIkActive(PlayerIKHandler h)
+    private static bool LegIkActive(State s)
     {
+        var h = s.IkHandler;
         if (h == null) return false;
-        try { return Driven(h.m_LeftLegRig) || Driven(h.m_RightLegRig); }
+        try { return Driven(h.m_LeftLegRig, ref s.LegRigL) || Driven(h.m_RightLegRig, ref s.LegRigR); }
         catch (Exception) { return false; }
     }
 
-    private static bool Driven(TwoBoneIKConstraint c)
+    // The Rig above a constraint is looked up once per model (per frame it would be an interop call plus allocation).
+    private static bool Driven(TwoBoneIKConstraint c, ref Rig rig)
     {
         if (c == null || c.weight <= 0.01f) return false;
-        var rig = c.GetComponentInParent<Rig>(true);
+        if (rig == null) rig = c.GetComponentInParent<Rig>(true);
         return rig == null || rig.weight > 0.01f;
     }
 
@@ -288,6 +293,8 @@ internal static class CrouchPose
         catch (Exception) { return "legIK=?"; }
     }
 
+    private static string Missing(Transform t, string name) => t == null ? name + " " : "";
+
     private static void Apply(State s)
     {
         var an = s.Animator;
@@ -300,6 +307,9 @@ internal static class CrouchPose
         var rFoot = an.GetBoneTransform(HumanBodyBones.RightFoot);
         if (hips == null || lUp == null || lLo == null || lFoot == null || rUp == null || rLo == null || rFoot == null)
         {
+            Plugin.WarnThrottled("bones", $"Can't pose model '{an.name}': missing humanoid bone(s) " +
+                $"{Missing(hips, "Hips")}{Missing(lUp, "LeftUpperLeg")}{Missing(lLo, "LeftLowerLeg")}{Missing(lFoot, "LeftFoot")}" +
+                $"{Missing(rUp, "RightUpperLeg")}{Missing(rLo, "RightLowerLeg")}{Missing(rFoot, "RightFoot")}");
             s.Applied = false;
             RestorePivot(s);
             return;
@@ -367,14 +377,14 @@ internal static class CrouchPose
         if (s.Pivot == null && Time.unscaledTime >= s.NextPivotFind)
         {
             s.NextPivotFind = Time.unscaledTime + 2f;
-            s.Pivot = FindPivot(s.Instance);
+            s.Pivot = FindPivot(s);
         }
         var p = s.Pivot;
         if (p == null) return;
         if (s.Look == null && s.NextLookFind <= Time.unscaledTime)
         {
             s.NextLookFind = Time.unscaledTime + 2f;
-            s.Look = FindLook(p);
+            s.Look = FindLook(s, p);
         }
         var lt = s.Look;
         Vector3 local = p.parent != null ? p.parent.InverseTransformVector(worldDelta) : worldDelta;
@@ -408,7 +418,7 @@ internal static class CrouchPose
         }
     }
 
-    private static Transform FindLook(Transform pivot)
+    private static Transform FindLook(State s, Transform pivot)
     {
         Transform t = null;
         try
@@ -422,8 +432,12 @@ internal static class CrouchPose
             }
         }
         catch (Exception) { }
-        Plugin.Info(t != null ? "Remote look-at target found; it stays in place while the pivot moves"
-                              : "Remote look-at target 'RigLookTarget' not found; a carrying player's gaze may point too low");
+        if (t != null) Plugin.Info("Remote look-at target found; it stays in place while the pivot moves");
+        else if (!s.LoggedNoLook)
+        {
+            s.LoggedNoLook = true; // retried every 2 s; say it once
+            Plugin.Info("Remote look-at target 'RigLookTarget' not found; a carrying player's gaze may point too low");
+        }
         return t;
     }
 
@@ -451,8 +465,9 @@ internal static class CrouchPose
         catch (Exception) { /* object already destroyed */ }
     }
 
-    private static Transform FindPivot(PlayerInstance inst)
+    private static Transform FindPivot(State s)
     {
+        var inst = s.Instance;
         Transform t = null;
         string how = "FirstPersonController.CinemachineCameraTarget";
         try
@@ -480,7 +495,11 @@ internal static class CrouchPose
             catch (Exception) { }
             Plugin.Info($"Remote camera pivot '{t.name}' via {how}; Object Holder is below it: {holderBelow}");
         }
-        else if (t == null) Plugin.Info("Remote camera pivot not found; held items won't follow the crouch");
+        else if (t == null && !s.LoggedNoPivot)
+        {
+            s.LoggedNoPivot = true; // retried every 2 s; say it once
+            Plugin.Info("Remote camera pivot not found; held items won't follow the crouch");
+        }
         return t;
     }
 

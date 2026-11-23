@@ -10,7 +10,7 @@
  *    (FurniturePlacer.m_PlacingMode) or an object (PlayerObjectHolder.m_PlacingMode). While placing, and
  *    while FirstPersonController._movementInteraction is false (menus, computer, checkout, pause), the
  *    crouch input is ignored and the current state is kept. On a skateboard
- *    (PlayerInteraction.InSkateboard) or while driving (VehicleInteraction enabled) the player always stands.
+ *    (PlayerInteraction.InSkateboard) or while driving (VehicleInteraction enabled) the player always stands, and the stand-up there does not wait for headroom.
  *  - Camera: the Cinemachine FPS camera follows FirstPersonController.CinemachineCameraTarget. Native code
  *    only writes that transform's localPosition in PushCameraEffect (a DOLocalMove tween back to
  *    defaultCameraPosition); CameraRotation only sets its rotation. We add a vertical offset in LateUpdate and
@@ -110,7 +110,9 @@ internal static class Crouch
         else Want &= held; // blocked: can't start a crouch, but letting go of the key still stands you up
 
         float target = Want ? 1f : 0f;
-        if (!Want && LocalT > 0f && _ccModified && !HasHeadroom(_cc, _standHeight, _standCenter, player.transform))
+        // On a skateboard or in a vehicle the player is carried by something else whose own colliders would count as
+        // "something above us", so there the stand-up never waits for headroom.
+        if (!Want && !(skate || driving) && LocalT > 0f && _ccModified && !HasHeadroom(_cc, _standHeight, _standCenter, player.transform))
         {
             target = LocalT; // something above us: stay down until there's room
             if (!_loggedBlocked) { Plugin.Info("No room to stand up; staying crouched"); _loggedBlocked = true; }
@@ -191,16 +193,30 @@ internal static class Crouch
     private static void Capture(FirstPersonController fpc)
     {
         Release();
-        FinishPendingRestore();
         _fpc = fpc;
         LocalFpcPtr = fpc.Pointer;
         _cc = fpc._controller;
         _ccCaptured = false;
-        if (_cc != null)
+        if (_cc != null && _pendCc != null && _pendCc.Pointer == _cc.Pointer)
         {
-            _standHeight = _cc.height;
-            _standCenter = _cc.center;
+            // Re-enabled while the shrunk capsule from a blocked switch-off is still pending: hand it back to the live
+            // crouch (fully crouched, standing up once there is headroom) instead of restoring it inside the geometry.
+            _standHeight = _pendHeight;
+            _standCenter = _pendCenter;
             _ccCaptured = _standHeight > 0.1f;
+            _ccModified = _ccCaptured;
+            LocalT = _ccCaptured ? 1f : 0f;
+            _pendCc = null; _pendRoot = null;
+        }
+        else
+        {
+            FinishPendingRestore();
+            if (_cc != null)
+            {
+                _standHeight = _cc.height;
+                _standCenter = _cc.center;
+                _ccCaptured = _standHeight > 0.1f;
+            }
         }
         _camTarget = ResolveCamTarget(fpc);
         _nextCamResolve = Time.unscaledTime + 2f;
@@ -434,16 +450,24 @@ internal static class Crouch
             if (Time.unscaledTime < _sendRetryAt) return; // back off after a failure
             bool value = share && crouched;
             bool verify = Time.unscaledTime >= _nextVerify;
-            if (_lastSent == value && !verify) return;
+            // A change from what we last sent is always sent: LocalPlayer.CustomProperties is only updated when the
+            // server echoes the change back, so comparing against it right after a quick tap would skip the send.
+            bool changed = _lastSent != null && _lastSent != value;
+            if (!changed && _lastSent == value && !verify) return;
             if (verify) _nextVerify = Time.unscaledTime + 2f;
 
-            // Self-healing: re-send if the room's copy differs (e.g. after joining another room).
             var me = PhotonNetwork.LocalPlayer;
             if (me == null) return;
-            bool? inRoom = ReadProp(me);
-            if (inRoom == value || (inRoom == null && !value)) { _lastSent = value; return; }
+            if (!changed)
+            {
+                // First send, or the periodic check (self-healing, e.g. after joining another room): send only if the
+                // room's copy differs.
+                bool? inRoom = ReadProp(me);
+                if (inRoom == value || (inRoom == null && !value)) { _lastSent = value; return; }
+            }
             Send(value);
             _lastSent = value;
+            _nextVerify = Mathf.Max(_nextVerify, Time.unscaledTime + 1f); // let the echo arrive before the next check
             Plugin.Info($"Sent crouch state {value} to other players");
         }
         catch (Exception e)

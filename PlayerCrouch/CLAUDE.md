@@ -4,6 +4,13 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
+v1.0.8 (review round 1 of the Improvement #3 rework; not yet tested in-game):
+- **Quick tap (F1):** `SyncNetwork` always sends when the value changes from what it last sent. Before, it compared with `LocalPlayer.CustomProperties`, which PUN only updates when the server echoes the change back, so a tap shorter than one RTT could leave others seeing the wrong state for up to 2 s. The comparison is now used only for the first send and the 2 s verify, and the verify is pushed back 1 s after each send.
+- **Driving / skateboard (F2):** the stand-up no longer waits for headroom while `driving` or on a skateboard (the vehicle's own colliders would count as an obstacle). Unverified in-game; test step 5.
+- **Missing bones (F3):** `CrouchPose.Apply` logs a throttled warning naming the missing humanoid bones.
+- **Re-enable while a collider restore is pending (F4):** `Capture` hands the pending shrunk capsule back to the live crouch (`LocalT=1`, `_ccModified=true`), so the normal headroom wait stands the player up.
+- **Cost (F6):** the leg-IK `Rig` is cached per model (`State.LegRigL/R`); the "pivot / look-at target not found" lines are logged once per model instead of every 2 s.
+
 v1.0.7 (round 2 of the review; not yet tested in-game):
 - **Gaze while carrying (remote view):** the 1.0.6 pivot move also dragged down `Camera Pivot/FPS VCam/RigLookTarget`, the target of the model's `LookAt` rig (a `MultiAimConstraint` that aims `mixamorig:Spine1` at it; verified with UnityPy in `level2` for all five skins). `PlayerAnimation.ToggleCarrying` -> `ToggleLookAt` tweens that rig on only while carrying, and the rig is solved before our LateUpdate, so a crouched carrier would have stared about 30 degrees down (target 1 m in front, lowered about 0.55 m) and the aim would have tilted the chest and arms. `CrouchPose.MovePivot` now keeps `RigLookTarget` at its original world position (same re-base and restore pattern as the pivot). The verbose log shows `Remote look-at target found ...`.
 - **Doc fix:** there is no hand IK on the carry: the hands follow the carry animation pose (`ToggleCarrying` -> `SetUpperBodyState`). `PlayerIKHandler.SetLeftHand`/`SetRightHand` have no callers in `native-all` and the only `SetWeight` callers are `NetworkVehicle.SeatPlayer`/`UnseatPlayer`. Remote copies of a held box also hang under that player's own `Object Holder` (`HoldObject` parents the item to `m_ObjectHolder`; `NetworkPlayerObjectHolder.UpdateObjectParent_RPC` is the shared no-op).
@@ -14,7 +21,7 @@ v1.0.6 (review round after the v1.0.5 changes; not yet tested in-game):
 - **Local model is no longer posed** (renderers are always off for it; also removes the `No active character model found ... (local)` warning).
 - **Warnings throttled** (`Plugin.WarnThrottled`, 10 s per key) for pose failures, headroom failures and send failures; `SyncNetwork` now has a real 5 s retry back-off (`_sendRetryAt`). The boxed Photon key is cached.
 - **Driving guard:** `Crouch.Update` forces standing while `PlayerInstance.VehicleInteraction.enabled`. Verified in the dumps: `Interaction.Enable` is `Behaviour.set_enabled` and only the active `*Interaction` is enabled (`PlayerInteraction.SetCurrentInteraction` / `VehicleInteraction.EnterVehicleMode`). Not verified: whether `_movementInteraction` is false while driving (nothing in the vehicle code writes it; its only writer is `FirstPersonController.SubscribeControllerState`, subscribed to `PlayerController.onControllerEnabled`, whose callers don't include vehicle code), and what a passenger's state is (passengers don't enable `VehicleInteraction`; untested).
-- **Switching the mod off while crouched under something:** the collider is no longer restored into the geometry; `Crouch.DeferColliderRestoreIfBlocked` keeps the shrunk capsule and `CrouchBehaviour.Update` calls `TickPendingRestore` (also while the mod is disabled) until `HasHeadroom` passes. Re-enabling restores it at once.
+- **Switching the mod off while crouched under something:** the collider is no longer restored into the geometry; `Crouch.DeferColliderRestoreIfBlocked` keeps the shrunk capsule and `CrouchBehaviour.Update` calls `TickPendingRestore` (also while the mod is disabled) until `HasHeadroom` passes. Re-enabling hands it back to the live crouch (1.0.8; before that it was restored at once).
 
 v1.0.5: renamed the plugin id to `flamboyanthopper.playercrouch` and the Photon key to `flamboyanthopper.crouch` (the previous id/key used a different prefix). Consequences: **peers on 1.0.4 or older and peers on 1.0.5+ cannot see each other crouch** (different property key), and the settings file is now `BepInEx/config/flamboyanthopper.playercrouch.cfg`, so settings reset to defaults and the old `<prefix>.playercrouch.cfg` is orphaned (the host's `BepInEx/config` still has only the old file; it can be deleted or its values copied). Make sure every machine that should show crouching runs >= 1.0.5, including the Windows guest's BepInEx install, or the in-game test fails for an unrelated reason.
 
@@ -27,14 +34,14 @@ v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switc
 - Leg IK (v1.0.1): `Model for player ...` lines now include `legIK(L=<constraint weight>/<rig weight> R=...)`. Expect `0.00` outside vehicles. A `Leg IK is active ... not posing it` line while on foot means the guard fires wrongly; check that line. Test sitting in a vehicle as a remote player too.
 - Does the FPS vcam actually follow `FirstPersonController.CinemachineCameraTarget`? (Logged `VCam follows:`.) If not, the camera won't drop and the camera offset must move whatever the vcam follows.
 - Is the player Animator humanoid (`human=True`)? The pose needs `Animator.GetBoneTransform`.
-- The local player's own body renderers are disabled (`PlayerSkin.Toggle(!m_IsLocal)`), so the local pose is invisible (no shadow either); it is applied anyway, harmlessly.
+- The local player's own body renderers are disabled (`PlayerSkin.Toggle(!m_IsLocal)`), so the local pose is invisible (no shadow either); since 1.0.6 the local model is not posed at all.
 - Do held boxes look wrong for other players while someone crouches? Yes, it was a real problem (box stays at standing height while the arms follow the torso); handled in 1.0.6 by lowering the remote pivot.
 
 ## How it works
 
 - **Files:** `Crouch.cs` handles the local state, input, camera, collider and network property. `CrouchPose.cs` handles the procedural pose for all players. `PlayerPatches.cs` holds the Harmony patches: `FirstPersonController.Move` prefix/postfix for speed and a `Jump` prefix. `CrouchBehaviour.cs` is the Update/LateUpdate driver.
 - **No game crouch exists** (no action, no animator state). Everything is added on top.
-- **Input:** read straight from `Keyboard.current[key]` and the optional gamepad button. It's ignored while `FurniturePlacer.m_PlacingMode` or `PlayerObjectHolder.m_PlacingMode` is set (Ctrl = the game's `SnapPlace`), or while `_movementInteraction` is false (UI, computer, checkout, pause); the state is frozen in those cases. `PlayerInteraction.InSkateboard` forces standing.
+- **Input:** read straight from `Keyboard.current[key]` and the optional gamepad button. It's ignored while `FurniturePlacer.m_PlacingMode` or `PlayerObjectHolder.m_PlacingMode` is set (Ctrl = the game's `SnapPlace`), or while `_movementInteraction` is false (UI, computer, checkout, pause); in those cases a crouch can't start; in hold mode releasing the key still stands you up, toggle mode is frozen (see Review round 1). `PlayerInteraction.InSkateboard` forces standing.
 - **Speed:** `Move` picks `MoveSpeed` or `SprintSpeed` as its target speed. Both are swapped for `MoveSpeed * SpeedMultiplier` (lerped by the crouch amount) for the duration of the call.
 - **Jump:** `Jump` is invoked through `InputActions.onJump`. The prefix skips it while crouched; in toggle mode it also clears `Want`.
 - **Camera:** `CinemachineCameraTarget.localPosition.y` gets an offset in LateUpdate. The only native writer of that position is `PushCameraEffect` (a DOTween `DOLocalMove`), so we re-base whenever the value differs from our last write.
@@ -64,12 +71,13 @@ v1.0.2: **confirmed working in-game by the user (2026-11-15).** 1.0.2 only switc
 - `GetComponentInChildren<PlayerAnimation>(true)` returns the inactive rig-test variant: don't use it.
 - `PlayerAnimation` holds Animation Rigging rigs (`m_LookAtRig`; hand and leg IK in `PlayerIKHandler`). The locomotion blend tree is fed from `CharacterController.velocity`. There is no crouch state. Animators are humanoid (`human=True`, confirmed in-game).
 
-## In-game test (1.0.7)
+## In-game test (1.0.8)
 
-Both machines need PlayerCrouch >= 1.0.5 (1.0.7 on the viewing side for the box, depth and gaze changes), and `VerboseLogging = true` in `flamboyanthopper.playercrouch.cfg` on both.
+Both machines need PlayerCrouch >= 1.0.5 (>= 1.0.7 on the viewing side for the box, depth and gaze changes), and `VerboseLogging = true` in `flamboyanthopper.playercrouch.cfg` on both.
 1. Join a game, hold Ctrl on one player; the other player must see the character crouch (knees bent, head about at the crouched eye height, slight lean). Walk while crouched.
 2. Pick up a box and crouch while carrying it; on the other screen the box must lower with the character and stay in the hands, and the head and gaze must match the crouching player's real view pitch (look straight ahead, up and down; the character must not stare at the floor). Stand up: box back at standing height.
 3. Crouch under a ~1.1 m obstacle (collider allows it) and check the other screen for clipping.
 4. Switch the mod off in the config manager while crouched under something low: you must not get pushed; the collider restores after you leave.
-5. Drive a vehicle with Ctrl pressed: the camera must not drop.
+5. Crouch, then enter a vehicle (E) and drive: you must stand up at once (camera back to normal height, even if the car roof is close), and the other player must see you standing. Also press Ctrl while driving: the camera must not drop.
+6. Tap Ctrl very quickly (press and release within ~0.1 s), several times, from a fresh session: the other screen must not stay crouched (or standing) afterwards.
 Send back: lines containing `[Crouch]` from both `BepInEx/LogOutput.log` files (`Model for player (remote)`, `Pose dims:`, `Remote camera pivot`, `Remote look-at target`, `crouched`/`stood up`, and any warnings).
