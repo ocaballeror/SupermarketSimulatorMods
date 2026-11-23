@@ -6,8 +6,10 @@ The requests below are written by the user. Agents only maintain each entry's **
 
 ## Bug #1: Floating and Duplicated Boxes When Rearranging Racks
 
-**Status:** done  
-**Code:** `SupermarketFixes/src/Patches/RackMoveFix.cs`
+**Status:** reviewed  
+**Code:** `SupermarketFixes/src/Patches/RackMoveFix.cs`  
+**Review:** 2026-11-23, 1 round, hash `af25cea05bf4`  
+**Waiting on:** In-game re-test of the 0.11.11 review follow-ups (the Swap record fix is untested).
 
 When rearranging racks (not shelves), some of the boxes already in the rack remain floating at their original location instead of disappearing and reappearing with the rack at its new location.
 

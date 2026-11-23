@@ -282,7 +282,7 @@ internal static class RackMoveFix
             else if (s_rackLeftovers != null) { s_rackLeftovers.Add((nb, origin)); deferred++; }
             else { Release(origin, nb); released++; }
         }
-        if (adopted + released + deferred > 0)
+        if (adopted + released + deferred > 0 && Plugin.VerboseLogging.Value)
             Plugin.Logger.LogInfo($"[RackMove] Slot rebuild on rack {slot.OwnRack?.ID}: kept {adopted} networked box(es) " +
                                   $"in place of local duplicates ({strays} released by an earlier rebuild), released {released}, " +
                                   $"checking {deferred} rack-wide");
@@ -309,7 +309,8 @@ internal static class RackMoveFix
             }
             if (!done) { Release(origin, nb); released++; }
         }
-        Plugin.Logger.LogInfo($"[RackMove] Rack {rack?.ID} rebuild: kept {adopted} networked box(es) moved between slots, released {released}");
+        if (Plugin.VerboseLogging.Value)
+            Plugin.Logger.LogInfo($"[RackMove] Rack {rack?.ID} rebuild: kept {adopted} networked box(es) moved between slots, released {released}");
     }
 
     /// <summary>Replace the local duplicate at <paramref name="dupIdx"/> with the networked box.
@@ -327,6 +328,31 @@ internal static class RackMoveFix
         nt.localScale = dt.localScale;
 
         boxes[dupIdx] = nb;
+
+        // The slot's saved/synced record for this box is the duplicate's BoxData. Point it at nb's own data, or
+        // RemoveFromSlot (which matches records by identity) would add a second record for nb later, inflating
+        // the slot's box and product counts when UIDs are shared. Done before DetachDataBeforeDespawn swaps
+        // the duplicate's data for an empty one.
+        try
+        {
+            var records = slot.m_Data?.RackedBoxDatas;
+            var dd = dup.Data;
+            var nd = nb.Data;
+            if (records != null && dd != null && nd != null && dd.Pointer != nd.Pointer)
+            {
+                int dupRecord = -1;
+                bool already = false;
+                for (int j = 0; j < records.Count; j++)
+                {
+                    var r = records[j];
+                    if (r == null) continue;
+                    if (r.Pointer == nd.Pointer) already = true;
+                    else if (dupRecord < 0 && r.Pointer == dd.Pointer) dupRecord = j;
+                }
+                if (!already && dupRecord >= 0) records[dupRecord] = nd;
+            }
+        }
+        catch (Exception e) { Plugin.Logger.LogError($"[RackMove] Pointing the slot record at the adopted box failed: {e}"); }
 
         // Dispose of the duplicate exactly like RackSlot.ClearLocalBoxes does.
         slot.m_Highlightable?.AddOrRemoveRenderer(dup.RenderersToHighlight, false);
@@ -356,7 +382,8 @@ internal static class RackMoveFix
     }
 
     /// <summary>Host data no longer has this box on the rack: stop drawing its stale snapshot.
-    /// The box is a networked object; its owner keeps controlling where it goes. If it stays a child of the
+    /// The box is a networked object, but it keeps the transform sync off it got when racked,
+    /// so only the pickup and drop RPCs move it again. If it stays a child of the
     /// slot, the next rebuild of the slot looks at it again (RackSlotInitializePatch).</summary>
     private static void Release(RackSlot origin, Box nb)
     {
