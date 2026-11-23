@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.cleartags";
     public const string Name = "Clear Tags";
-    public const string Version = "0.3.6";
+    public const string Version = "0.3.7";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -66,8 +66,9 @@ public class Plugin : BasePlugin
         else
         {
             Active = false;               // TagScaler.Factor is 1 from here on
-            _harmony.UnpatchSelf();
-            TagScaler.ResizeAll("disabled");
+            try { _harmony.UnpatchSelf(); }
+            catch (Exception e) { Log.LogWarning($"[ClearTags] unpatch failed: {e.Message}"); }
+            TagScaler.ResizeAll("disabled");   // always restore the tags, even if unpatching failed
             Log.LogInfo("All patches removed (disabled)");
         }
     }

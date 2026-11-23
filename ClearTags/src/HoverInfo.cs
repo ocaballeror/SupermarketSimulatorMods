@@ -182,6 +182,7 @@ internal static class HoverInfo
     private static IntPtr s_cTarget;
     private static HoverData s_cText;
     private static float s_cAt;
+    private static string s_cKind;
 
     // What to build on a cache miss. Static fields and an int kind instead of a lambda: no closure is allocated per frame.
     private const int KBox = 0, KFurn = 1, KLabel = 2, KPriceTag = 3, KVendingTag = 4;
@@ -198,9 +199,14 @@ internal static class HoverInfo
     private static HoverData Cached(IntPtr target, int kind)
     {
         float now = Time.unscaledTime;
-        if (target == s_cTarget && now - s_cAt < 0.5f) return s_cText;
+        if (target == s_cTarget && now - s_cAt < 0.5f)
+        {
+            if (s_cKind != null) LastKind = s_cKind;   // label / price tag kinds are only known from the build; box callers set their own
+            return s_cText;
+        }
         s_cTarget = target;
         s_cAt = now;
+        s_cKind = null;
         s_cText = null;   // if the build throws, don't keep showing the previous target's text
         try
         {
@@ -214,6 +220,7 @@ internal static class HoverInfo
             }
         }
         catch (Exception) { s_cText = null; }   // cached as "nothing to show" for 0.5 s, then tried again
+        if (kind == KPriceTag || kind == KVendingTag || kind == KLabel) s_cKind = LastKind;
         return s_cText;
     }
 

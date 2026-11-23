@@ -63,6 +63,9 @@ internal static class TagScaler
 
     private static readonly Dictionary<int, State> States = new();
 
+    /// <summary>Number of remembered tags; the behaviour prunes (via <see cref="ResizeAll"/>) when this grows large.</summary>
+    internal static int StateCount => States.Count;
+
     /// <summary>The factor tags should have right now (1 while the mod is off).</summary>
     internal static float Factor => Plugin.Active ? Plugin.TagScale.Value : 1f;
 
@@ -249,6 +252,12 @@ internal static class TagScaler
         {
             var c = tr.GetChild(i);
             // All three axes: a flat quad's thickness is invisible, and this is right whichever plane the mesh lies in.
+            if (Mathf.Approximately(fEff, 1f))
+            {
+                c.localScale = st.BaseScale[i];        // vanilla: the exact captured values, no float round trip
+                c.localPosition = st.BasePos[i];
+                continue;
+            }
             c.localScale = st.BaseScale[i] * fEff;
             // Scale the layout about the frame's centre too (the furniture box's little "Color Point" sits inside the
             // frame; BG and Icon are within a few millimetres of the centre, so they hardly move).
@@ -314,11 +323,11 @@ internal static class TagScaler
         }
         if (logMissed)
         {
-            if (changed > 0) Plugin.Logger.LogInfo($"[ClearTags] sweep: {changed} of {total} boxes had not been resized by the hooks (x{Factor})");
+            if (changed > 0) Plugin.Info($"sweep: {changed} of {total} boxes had not been resized by the hooks (x{Factor})");
         }
         else
         {
-            Plugin.Logger.LogInfo($"[ClearTags] {reason}: {changed} of {total} boxes resized (x{Factor})");
+            Plugin.Info($"{reason}: {changed} of {total} boxes resized (x{Factor})");
         }
         return changed;
     }

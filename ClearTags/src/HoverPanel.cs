@@ -344,7 +344,7 @@ internal static class HoverPanel
 
         _panel.gameObject.SetActive(false);
         _root.SetActive(true);
-        Plugin.Logger.LogInfo($"[ClearTags] hover panel created: font '{font.name}' from {fontSource}; background: {bgSource}; positive colour: {posSource}; header colour #{ColorUtility.ToHtmlStringRGB(Header)} (measured from the Daily Statistics screenshot)");
+        Plugin.Info($"hover panel created: font '{font.name}' from {fontSource}; background: {bgSource}; positive colour: {posSource}; header colour #{ColorUtility.ToHtmlStringRGB(Header)} (measured from the Daily Statistics screenshot)");
     }
 
     // ------------------------------------------------------------------ layout

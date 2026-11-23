@@ -15,9 +15,12 @@ public class ClearTagsBehaviour : MonoBehaviour
     public ClearTagsBehaviour(IntPtr ptr) : base(ptr) { }
 
     private const float SweepInterval = 30f;
+    private const int PruneThreshold = 500;
+    private const float PruneInterval = 120f;
 
     private string _text;   // IMGUI fallback only
     private float _nextSweep = 5f;
+    private float _nextPrune = 60f;
     private bool _drawLogged;
     private GUIStyle _style;
     private GUIContent _content;
@@ -34,6 +37,18 @@ public class ClearTagsBehaviour : MonoBehaviour
             }
         }
         catch (Exception e) { Plugin.Logger.LogError($"[ClearTags] sweep failed: {e}"); }
+
+        try
+        {
+            // Boxes come and go through Photon all session; ResizeAll forgets the tags of destroyed ones. Rare, and only when the list has grown.
+            float now = Time.unscaledTime;
+            if (Plugin.Active && TagScaler.StateCount > PruneThreshold && now >= _nextPrune)
+            {
+                _nextPrune = now + PruneInterval;
+                TagScaler.ResizeAll("prune", logMissed: true);
+            }
+        }
+        catch (Exception e) { Plugin.Logger.LogError($"[ClearTags] prune failed: {e}"); }
 
         HoverData data = null;
         try { data = HoverInfo.Resolve(); }
@@ -58,7 +73,7 @@ public class ClearTagsBehaviour : MonoBehaviour
             if (!_drawLogged)
             {
                 _drawLogged = true;
-                Plugin.Logger.LogInfo("[ClearTags] OnGUI is drawing the hover text (plain fallback, first time)");
+                Plugin.Info("OnGUI is drawing the hover text (plain fallback, first time)");
             }
 
             float scale = Screen.height / 1080f;
