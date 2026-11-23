@@ -109,6 +109,7 @@ internal static class AutoLoad
     private const float GiveUpSeconds = 180f;       // a visit that never becomes ready (courier dismissed, ...)
     private const float DefaultDayEnd = 46800f;
     private const int FallbackTrunk = 3;
+    private const float HeldSlack = 1.5f;           // extra metres a held taken-back bag must be carried away before it is forgotten
 
     private sealed class Visit
     {
@@ -195,7 +196,7 @@ internal static class AutoLoad
         Log($"a player took the bag back out of courier #{courier.EmployeeId}'s trunk; not loading it again until it has been carried away");
     }
 
-    /// <summary>Forgets a taken-back bag once it has been farther than ScanRadius from the spot it was taken from (or is gone).</summary>
+    /// <summary>Forgets a taken-back bag once it has been farther than ScanRadius (HeldSlack more while it is held) from the spot it was taken from, or is gone.</summary>
     private static void ReleaseTakenBack()
     {
         if (s_takenBack.Count == 0) return;
@@ -209,7 +210,10 @@ internal static class AutoLoad
             int id = bag.GetInstanceID();
             if (!s_takenBack.TryGetValue(id, out var park)) continue;
             alive.Add(id);
-            if (Vector3.Distance(bag.transform.position, park) > radius) s_takenBack.Remove(id);
+            // A held bag is at the player's hand, which can be outside a tiny radius while he stands at the trunk
+            // (or far from a blocked park spot), so a held bag only counts as carried away with some slack.
+            float away = Vector3.Distance(bag.transform.position, park);
+            if (away > radius + (IsHeld(bag) ? HeldSlack : 0f)) s_takenBack.Remove(id);
         }
         var gone = new List<int>();
         foreach (var k in s_takenBack.Keys)
