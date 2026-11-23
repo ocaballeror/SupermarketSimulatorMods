@@ -142,6 +142,8 @@ internal static class Employees
 
     private static void Process(float now, bool vchg, bool verify)
     {
+        // Also when no color is set: preview clones register renderers (slot 100) that get destroyed on every type switch.
+        if (now >= _nextPrune) { _nextPrune = now + 30f; Recolor.PruneRegistry(); }
         if (!ClothesStore.AnySet)
         {
             // No color anywhere: put back whatever of ours is still on a renderer (pooled employees included).
@@ -180,7 +182,6 @@ internal static class Employees
         }
         _incomplete = anyIncomplete;
         _lastVersion = version;
-        if (now >= _nextPrune) { _nextPrune = now + 30f; Recolor.PruneRegistry(); }
     }
 
     private static void Rescan(Tracked t)

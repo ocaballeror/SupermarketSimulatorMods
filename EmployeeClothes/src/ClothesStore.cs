@@ -11,8 +11,9 @@ namespace EmployeeClothes;
 
 /// <summary>
 /// The chosen clothes color per employee type, where it comes from and where it goes.
-///  - Host / solo player: the colors are edited in the UI, saved per save file in a text file next to the other
-///    BepInEx configs and published as a Photon room property for guests.
+///  - Host / solo player: the colors are edited in the UI, written per save file to a text file next to the other
+///    BepInEx configs WHEN THE GAME SAVES (SaveHooks in Patches.cs), so they stay tied to the game save like the money
+///    that paid for them, and published as a Photon room property for guests.
 ///  - Guest: read-only, taken from the room property the host published (polled; unmodded hosts publish nothing).
 /// </summary>
 internal static class ClothesStore
@@ -30,6 +31,8 @@ internal static class ClothesStore
     private static string _key;               // save file the colors belong to (host / solo)
     private static string _lastRemote = "\u0001"; // last room string applied on a guest (sentinel = none yet)
     private static bool _wasGuest;
+    private static bool _dirty;               // colors changed (Apply / Reset) since they were last written to the file
+    private static bool _fresh;               // the game data was just cleared for a new game: the next save writes "no colors"
 
     /// <summary>Bumped whenever any color changes (the sweeper re-applies on the next pass anyway).</summary>
     internal static int Version { get; private set; }
@@ -341,37 +344,81 @@ internal static class ClothesStore
         catch (Exception e) { Plugin.Warn("Saving the Apply to all switch failed: " + e.Message); }
     }
 
-    /// <summary>Writes the current colors under the current save's key (host / solo only).</summary>
-    internal static void Save()
+    /// <summary>
+    /// An Apply or Reset changed the colors. They are NOT written to the file yet: that happens when the game saves
+    /// (<see cref="OnGameSaved"/>), so quitting without saving reverts the colors together with the money.
+    /// </summary>
+    internal static void MarkChanged()
     {
         if (IsGuest) return;
-        var key = _key ?? SaveKey();
-        if (key == null) { Plugin.Warn("No save file known; the colors are applied but won't be remembered after a restart."); return; }
-        _key = key;
+        _key ??= SaveKey();
+        if (_key == null) Plugin.Warn("No save file known; the colors are applied but won't be remembered after a restart.");
+        _dirty = true;
+    }
+
+    /// <summary>Writes (or, with no colors, removes) the line of one save file; every other line is kept.</summary>
+    private static void WriteLine(string key, string value)
+    {
+        var lines = new List<string>();
+        if (File.Exists(FilePath))
+            foreach (var line in File.ReadAllLines(FilePath))
+            {
+                int tab = line.IndexOf('\t');
+                if (tab > 0 && line.Substring(0, tab) == key) continue;
+                if (!string.IsNullOrWhiteSpace(line)) lines.Add(line);
+            }
+        if (value.Length > 0) lines.Add(key + "\t" + value);
+        File.WriteAllLines(FilePath, lines);
+    }
+
+    /// <summary>
+    /// The game wrote a save (SaveManager.Save(string), the file name is "slot_N.es3"): commit the colors under that
+    /// name. Written only when something changed since the last commit, or after a new game cleared the game data
+    /// (then the slot's old line is removed). Host / solo only.
+    /// </summary>
+    internal static void OnGameSaved(string saveName)
+    {
+        if (IsGuest || (!_dirty && !_fresh)) return;
+        var key = string.IsNullOrEmpty(saveName) ? null : Path.GetFileName(saveName);
+        if (key == null) return;
         try
         {
-            var lines = new List<string>();
-            if (File.Exists(FilePath))
-                foreach (var line in File.ReadAllLines(FilePath))
-                {
-                    int tab = line.IndexOf('\t');
-                    if (tab > 0 && line.Substring(0, tab) == key) continue;
-                    if (!string.IsNullOrWhiteSpace(line)) lines.Add(line);
-                }
             var s = Serialize();
-            if (s.Length > 0) lines.Add(key + "\t" + s);
-            File.WriteAllLines(FilePath, lines);
-            Plugin.Debug($"Saved colors for '{key}': '{s}'");
+            WriteLine(key, s);
+            _key = key;
+            _dirty = false;
+            _fresh = false;
+            Plugin.Debug($"Game saved: wrote colors for '{key}': '{s}'");
         }
         catch (Exception e) { Plugin.Warn("Saving the colors failed: " + e.Message); }
     }
+
+    /// <summary>
+    /// SaveManager.Clear ran: the game data was reset (main menu start, new game, game over restart). Forget the colors in
+    /// memory; if a save follows (new game), it writes "no colors" for its slot, so a used slot doesn't pass its old colors on.
+    /// </summary>
+    internal static void OnGameDataCleared()
+    {
+        if (IsGuest) return;
+        Deserialize("");
+        _dirty = false;
+        _fresh = true;
+    }
+
+    /// <summary>
+    /// SaveManager.ApplySaveData ran: an existing save is being loaded (not a new game), so a Clear seen before it
+    /// (the main menu clears at start) doesn't mean the next save is a new game.
+    /// </summary>
+    internal static void OnSaveDataApplied() => _fresh = false;
 
     private static void LoadFor(string key)
     {
         _key = key;
         var line = ReadLine(key);
         Deserialize(line ?? "");
-        Plugin.Info($"Colors for save '{key}': {(string.IsNullOrEmpty(line) ? "none" : line)}");
+        _dirty = false;
+        _fresh = false;
+        Plugin.Debug($"Colors for save '{key}': {(string.IsNullOrEmpty(line) ? "none" : line)}");
     }
 
     // ------------------------------------------------------------------ room property
@@ -403,11 +450,11 @@ internal static class ClothesStore
         try
         {
             if (!PhotonNetwork.IsMasterClient || PhotonNetwork.CurrentRoom == null) return;
-            string want = Plugin.SyncToGuests ? Serialize() : ""; // sharing off: make sure nothing stays published
+            string want = Serialize();
             string have = RoomString() ?? "";
             if (want == have) return;
             SetRoomString(want);
-            Plugin.Info($"Published the colors to the room: '{want}'");
+            Plugin.Debug($"Published the colors to the room: '{want}'");
         }
         catch (Exception e) { Plugin.Debug("Publishing the colors failed: " + e.Message); }
     }
@@ -425,7 +472,7 @@ internal static class ClothesStore
             {
                 _lastRemote = remote;
                 Deserialize(remote);
-                Plugin.Info($"Colors from the host: {(remote.Length == 0 ? "none" : remote)}");
+                Plugin.Debug($"Colors from the host: {(remote.Length == 0 ? "none" : remote)}");
             }
             return;
         }
@@ -436,19 +483,19 @@ internal static class ClothesStore
         PublishRoom();
     }
 
-    /// <summary>A new game scene was loaded: forget which save the colors belong to.</summary>
+    /// <summary>A new game scene was loaded: forget the previous save's colors and which save they belonged to.</summary>
     internal static void OnNewScene()
     {
         _key = null;
         _lastRemote = "\u0001";
+        _dirty = false;
+        _fresh = false;
+        Deserialize(""); // the next Tick loads the new save's colors (or the host's, on a guest)
     }
-
-    /// <summary>Marks the colors as changed so the next sweep re-applies them.</summary>
-    internal static void Touch() => Version++;
 
     internal static void OnEnabled()
     {
-        _key = null;
+        if (!_dirty) _key = null; // unsaved colors (applied while on) must not be replaced by the file's
         _lastRemote = "\u0001";
         Version++;
     }

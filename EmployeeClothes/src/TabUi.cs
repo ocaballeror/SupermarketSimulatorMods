@@ -54,6 +54,7 @@ internal static class TabUi
     private static readonly Color?[] Pending = new Color?[8];
     private static float _nextFind;
     private static bool _warnedMissing;
+    private static bool _gaveUp;          // the tab has an unexpected layout: the fallback scan stops (until a new scene)
     private static bool _buildFailed;     // Build threw once: log it once and stop retrying (until a new scene)
     private static ComputerT _comp;       // the store computer (to notice the player leaving it)
     private static Transform _toggleTpl;   // the game's own ToggleSwitch (HR tab), cloned for "Apply to all"
@@ -63,8 +64,6 @@ internal static class TabUi
     private static Color _toggleBase = Color.white;
     private static bool _hooked;          // the picker's onColorChanged is hooked (otherwise PerFrame polls its color)
     private static Color _polled;
-
-    internal static bool Injected => _card != null;
 
     // ------------------------------------------------------------------ injection
 
@@ -84,6 +83,7 @@ internal static class TabUi
                     _warnedMissing = true;
                     Plugin.Warn("The Customization tab doesn't have the expected layout (Unlocked/Sections Scroll View/Viewport/Content/Store Name UI); no card added.");
                 }
+                _gaveUp = true;   // the layout won't change by itself: stop the fallback scan (until the next scene)
                 return;
             }
             Build(tab, content, template);
@@ -145,7 +145,7 @@ internal static class TabUi
         if (contentRt != null) LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
 
         BuildPanel(tab);
-        Plugin.Info($"Card added to the Customization tab (color picker {(_picker != null ? "cloned" : "not available: swatches only")})");
+        Plugin.Debug($"Card added to the Customization tab (color picker {(_picker != null ? "cloned" : "not available: swatches only")})");
     }
 
     /// <summary>Removes the injected UI (mod switched off or scene change).</summary>
@@ -176,6 +176,7 @@ internal static class TabUi
         _hidUnlocked = false;
         _open = false;
         _warnedMissing = false;
+        _gaveUp = false;
         _buildFailed = false;
         _comp = null;
     }
@@ -909,7 +910,7 @@ internal static class TabUi
                 foreach (var k in ClothesStore.Kinds) { ClothesStore.Set(k, pend); Pending[(int)k] = pend; }
             else
                 ClothesStore.Set(kind, pend);
-            ClothesStore.Save();   // saved to the mod's own file at every Apply (and Reset), so closing needs no extra step
+            ClothesStore.MarkChanged();   // written to the mod's file with the next game save (not now), so money and colors stay together
             Plugin.Info($"Applied #{hex} to {(_applyAll ? "all employee types" : ClothesStore.NameOf(kind))}");
             Employees.Sweep();
             _message = _applyAll ? "Applied to all types." : $"Applied to {ClothesStore.PluralOf(kind).ToLowerInvariant()}.";
@@ -935,7 +936,7 @@ internal static class TabUi
                 ClothesStore.Set(CurrentKind, null);
                 Pending[(int)CurrentKind] = null;
             }
-            ClothesStore.Save();
+            ClothesStore.MarkChanged();
             Preview.SetColor(null);
             _message = _applyAll ? "Reset all types to the original clothes." : $"Reset {ClothesStore.PluralOf(CurrentKind).ToLowerInvariant()} to the original clothes.";
             Plugin.Info($"Reset to the original clothes: {(_applyAll ? "all employee types" : ClothesStore.NameOf(CurrentKind))}");
@@ -984,14 +985,14 @@ internal static class TabUi
         if (_card == null)
         {
             // The OnEnable patch normally injects the card; this is the fallback.
-            if (_buildFailed || Time.unscaledTime < _nextFind) return;
+            if (_buildFailed || _gaveUp || Time.unscaledTime < _nextFind) return;
             _nextFind = Time.unscaledTime + 1f;
             if (!NoktaSingleton<IDManager>.HasInstance) return;
             var all = Resources.FindObjectsOfTypeAll(Il2CppType.Of<TabComponent>());
             for (int i = 0; i < all.Length; i++)
             {
                 var tab = all[i]?.TryCast<TabComponent>();
-                if (tab != null && tab.m_UnlockedUI != null) { Ensure(tab); break; }
+                if (tab != null && tab.gameObject.scene.IsValid() && tab.m_UnlockedUI != null) { Ensure(tab); break; }
             }
             return;
         }

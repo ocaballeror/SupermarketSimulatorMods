@@ -224,6 +224,7 @@ internal static class Preview
             FrameCamera();
             _shown = true;
             _cam.enabled = true;
+            SetLights(true);
             _needApply = true;
             if (_diagCount < 4 && Plugin.VerboseLogging != null && Plugin.VerboseLogging.Value)
             {
@@ -326,7 +327,7 @@ internal static class Preview
         if (!_loggedFirstFrame && Models.Count > 0)
         {
             _loggedFirstFrame = true;
-            Plugin.Info($"Preview is running ({Models.Count} model(s), camera enabled {_cam.enabled}, render texture {(_rt != null ? _rt.width + "x" + _rt.height : "none")})");
+            Plugin.Debug($"Preview is running ({Models.Count} model(s), camera enabled {_cam.enabled}, render texture {(_rt != null ? _rt.width + "x" + _rt.height : "none")})");
         }
     }
 
@@ -443,12 +444,10 @@ internal static class Preview
         }
     }
 
-    /// <summary>The material copies are about to be destroyed: show the original materials until they are rebuilt.</summary>
-    internal static void OnMaterialsReset()
+    private static void SetLights(bool on)
     {
-        for (int i = 0; i < Models.Count; i++)
-            if (Models[i].Model != null) Recolor.ApplyToObject(Models[i].Model, Recolor.PreviewSlot, null);
-        _needApply = true;
+        if (_light1 != null) _light1.enabled = on;
+        if (_light2 != null) _light2.enabled = on;
     }
 
     internal static void Hide()
@@ -456,6 +455,7 @@ internal static class Preview
         _shown = false;
         _diagPending = false;
         if (_cam != null) _cam.enabled = false;
+        SetLights(false);
         ClearModels();
     }
 

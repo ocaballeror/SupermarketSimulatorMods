@@ -1,8 +1,8 @@
 /*
  * EmployeeClothes: pick the color of the employees' clothes from the computer (Improvement #15).
  *
- * HOW THE GAME BUILDS EMPLOYEES (verified in the shipped assets with UnityPy, 2026-11-17; nothing here has been
- * run in-game yet)
+ * HOW THE GAME BUILDS EMPLOYEES (verified in the shipped assets with UnityPy, 2026-11-17; the recoloring
+ * and the UI have been through several in-game rounds, see CLAUDE.md for what is still unconfirmed)
  *  - Every employee type has several prefabs (Restocker, Restocker_02..06, Cashier, Woman_Cashier, CustomerHelper,
  *    SecurityGuard, Janitor, Courier, Baker, IceCreamHelper_01). The scene-asset prefab is reached through the
  *    employee ScriptableObjects (IDManager.m_Cashiers / m_Restockers / m_CustomerHelpers / m_SecurityGuards /
@@ -32,7 +32,7 @@
  *  - For every (original material, employee type) a material copy is made whose _BaseMap/_MainTex is the shade map and
  *    whose _BaseColor/_Color is chosen color * 1.45 * garment shade. The renderer's sharedMaterials entry is swapped.
  *    Changing the color is then only a SetColor on the copies (so the live preview is free), and "no color" swaps the
- *    original material back. Pants are 0.7x and waistcoats 0.8x of the color when the ShadedGarments setting is on (so
+ *    original material back. Pants are 0.7x and waistcoats 0.8x of the color (Plugin.ShadedGarments, a constant; so
  *    an outfit isn't one flat color).
  *  - Masked atlases: for the mixed materials above, a working copy of the texture (at most 512x512, through a RenderTexture)
  *    is made once; the rule picks the garment pixels, and the shade of each garment pixel is computed like the shade map
@@ -65,7 +65,7 @@
  *    made by instantiating the Store Name card under an inactive holder (no Awake runs), destroying its ChangeNameItem,
  *    the Localize components and the button's listeners, and then re-parenting it. It is injected by a postfix on
  *    CustomizationTab.OnEnable (fallback: a poll in the driver).
- *  - The price (default $500) is charged when the card is CLICKED and the panel opens: charge first, and the panel
+ *  - The price ($1000, Plugin.Price) is charged when the card is CLICKED and the panel opens: charge first, and the panel
  *    opens only if the charge worked (a failure after charging refunds it). This is a paid SESSION: inside it, picking
  *    colors, Apply, Apply to all, Reset and switching type are all free. The session ends on Done, on switching to
  *    another tab (the panel is deactivated: PanelWatcher.OnDisable), on leaving the computer (a patch on
@@ -76,7 +76,7 @@
  *    would use NetworkMoneyManager.OnMoneyTransition_MasterRequest (guests can't open the panel, the branch mirrors
  *    the game). The game's feedback for "can't afford" is the card button being disabled while !HasMoney(price)
  *    (ChangeNameItem.UpdatePurchaseButton / CheckRequirements), which the card does too; it shows the price. The colors
- *    are written to the mod's own file at every Apply and Reset (not with the game save).
+ *    are written to the mod's own file when the game saves (see Persistence), so they stay tied to the money.
  *  - The panel (a child of the tab, over its own opaque background Image; the tab's own cards are hidden while it is open
  *    and shown again when the session ends, with a safety net in the CustomizationTab.OnEnable patch) has: a RenderTexture preview, arrows to switch
  *    between the 8 employee types (HrEmployeeKind), the game's own ColorPicker widget (cloned from the store-name color
@@ -105,12 +105,21 @@
  *    ignore ours. Late joiners get it from the room; modded guests poll it once a second and apply it. Unmodded guests
  *    see the original colors (harmless).
  *  - Persistence: the host's colors are saved in BepInEx/config/flamboyanthopper.employeeclothes.saves.txt, one line per save file
- *    (SaveManager.CurrentSaveFilePath's file name), because the game's own save format can't be extended. A new game in
- *    a used slot inherits that slot's colors (use Reset, or delete the line).
+ *    ("slot_N.es3"), because the game's own save format can't be extended. Apply and Reset only change the colors in
+ *    memory and mark them dirty; the line is written by a postfix on SaveManager.Save(string) (the private leaf that every
+ *    save path ends in: autosave, quick save, menu save, new game), under the file name being saved. So the colors follow
+ *    the game save exactly like the $1000 does: quitting without saving takes both back (no free apply by reloading).
+ *    A new game must not inherit the slot's old colors: a postfix on SaveManager.Clear (reset of the game data: main
+ *    menu start, new game, restart after game over) empties the colors and sets "fresh", so the Save(string) that
+ *    follows a new game writes "no colors" (removes the line); a postfix on SaveManager.ApplySaveData (loading an
+ *    existing save) clears "fresh" again, because the main menu's own Clear comes before a load. The colors of the
+ *    previous save are dropped as soon as a scene starts (IDManager.Awake) instead of when the next Tick loads the new
+ *    key. The "Apply to all" switch is global and is written at once (it costs nothing).
  *
- * Patches (11, each applied on its own and logged if one fails): CustomizationTab.OnEnable (inject the card, keep the
+ * Patches (14, each applied on its own and logged if one fails): CustomizationTab.OnEnable (inject the card, keep the
  * cards visible), IDManager.Awake (a new game scene: forget cached objects), Computer.OpenPC setter (leaving the computer
- * ends the session) and the eight employee Start postfixes of EmployeeTracker.cs (register new employees). Everything else
+ * ends the session), SaveManager.Save(string) / Clear / ApplySaveData (commit the colors with the game save) and the eight
+ * employee Start postfixes of EmployeeTracker.cs (register new employees). Everything else
  * is public API calls and a few slow polls (ClothesStore.Tick once a second, TabUi.Tick every 0.5 s), so a game update
  * breaks little.
  */
@@ -129,7 +138,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.employeeclothes";
     public const string Name = "Employee Clothes";
-    public const string Version = "1.0.9";
+    public const string Version = "1.0.10";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -138,7 +147,6 @@ public class Plugin : BasePlugin
     // Fixed values (no longer settings).
     internal const float Price = 1000f;
     internal const bool ShadedGarments = true;
-    internal const bool SyncToGuests = true;
     internal const float PreviewLight = 30f;
 
     /// <summary>True while the patches are applied and the mod does its work.</summary>

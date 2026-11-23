@@ -281,7 +281,7 @@ internal static class Recolor
         if (!_loggedFirstMap)
         {
             _loggedFirstMap = true;
-            Plugin.Info($"First shade map: '{src.name}' {sw}x{sh} -> {tw}x{th}, mean luminance {mean:0.000}, fast copy {fast}");
+            Plugin.Debug($"First shade map: '{src.name}' {sw}x{sh} -> {tw}x{th}, mean luminance {mean:0.000}, fast copy {fast}");
         }
         else Plugin.Debug($"Shade map '{src.name}' {sw}x{sh} -> {tw}x{th}, mean {mean:0.000}");
         return tex;
@@ -508,7 +508,7 @@ internal static class Recolor
             shade[j] = (byte)(sh / TintScale * 255f + 0.5f);
         }
         var atlas = new Atlas { W = tw, H = th, Src = buf, Idx = idx.ToArray(), ShadeV = shade, Fast = fast };
-        Plugin.Info($"Masked copy of '{src.name}' ({rule.Kind}): {w0}x{h0} -> {tw}x{th}, {atlas.Idx.Length} garment pixels ({100.0 * atlas.Idx.Length / count:0}%), mean {mean:0.000}, {sw.Elapsed.TotalMilliseconds:0.0} ms");
+        Plugin.Debug($"Masked copy of '{src.name}' ({rule.Kind}): {w0}x{h0} -> {tw}x{th}, {atlas.Idx.Length} garment pixels ({100.0 * atlas.Idx.Length / count:0}%), mean {mean:0.000}, {sw.Elapsed.TotalMilliseconds:0.0} ms");
         return atlas;
     }
 

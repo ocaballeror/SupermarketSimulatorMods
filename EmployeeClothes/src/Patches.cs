@@ -51,3 +51,40 @@ internal static class ComputerClosePatch
         catch (Exception e) { Plugin.Error("Computer close hook failed: " + e); }
     }
 }
+
+/// <summary>
+/// The game wrote a save file (SaveManager.Save(string), private, the leaf that every save path ends in: autosave, quick
+/// save, menu save, new game). The colors are committed to the mod's file here and only here, so they stay tied to the
+/// game save: quitting without saving takes back the money and the colors together.
+/// </summary>
+[HarmonyPatch(typeof(SaveManager), nameof(SaveManager.Save), new[] { typeof(string) })]
+internal static class SaveWrittenPatch
+{
+    private static void Postfix(string saveName)
+    {
+        try { ClothesStore.OnGameSaved(saveName); }
+        catch (Exception e) { Plugin.Error("Save hook failed: " + e); }
+    }
+}
+
+/// <summary>SaveManager.Clear resets the game data (main menu start, new game, restart after game over): the colors of the previous game go with it.</summary>
+[HarmonyPatch(typeof(SaveManager), nameof(SaveManager.Clear))]
+internal static class SaveClearedPatch
+{
+    private static void Postfix()
+    {
+        try { ClothesStore.OnGameDataCleared(); }
+        catch (Exception e) { Plugin.Error("Save clear hook failed: " + e); }
+    }
+}
+
+/// <summary>SaveManager.ApplySaveData applies an existing save (continue, load, load for multiplayer); a new game also calls it, but Clear comes after it.</summary>
+[HarmonyPatch(typeof(SaveManager), nameof(SaveManager.ApplySaveData))]
+internal static class SaveAppliedPatch
+{
+    private static void Postfix()
+    {
+        try { ClothesStore.OnSaveDataApplied(); }
+        catch (Exception e) { Plugin.Error("Save apply hook failed: " + e); }
+    }
+}
