@@ -5,6 +5,7 @@ style (icon, brand + name; on a box also quantity and box price) when the crossh
 
 ## Status
 
+- v0.3.8 (review round 2 of 0.3.7): the prune only runs again once the remembered tags exceed twice the live count found by the last prune (and 500), so a store with more than 500 live boxes no longer rescans every 120 s.
 - v0.3.7 (review round 1 of 0.3.6, approved with minor findings): diagnostic INFO lines (resize count per settings change, `hover panel created`, `OnGUI is drawing`) now go through `Plugin.Info` and only appear with `VerboseLogging`; `TagScaler.States` is pruned by `ResizeAll("prune")` from `ClearTagsBehaviour.Update` every 120 s once it holds more than 500 tags (previously only on settings changes); `Plugin.SetActive(false)` restores the tags even if `UnpatchSelf` throws; `HoverInfo.LastKind` is restored on a cache hit for label and price-tag targets (verbose log only); at an effective factor of 1 `TagScaler.Apply` assigns the captured base scale and position directly (exact, no float round trip). No other behaviour change.
 - v0.3.6 (user request): a box **in a storage rack** shows the hover panel when the crosshair is on **any part of the box**, not only on its tag. `HoverInfo.Resolve`: in the `Box` branch the tag-quad test (`TagHit`) is skipped when `box.m_Racked`; loose boxes, the held box and furniture boxes still need the tag. No new patch and no setting: the existing `Physics.Raycast` (same ray and layer mask as the game) already returns the racked box's own collider (vanilla `PlayerInteraction.Raycast` relies on it too: hit collider has a `Box` with `m_Racked` -> takes the `RackSlot` from the parent, else logs "Racked box doesn't have an interactable rack slot as parent"). Vanilla interaction (picking up a racked box, the rack slot hints) is untouched, nothing is patched. Purely local, so it works the same on a guest. **Not yet tested in-game.**
 - v0.3.4 (settings reduced, commit "simplify mod settings"): the remaining settings are `Enabled`, `ScaleMultiplier`, `ShowHoverText`, `TextSize` (default now 30, was 22) and `VerboseLogging` (the cfg key `[Diagnostics] VerboseLogging` already existed, so existing cfgs keep their stored value; default now off for new configs; the box sweep diagnostic only runs when it is on). The descriptions were shortened by the user. Nothing was turned into a constant.
@@ -107,7 +108,7 @@ prefab**: `DisplaySlot.SetPriceTag` (called from the slot's product add/remove p
 
 ## Mechanism
 
-**Scale** (`TagScaler`): postfix on `Box.OnEnable`, `Initialize`, `Setup` and `FurnitureBox.OnEnable`, `Initialize` -> `Apply(ui)`; plus, on every settings change (and, while `VerboseLogging` is on, a diagnostic sweep every 30 s; and a silent prune every 120 s once more than 500 tags are remembered), (`ResizeAll`, `FindObjectsOfType<Box>` and `<FurnitureBox>` with `includeInactive: true`). State per "Icon UI"
+**Scale** (`TagScaler`): postfix on `Box.OnEnable`, `Initialize`, `Setup` and `FurnitureBox.OnEnable`, `Initialize` -> `Apply(ui)`; plus, on every settings change (and, while `VerboseLogging` is on, a diagnostic sweep every 30 s; and a silent prune, at most every 120 s, once more than 500 tags (and twice the live count of the last prune) are remembered), (`ResizeAll`, `FindObjectsOfType<Box>` and `<FurnitureBox>` with `includeInactive: true`). State per "Icon UI"
 instance id: the children's original `localScale` (captured the first time a box is seen with factor != 1) and the
 applied factor; new scale = base * factor on all three axes, new position = centre + (base position - centre) * factor (centre = BG's position); only written when the factor changed, so nothing
 compounds; factor 1 restores the base. `LODGroup.RecalculateBounds()` after a change. The sweep logs
@@ -195,7 +196,7 @@ live in `RackSlotData`, which is what the rack tag reads).
 
 ## In-game test
 
-1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.3.6 loaded` and `Patches applied (5/5)`.
+1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.3.8 loaded` and `Patches applied (5/5)`.
 2. Load a save with boxes (storage room, racks). **Tag position:** a 15x15x15, an 8x8x8, a 20x10x7, a 30x20x20 and a 40x26x26 furniture box, loose, racked and in your hands: the
    tag lies completely on the lid (nothing hangs over an edge); on big boxes it is 2x, on the smallest (8x8x8, 20x10x7) about 1.7x. `[ClearTags] tag capped to x... (requested x2.0) ...`
    lines (once per lid size) show where it was reduced. A `[ClearTags] sweep: N of M ...` line (only while `VerboseLogging` is on) would mean a spawn path isn't hooked;

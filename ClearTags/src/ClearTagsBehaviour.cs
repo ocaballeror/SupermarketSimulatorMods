@@ -21,6 +21,7 @@ public class ClearTagsBehaviour : MonoBehaviour
     private string _text;   // IMGUI fallback only
     private float _nextSweep = 5f;
     private float _nextPrune = 60f;
+    private int _pruneLive;
     private bool _drawLogged;
     private GUIStyle _style;
     private GUIContent _content;
@@ -42,10 +43,11 @@ public class ClearTagsBehaviour : MonoBehaviour
         {
             // Boxes come and go through Photon all session; ResizeAll forgets the tags of destroyed ones. Rare, and only when the list has grown.
             float now = Time.unscaledTime;
-            if (Plugin.Active && TagScaler.StateCount > PruneThreshold && now >= _nextPrune)
+            if (Plugin.Active && TagScaler.StateCount > Math.Max(PruneThreshold, 2 * _pruneLive) && now >= _nextPrune)
             {
                 _nextPrune = now + PruneInterval;
                 TagScaler.ResizeAll("prune", logMissed: true);
+                _pruneLive = TagScaler.StateCount;   // live tags after pruning: the next prune waits until the list has doubled (a big store never rescans every 120 s)
             }
         }
         catch (Exception e) { Plugin.Logger.LogError($"[ClearTags] prune failed: {e}"); }
