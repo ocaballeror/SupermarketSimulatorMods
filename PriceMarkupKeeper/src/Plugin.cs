@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.pricemarkupkeeper";
     public const string Name = "Price Markup Keeper";
-    public const string Version = "1.1.3";
+    public const string Version = "1.1.4";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

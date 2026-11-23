@@ -84,7 +84,7 @@ internal static class MarkupKeeper
     internal static float MarkupPrice(float marketPrice, float pct) =>
         (float)Math.Round((double)((pct / 100f + 1f) * marketPrice), 2);
 
-    private static bool IsAuthority() => !PhotonNetwork.IsConnected || PhotonNetwork.IsMasterClient;
+    internal static bool IsAuthority() => !PhotonNetwork.IsConnected || PhotonNetwork.IsMasterClient;
 
     internal static void BeginDay(PriceManager pm)
     {
@@ -247,14 +247,18 @@ internal static class ChangeCurrentCostPatch
 // GetOrCreatePriceSetByPlayer throws without the product's pricingDatas entry.
 internal static class NewProductPricer
 {
-    private static bool IsAuthority() => !PhotonNetwork.IsConnected || PhotonNetwork.IsMasterClient;
-
     internal static void OnLicenseUnlocked(int licenseID, string via)
     {
-        if (!IsAuthority()) return;
-        var idm = NoktaSingleton<IDManager>.Instance;
-        var pm = NoktaSingleton<PriceManager>.Instance;
-        if (idm == null || pm == null) return;
+        if (!MarkupKeeper.IsAuthority()) return;
+        // PriceManager is a NoktaSingletonPunCallbacks, not a NoktaSingleton (IDManager is the latter).
+        var idm = NoktaSingleton<IDManager>.HasInstance ? NoktaSingleton<IDManager>.Instance : null;
+        var pm = NoktaSingletonPunCallbacks<PriceManager>.HasInstance ? NoktaSingletonPunCallbacks<PriceManager>.Instance : null;
+        if (idm == null || pm == null)
+        {
+            if (Plugin.VerboseLogging.Value)
+                Plugin.Logger.LogInfo($"[Markup] License {licenseID} unlocked ({via}): IDManager or PriceManager not available, nothing priced");
+            return;
+        }
         var license = idm.ProductLicenseSO(licenseID);
         var products = license != null ? license.Products : null;
         if (products == null) return;
@@ -310,8 +314,9 @@ internal static class NewProductPricer
             if (changed.Count > 0)
             {
                 pm.FinishBulkPricingApply(changed, false, ratio);
-                // A second pass for the discount, like ApplyBulkDiscount's own finish: it also picks a sale
-                // sign style for the newly discounted products and tells guests isDiscount.
+                // A second pass for the discount, like ApplyBulkDiscount's own finish. The first call already
+                // rerolled the sale sign (it does for any DiscountRate > 0.1); this one repeats the refresh
+                // and tells guests isDiscount, so they store BulkDiscountRatio. Kept for fidelity.
                 if (discount > 0) pm.FinishBulkPricingApply(changed, true, discount);
                 Plugin.Logger.LogInfo($"[Markup] License {licenseID} unlocked ({via}): priced {changed.Count} new product(s) " +
                                       $"at {ratio:0.##}% above market price" + (discount > 0 ? $", {discount}% discount" : "") +
