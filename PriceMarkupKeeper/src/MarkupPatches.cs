@@ -251,8 +251,10 @@ internal static class NewProductPricer
     {
         if (!MarkupKeeper.IsAuthority()) return;
         // PriceManager is a NoktaSingletonPunCallbacks, not a NoktaSingleton (IDManager is the latter).
+        // The PunCallbacks variant only fills its cache in the Instance getter (HasInstance can be false before
+        // the first access), so call Instance directly; it returns null while quitting.
         var idm = NoktaSingleton<IDManager>.HasInstance ? NoktaSingleton<IDManager>.Instance : null;
-        var pm = NoktaSingletonPunCallbacks<PriceManager>.HasInstance ? NoktaSingletonPunCallbacks<PriceManager>.Instance : null;
+        var pm = NoktaSingletonPunCallbacks<PriceManager>.Instance;
         if (idm == null || pm == null)
         {
             if (Plugin.VerboseLogging.Value)
