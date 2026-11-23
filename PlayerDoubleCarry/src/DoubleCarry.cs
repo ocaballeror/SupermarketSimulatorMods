@@ -197,7 +197,10 @@ internal static class DoubleCarry
     /// A click here may take another box: the OnUse(true) branch in which the game opens a closed held box (or
     /// does nothing for an open one). An open held box is closed when stacked.
     /// </summary>
-    private static bool CanTakeSecond(BoxInteraction bi) => NothingTargeted(bi);
+    private static bool CanTakeSecond(BoxInteraction bi) =>
+        NothingTargeted(bi) &&
+        // An open box is restocked through this same click while a shelf / vending slot is targeted.
+        (bi.m_Box.IsOpen == false || (bi.m_CurrentDisplaySlot == null && bi.m_CurrentVendingSlot == null));
 
     /// <summary>The loose box the player is looking at, if any (same ray as PlayerInteraction.Raycast).</summary>
     private static Box LookedAtBox(PlayerInstance p, Box held)
@@ -727,7 +730,7 @@ internal static class DoubleCarry
                 rb.isKinematic = false;
                 rb.interpolation = RigidbodyInterpolation.Interpolate;
             }
-            Info($"[PlayerCarry] {leaving.name} left while carrying {Describe(b)}; put it down");
+            Info($"{leaving.name} left while carrying {Describe(b)}; put it down");
         }
     }
 

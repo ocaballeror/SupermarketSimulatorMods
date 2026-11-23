@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.playerdoublecarry";
     public const string Name = "Player Double Carry";
-    public const string Version = "0.2.3";
+    public const string Version = "0.2.4";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
