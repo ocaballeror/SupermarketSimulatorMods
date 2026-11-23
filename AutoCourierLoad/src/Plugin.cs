@@ -13,7 +13,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.autocourierload";
     public const string Name = "Auto Courier Load";
-    public const string Version = "0.2.3";
+    public const string Version = "0.2.4";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -22,8 +22,6 @@ public class Plugin : BasePlugin
 
     // Fixed values (no longer settings).
     internal const float LeaveUnderSeconds = 60f;
-    // this one doesn't make sense. he always loads any bag that is dropped in his search radius
-    internal const float KeepScanningSeconds = 30f;
 
     /// <summary>True while the mod's patches are applied.</summary>
     internal static bool Active { get; private set; }

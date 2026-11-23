@@ -12,7 +12,7 @@ When your courier is waiting at his parking space (after a delivery, or just sta
    - one of the orders in his trunk has **less than a minute left** (the countdown on the order's note);
    - his trunk is **full**, even if other orders are still active.
 
-Bags that you hold, bags in his trunk, open bags and bags without a name tag are left alone. A bag the courier himself just put back in his drop area (for example because he refused it) is not loaded again until somebody moves it.
+Bags that you hold, bags in his trunk, open bags and bags without a name tag are left alone. A bag the courier himself just put back in his drop area (for example because he refused it) is not loaded again until somebody moves it. The same goes for a bag you take back out of his trunk: he leaves it alone until you have carried it more than the scan radius away from his parking space.
 
 If he finds nothing, he simply waits at his spot like before, and you can still hand him bags and press E as usual. Dropping a bag next to him later, even long after he came back, wakes this up again.
 

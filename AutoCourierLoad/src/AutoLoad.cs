@@ -42,7 +42,8 @@ namespace AutoCourierLoad;
 ///  - Bags are networked objects (NetworkOrderPaperBag, Photon-instantiated). OnlineOrderPaperBagContainer.
 ///    m_PaperBags lists them all; IsCarried(bag) is true when the bag has a parent transform or (online) its
 ///    NetworkOrderPaperBag.m_Holder is non-empty, i.e. a player holds it or it sits in a courier's hands or
-///    trunk. A player picking a bag up (TakePaperBag) takes over its PhotonView; placing one on a placement
+///    trunk, or (offline) PlayerObjectHolder.m_CurrentObject is the bag, a field OnlineOrderInteraction never
+///    clears on drop, so the offline branch stays true for the last bag dropped (this mod uses its own IsHeld). A player picking a bag up (TakePaperBag) takes over its PhotonView; placing one on a placement
 ///    area hands it back to the master.
 ///  - An order's deadline: OrderListData.HasExpiration, ExpirationDay, ExpirationTime (game seconds of the
 ///    day, same axis as DayCycleManager.CurrentTime). The countdown on the note (OrderTimeDisplay.Update) is
@@ -62,11 +63,13 @@ namespace AutoCourierLoad;
 ///    0.4 s) looks at each visit: while the courier is still returning it only watches the bags near his
 ///    park spot (so a bag that was already lying there counts as settled when he arrives); once he is Idle,
 ///    IsAvailableForHandOver and not dispatched, it scans every bag in OnlineOrderPaperBagContainer.m_PaperBags
-///    for the first time and then again for KeepScanningSeconds (or for as long as he waits with something
+///    for the first time and then again for ScanWindow (1.5 s; or for as long as he waits with something
 ///    loaded and not yet leaving). A bag qualifies when it is active, not
-///    IsCarried (nobody holds it, it is not in a trunk), within ScanRadius metres of Courier.ParkPosition,
+///    IsHeld (nobody holds it, it is not in a trunk; see IsHeld for why not the game's IsCarried), within ScanRadius
+///    metres of Courier.ParkPosition,
 ///    passes the game's own TryResolveHandOverOrder, has been lying free for at least 0.75 s, and was not
-///    thrown into the drop area by the courier himself (see below). Bags with the least time left go first.
+///    thrown into the drop area by the courier himself or taken back out of his trunk by a player (see below).
+///    Bags with the least time left go first.
 ///  - Each one goes through the game's own Courier.ReceiveBag, after the same preparation as the host's
 ///    hand-over: the bag's PhotonView is taken over if another client owns it and the player's "working on
 ///    this order" claim is cleared. Everything after that is vanilla (claim broadcast, holder broadcast,
@@ -81,13 +84,18 @@ namespace AutoCourierLoad;
 ///    Courier.RequestDispatch(), the exact master-side effect of pressing E.
 ///  - A postfix on Courier.MoveBagToDropArea remembers the bags the courier himself put in the drop area (a
 ///    rejected hand-over, or a released parcel); they are not loaded again until someone moves them, so the
-///    courier can't loop on a bag he just gave back.
+///    courier can't loop on a bag he just gave back. A postfix on Courier.GiveBackLastParcel (a player took the
+///    last bag back out of the trunk, OnlineOrderInteraction.TryTakeBackFromCourier) remembers that bag with the
+///    spot; it is not loaded again until it has been farther than ScanRadius from that spot (carried away), however
+///    long it is held or put down near the scooter.
 ///
 /// Multiplayer: the courier AI, the claim table and RequestDispatch are master-side, so this runs only on the
 /// host (PhotonNetwork.IsConnectedAndSlave -> nothing). It makes no network calls of its own: it invokes the
 /// game's methods, which broadcast. An unmodded guest therefore stays consistent. Bags a player holds (host
-/// or guest) are IsCarried and never touched; a guest's bag counts as held from the moment the host handled
-/// the guest's take request (Take_RPC sets the holder / parent).
+/// or guest) are IsHeld and never touched; a guest's bag counts as held from the moment the host handled
+/// the guest's take request (Take_RPC sets the holder / parent). Residual race (as in vanilla between two
+/// players): a guest's take is applied locally and only reaches the host about one round trip later, so a bag
+/// grabbed at the very moment the courier loads it can end up in both places.
 ///
 /// Not verified in-game (no way to run the game here); see CLAUDE.md for the test steps.
 /// </summary>
@@ -96,7 +104,7 @@ internal static class AutoLoad
     private const float TickInterval = 0.4f;
     private const float SettleSeconds = 0.75f;
     private const float DepartDelay = 1.2f;          // stowing is instant (no tween); this is just a short pause
-    private const float MinScanWindow = 1.5f;
+    private const float ScanWindow = 1.5f;  // how long a visit that has loaded nothing keeps looking after the courier is ready
     private const float IdleWatchInterval = 1.0f;   // how often an idle courier without a visit is checked for bags near him
     private const float GiveUpSeconds = 180f;       // a visit that never becomes ready (courier dismissed, ...)
     private const float DefaultDayEnd = 46800f;
@@ -118,23 +126,28 @@ internal static class AutoLoad
     private static readonly List<Visit> s_visits = new();
     /// <summary>Bags the courier threw into the drop area: instance id -> where. Ignored until moved.</summary>
     private static readonly Dictionary<int, Vector3> s_ignored = new();
+    /// <summary>Bags a player took back out of a trunk: instance id -> that courier's park spot. Ignored until the bag has been farther than ScanRadius from it.</summary>
+    private static readonly Dictionary<int, Vector3> s_takenBack = new();
     private static float s_next;
     private static float s_nextIdleWatch;
-    private static bool s_loggedError;
+    private static readonly Dictionary<string, float> s_errorLoggedAt = new();
 
     internal static void Reset()
     {
         s_visits.Clear();
         s_ignored.Clear();
+        s_takenBack.Clear();
         s_nextIdleWatch = 0f;
-        s_loggedError = false;
+        s_errorLoggedAt.Clear();
     }
 
     internal static void LogError(string where, Exception e)
     {
-        if (s_loggedError) return;
-        s_loggedError = true;
-        Plugin.Logger.LogError($"[AutoCourier] {where} failed (further errors suppressed): {e}");
+        // One line per source and minute, so a repeating failure doesn't flood the log but a different one still shows.
+        float now = Time.realtimeSinceStartup;
+        if (s_errorLoggedAt.TryGetValue(where, out var last) && now - last < 60f) return;
+        s_errorLoggedAt[where] = now;
+        Plugin.Logger.LogError($"[AutoCourier] {where} failed (at most one line per minute for this source): {e}");
     }
 
     private static void Log(string msg)
@@ -173,6 +186,44 @@ internal static class AutoLoad
         s_ignored[bag.GetInstanceID()] = bag.transform.position;
     }
 
+    /// <summary>Courier.GiveBackLastParcel postfix: a player took this bag back out of the trunk; don't reload it while it stays near the spot.</summary>
+    internal static void OnParcelGivenBack(CourierNpc courier, OrderPaperBag bag)
+    {
+        if (!Plugin.Active || bag == null || courier == null) return;
+        if (s_takenBack.Count > 200) s_takenBack.Clear();
+        s_takenBack[bag.GetInstanceID()] = ParkPoint(courier);
+        Log($"a player took the bag back out of courier #{courier.EmployeeId}'s trunk; not loading it again until it has been carried away");
+    }
+
+    /// <summary>Forgets a taken-back bag once it has been farther than ScanRadius from the spot it was taken from (or is gone).</summary>
+    private static void ReleaseTakenBack()
+    {
+        if (s_takenBack.Count == 0) return;
+        var bags = OnlineOrderPaperBagContainer.m_PaperBags;
+        var alive = new HashSet<int>();
+        float radius = Plugin.ScanRadius.Value;
+        for (int i = 0; bags != null && i < bags.Count; i++)
+        {
+            var bag = bags[i];
+            if (bag == null) continue;
+            int id = bag.GetInstanceID();
+            if (!s_takenBack.TryGetValue(id, out var park)) continue;
+            alive.Add(id);
+            if (Vector3.Distance(bag.transform.position, park) > radius) s_takenBack.Remove(id);
+        }
+        var gone = new List<int>();
+        foreach (var k in s_takenBack.Keys)
+            if (!alive.Contains(k) && !HasBag(bags, k)) gone.Add(k);
+        foreach (var k in gone) s_takenBack.Remove(k);
+    }
+
+    private static bool HasBag(Il2CppSystem.Collections.Generic.List<OrderPaperBag> bags, int id)
+    {
+        for (int i = 0; bags != null && i < bags.Count; i++)
+            if (bags[i] != null && bags[i].GetInstanceID() == id) return true;
+        return false;
+    }
+
     // ---- per-frame work ---------------------------------------------------------------------------
 
     internal static void Tick()
@@ -181,7 +232,10 @@ internal static class AutoLoad
         float now = Time.time;
         if (now < s_next) return;
         s_next = now + TickInterval;
-        if (IsGuest) { s_visits.Clear(); return; }
+        if (IsGuest) { s_visits.Clear(); s_takenBack.Clear(); return; }
+
+        try { ReleaseTakenBack(); }
+        catch (Exception e) { LogError("taken-back bookkeeping", e); }
 
         if (now >= s_nextIdleWatch)
         {
@@ -255,7 +309,7 @@ internal static class AutoLoad
 
         // Even "0 = only when he arrives" lasts a moment, so that bags that were lying there before count as settled.
         // While he waits with something loaded, keep looking: the bag he is waiting for may arrive late.
-        bool scanning = v.Scans == 0 || v.Loaded > 0 || now - v.ReadyAt <= Math.Max(Plugin.KeepScanningSeconds, MinScanWindow);
+        bool scanning = v.Scans == 0 || v.Loaded > 0 || now - v.ReadyAt <= ScanWindow;
         if (scanning)
         {
             v.Scans++;
@@ -302,6 +356,34 @@ internal static class AutoLoad
         public float TimeLeft;
     }
 
+    /// <summary>
+    /// Whether a player holds the bag or it sits in a courier's hands or trunk. Not the game's
+    /// OnlineOrderPaperBagContainer.IsCarried: its offline branch compares PlayerObjectHolder.m_CurrentObject, which
+    /// OnlineOrderInteraction never clears when the bag leaves the hands (drop, throw, hand-over), so in a solo game
+    /// the last bag the player dropped would count as carried until he picked up something else. Here: a parent
+    /// transform (a held bag hangs under the player's object holder, a stowed one under the scooter), or online a
+    /// non-empty NetworkOrderPaperBag holder, or the local player's OnlineOrderInteraction currently having it
+    /// (m_CurrentOrderPaperBag is cleared by RemovePaperBag on drop and still covers placing mode, where the bag is
+    /// unparented).
+    /// </summary>
+    private static bool IsHeld(OrderPaperBag bag)
+    {
+        if (bag.transform.parent != null) return true;
+        if (PhotonNetwork.IsConnected)
+        {
+            var nb = bag.NetworkOrderPaperBag;
+            if (nb != null && nb.HasHolder) return true;
+        }
+        if (NoktaSingleton<PlayerManager>.HasInstance)
+        {
+            var lp = NoktaSingleton<PlayerManager>.Instance.LocalPlayer;
+            var ooi = lp != null ? lp.OnlineOrderInteraction : null;
+            var cur = ooi != null ? ooi.CurrentOrderPaperBag : null;
+            if (cur != null && cur.Pointer == bag.Pointer) return true;
+        }
+        return false;
+    }
+
     private static Vector3 ParkPoint(CourierNpc c)
     {
         var t = c.ParkPosition;
@@ -319,12 +401,13 @@ internal static class AutoLoad
         dist = 0f;
         order = null;
         int id = bag.GetInstanceID();
-        if (OnlineOrderPaperBagContainer.IsCarried(bag)) { s_ignored.Remove(id); return false; }
+        if (IsHeld(bag)) { s_ignored.Remove(id); return false; }
         if (s_ignored.TryGetValue(id, out var where))
         {
             if ((bag.transform.position - where).sqrMagnitude < 0.25f) return false; // still where the courier left it
             s_ignored.Remove(id);
         }
+        if (s_takenBack.ContainsKey(id)) return false; // a player took it out of the trunk and is still near the spot with it
         dist = Vector3.Distance(bag.transform.position, park);
         if (dist > radius) return false;
         return CourierNpc.TryResolveHandOverOrder(bag, out order) && order != null;
@@ -406,7 +489,7 @@ internal static class AutoLoad
             // ReceiveBag throws the bag into the drop area when any of these fail: check them first.
             if (!IsIdle(c) || c.IsDispatched || !c.IsAvailableForHandOver) break;
             if (cand.Bag == null) continue;
-            if (OnlineOrderPaperBagContainer.IsCarried(cand.Bag)) continue; // picked up since the scan
+            if (IsHeld(cand.Bag)) continue; // picked up since the scan
             if (Load(c, cand, cap))
             {
                 v.Loaded++;
@@ -544,5 +627,15 @@ internal static class AutoCourier_MoveBagToDropArea_Patch
     {
         try { AutoLoad.OnBagReturnedToArea(bag); }
         catch (Exception e) { AutoLoad.LogError("MoveBagToDropArea postfix", e); }
+    }
+}
+
+[HarmonyPatch(typeof(CourierNpc), nameof(CourierNpc.GiveBackLastParcel))]
+internal static class AutoCourier_GiveBackLastParcel_Patch
+{
+    private static void Postfix(CourierNpc __instance, OrderPaperBag __result)
+    {
+        try { AutoLoad.OnParcelGivenBack(__instance, __result); }
+        catch (Exception e) { AutoLoad.LogError("GiveBackLastParcel postfix", e); }
     }
 }
