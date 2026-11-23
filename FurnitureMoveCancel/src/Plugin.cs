@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.furnituremovecancel";
     public const string Name = "Furniture Move Cancel";
-    public const string Version = "1.0.4";
+    public const string Version = "1.0.5";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

@@ -253,8 +253,10 @@ When restockers are carrying two boxes and they drop the bottom one, the top one
 
 ## Improvement #6: Allow Furniture to Be Returned to Its Original Position
 
-**Status:** done 2026-11-15  
-**Code:** `FurnitureMoveCancel/`
+**Status:** reviewed  
+**Code:** `FurnitureMoveCancel/`  
+**Review:** 2026-11-23, 1 round, hash `6cf40f900376`  
+**Waiting on:** In-game re-test of 1.0.5 (Esc hint now shows while moving a category sign).
 
 When rearranging furniture (shelves, fridges, freezers, racks, etc.), allow players to press `Esc` to return the furniture to its original position before it was picked up.
 

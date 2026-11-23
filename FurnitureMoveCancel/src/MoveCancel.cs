@@ -75,7 +75,8 @@ internal static class MoveCancel
     private static InputAction _backAction;
     private static IntPtr _backActionOwner;
 
-    private const InputActionID HintId = InputActionID.CANCEL;
+    // Own slot: CANCEL (4) is taken by CategorySignInteraction.MovingHints ("_boxUp"); CANCEL_HOLD (27) is used only by OnlineOrderInteraction.
+    private const InputActionID HintId = InputActionID.CANCEL_HOLD;
 
     /// <summary>Online, other clients need this long to receive the streamed origin (see header).</summary>
     internal const float MinOnlineDelay = 0.3f;
