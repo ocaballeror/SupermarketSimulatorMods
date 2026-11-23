@@ -435,10 +435,10 @@ the wrong box type, so make sure to spawn the right one.
 
 ## Improvement #15: Employee clothes
 
-**Status:** in-progress  
+**Status:** reviewed  
 **Code:** `EmployeeClothes/`  
-**Review:** 2026-11-18, round 3 on v1.0.6 (fixes applied, not re-reviewed), hash `90fdf44ec44e`  
-**Waiting on:** In-game test of v1.0.6 (guard torso and preview, still preview, plural labels; steps in the mod's `CLAUDE.md`).
+**Review:** 2026-11-23, 2 rounds, hash `55ddc4d35ffd`
+**Waiting on:** In-game test of v1.0.10 (colors saved with the game save: quit without saving, new game on a used slot, load; steps in the mod's `CLAUDE.md`, "Review notes").
 
 Create a new entry in the customization menu from the game's computer that allows the
 player to pick the color scheme of the clothes of the employees. It costs $500 to access
