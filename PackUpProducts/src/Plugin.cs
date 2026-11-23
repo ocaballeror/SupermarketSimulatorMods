@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.packupproducts";
     public const string Name = "Pack Up Products";
-    public const string Version = "0.1.4";
+    public const string Version = "0.1.5";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -40,6 +40,7 @@ public class Plugin : BasePlugin
     public override bool Unload()
     {
         Unloaded = true;
+        Network.Unpublish();
         PackUp.Reset();
         return true;
     }

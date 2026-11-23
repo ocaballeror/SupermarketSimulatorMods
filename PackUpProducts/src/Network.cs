@@ -27,6 +27,7 @@ internal static class Network
     private const float GiveUpSeconds = 30f;
     private const int MaxIds = 16;
 
+    private static bool _wasInRoom;
     private static float _nextPresence;
     private static float _nextServe;
 
@@ -56,6 +57,34 @@ internal static class Network
             try { return InRoom && !PhotonNetwork.IsMasterClient; }
             catch (Exception) { return false; }
         }
+    }
+
+    /// <summary>Plugin unload: stop advertising the mod, so guests stop packing (nobody would save their boxes).</summary>
+    internal static void Unpublish()
+    {
+        try
+        {
+            var me = PhotonNetwork.LocalPlayer;
+            if (me == null || string.IsNullOrEmpty(ReadString(me, VerKey))) return;
+            var ht = new Hashtable();
+            ht[(Il2CppSystem.Object)VerKey] = (Il2CppSystem.Object)"";
+            me.SetCustomProperties(ht);
+        }
+        catch (Exception) { }
+    }
+
+    /// <summary>Forget the save requests of a finished session: PUN keeps LocalPlayer.CustomProperties across rooms.</summary>
+    private static void ClearRegistration()
+    {
+        try
+        {
+            var me = PhotonNetwork.LocalPlayer;
+            if (me == null || string.IsNullOrEmpty(ReadString(me, RegKey))) return;
+            var ht = new Hashtable();
+            ht[(Il2CppSystem.Object)RegKey] = (Il2CppSystem.Object)"";
+            me.SetCustomProperties(ht);
+        }
+        catch (Exception) { }
     }
 
     internal static void Reset()
@@ -90,7 +119,16 @@ internal static class Network
     /// <summary>Called every frame: publishes the version (once per 2 s check) and serves guests when we are the host.</summary>
     internal static void Tick()
     {
-        if (!InRoom)
+        bool inRoom = InRoom;
+        if (inRoom != _wasInRoom)
+        {
+            // Entering or leaving a room: tokens from the previous session must not reach the next host, where
+            // the same view ids point at unrelated objects.
+            _wasInRoom = inRoom;
+            Recent.Clear();
+            ClearRegistration();
+        }
+        if (!inRoom)
         {
             Done.Clear();
             FirstSeen.Clear();
@@ -106,7 +144,8 @@ internal static class Network
         if (now >= _nextServe)
         {
             _nextServe = now + 0.25f;
-            if (PhotonNetwork.IsMasterClient && Plugin.Enabled.Value) Serve(now);
+            // Not gated on Enabled: saving the boxes guests already made is a duty, only new packs need the switch.
+            if (PhotonNetwork.IsMasterClient) Serve(now);
         }
     }
 
@@ -120,7 +159,7 @@ internal static class Network
         var ht = new Hashtable();
         ht[(Il2CppSystem.Object)VerKey] = (Il2CppSystem.Object)want;
         me.SetCustomProperties(ht);
-        PackUp.Log($"Published mod presence \"{want}\" (this machine is {(PhotonNetwork.IsMasterClient ? "the host" : "a guest")})");
+        PackUp.Vlog($"Published mod presence \"{want}\" (this machine is {(PhotonNetwork.IsMasterClient ? "the host" : "a guest")})");
     }
 
     /// <summary>Guest: tell the host to save the box with this PhotonView id.</summary>
@@ -180,7 +219,7 @@ internal static class Network
             var nb = pv.GetComponent<NetworkBox>();
             var box = nb != null ? nb.Box : null;
             if (box == null) { why = "the view isn't a box"; return false; }
-            if (box.Racked) { PackUp.Log($"Box of {who} (view {viewId}) is racked now; not adding it"); return true; }
+            if (box.Racked) { PackUp.Vlog($"Box of {who} (view {viewId}) is racked now; not adding it"); return true; }
             var data = box.Data;
             if (data == null) { why = "the box has no data yet"; return false; }
             // NetworkBox.OnPhotonInstantiate builds the instantiation data into NetworkBox.m_BoxData and, on the
@@ -192,21 +231,21 @@ internal static class Network
             if (announced != null && announced.ProductID > 0 && data.ProductID != announced.ProductID)
             {
                 box.Setup(announced.ProductID, false);
-                // Setup always switches the box icon on; an open box shows none (Box.OpenBox switches it off),
-                // and the guest's OpenBox_RPC may have reached us before this first Serve.
+                // Setup(newBox: false) doesn't touch the icon, but the copy may be open already (the guest's
+                // OpenBox_RPC can reach us before this first Serve) and an open box shows none; make sure.
                 if (data.IsOpen && box.m_IconUI != null) box.m_IconUI.SetActive(false);
-                PackUp.Log($"Set up the host's copy of the box (view {viewId}) for product {announced.ProductID}");
+                PackUp.Vlog($"Set up the host's copy of the box (view {viewId}) for product {announced.ProductID}");
             }
             if (data.ProductID <= 0) { why = "the host's copy of the box has no product yet"; return false; }
             var inv = NoktaSingleton<InventoryManager>.Instance;
             if (inv == null) { why = "no InventoryManager"; return false; }
             if (PackUp.InInventory(inv, data))
             {
-                PackUp.Log($"Box of {who} (view {viewId}) was already in the saved inventory");
+                PackUp.Vlog($"Box of {who} (view {viewId}) was already in the saved inventory");
                 return true;
             }
             inv.AddBox(data);
-            PackUp.Log($"Saving the box {who} packed: view {viewId}, product {data.ProductID}, count {data.ProductCount} (added to the inventory)");
+            PackUp.Vlog($"Saving the box {who} packed: view {viewId}, product {data.ProductID}, count {data.ProductCount} (added to the inventory)");
             return true;
         }
         catch (Exception e)

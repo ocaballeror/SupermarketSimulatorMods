@@ -12,7 +12,7 @@
  * Mechanism (all verified in the native dumps, see CLAUDE.md for the details):
  *  1. A MonoBehaviour polls the Take action of the local player (WasPressedThisFrame). Nothing is patched.
  *  2. Guards: hands really empty (no active Interaction, nothing under the hold point, not in placing mode,
- *     not paused, cursor locked), then the same raycast as BoxInteraction; the hit must be a DisplaySlot that
+ *     not paused, cursor locked, no Box parked beside the hold point), then the same raycast as BoxInteraction; the hit must be a DisplaySlot that
  *     holds products (ice cream cone/flavour slots are left alone).
  *  3. Right box: the game accepts a product only in a box whose Size equals ProductSO.GridLayoutInBox.boxSize
  *     (BoxInteraction.CheckTakeProductFromSlot) and BoxGenerator.GetBoxBySize picks the prefab for that size,
@@ -23,6 +23,7 @@
  *     Persistence: loose boxes are saved from InventoryManager.Boxes, which vanilla fills with
  *     InventoryManager.AddBox(box.Data) in Box.Setup(newBox: true). Setup(newBox: true) also resets the count
  *     to a full box (ProductAmountOnPurchase), so we call AddBox ourselves instead.
+ *     Online the box gets its UID from IDManager.GenerateBoxUniqueID (like delivery boxes), not the view id.
  *  5. Into the hands: PlayerInteraction.SetCurrentInteractable(box) + Interact(false, false), the same
  *     simulated click the wholesale purchase uses on a freshly spawned box (PurchasableProduct.Purchase). It
  *     runs Box.InstantInteract: offline Box.PickUp(); host NetworkBox.AvailabilityCallback_RPC(own user id)
@@ -97,7 +98,7 @@ internal static class PackUp
 
     internal static void Warn(string msg) => Plugin.Logger.LogWarning("[PackUp] " + msg);
 
-    private static void Vlog(string msg)
+    internal static void Vlog(string msg)
     {
         if (Plugin.VerboseLogging.Value) Plugin.Logger.LogInfo("[PackUp] " + msg);
     }
@@ -195,6 +196,17 @@ internal static class PackUp
         if (bi.Enable || bi.IsWaitingAvailability) return "a box is already in your hands";
         var hold = holder.m_ObjectHolder;
         if (hold != null && hold.childCount > 0) return $"hands are not empty ({hold.GetChild(0).name})";
+        // A box stashed beside the hold point (another carry mod parks the first box there) is still carried.
+        var par = hold != null ? hold.parent : null;
+        if (par != null)
+        {
+            for (int i = 0; i < par.childCount; i++)
+            {
+                var ch = par.GetChild(i);
+                if (ch != null && ch.gameObject.activeInHierarchy && ch.GetComponent<Box>() != null)
+                    return $"a box is stashed on you ({ch.name})";
+            }
+        }
         var active = pi.GetActiveInteracts();
         if (active != null && active.Count > 0) return $"another interaction is active ({active[0].GetIl2CppType().Name})";
         return null;
@@ -260,22 +272,32 @@ internal static class PackUp
         float yaw = cam != null ? cam.transform.eulerAngles.y : 0f;
         var rot = Quaternion.Euler(0f, yaw, 0f);
 
-        Log($"Packing {so.ProductName} (product {pid}, {count} on the slot) into a {size} box " +
+        Vlog($"Packing {so.ProductName} (product {pid}, {count} on the slot) into a {size} box " +
             $"[{(guest ? "guest" : PhotonNetwork.IsConnected ? "host" : "offline")}]");
 
         Box box = guest ? SpawnAsGuest(size, pid, pos, rot, out int viewId) : SpawnAsHost(size, pid, pos, rot, out viewId);
         if (box == null) return;
 
         // The simulated pickup click (what a wholesale purchase does on its new box).
-        var pi = p.PlayerInteraction;
-        var target = box.TryCast<IInteractable>() ?? new IInteractable(box.Pointer);
-        pi.SetCurrentInteractable(target);
-        pi.Interact(false, false);
+        try
+        {
+            var pi = p.PlayerInteraction;
+            var target = box.TryCast<IInteractable>() ?? new IInteractable(box.Pointer);
+            pi.SetCurrentInteractable(target);
+            pi.Interact(false, false);
+        }
+        catch (Exception e)
+        {
+            // A guest's box is kinematic until held; don't leave it frozen at the hold point.
+            Warn($"Picking up the new box failed: {e}");
+            Release(box);
+            return;
+        }
 
         if (guest)
         {
             _pending = new Pending { Box = box, Slot = slot, Started = Time.unscaledTime, ViewId = viewId };
-            Log($"Asked the host for the new box (view {viewId}); waiting for the pickup answer");
+            Vlog($"Asked the host for the new box (view {viewId}); waiting for the pickup answer");
             return;
         }
         if (!Same(bi.m_Box, box))
@@ -296,6 +318,14 @@ internal static class PackUp
         try
         {
             var data = new BoxData(size, pos, rot, true, pid, 0);
+            // Online the master keeps a UID > 0 from the data; otherwise it would become the PhotonView id, which
+            // PUN reuses across sessions and so can collide with a saved box's UID. Take one from the same counter
+            // the delivery boxes use. Offline SpawnBox generates it itself.
+            if (PhotonNetwork.IsConnected && NoktaSingleton<IDManager>.HasInstance)
+            {
+                int uid = NoktaSingleton<IDManager>.Instance.GenerateBoxUniqueID();
+                if (uid > 0) data.m_UID = uid;
+            }
             var box = NoktaSingleton<BoxGenerator>.Instance.SpawnBox(pos, rot, data);
             if (box == null) { Warn("BoxGenerator.SpawnBox returned no box"); return null; }
             var d = box.Data;
@@ -304,7 +334,7 @@ internal static class PackUp
             if (nb != null) viewId = nb.ViewId;
             var inv = NoktaSingleton<InventoryManager>.Instance;
             if (inv != null && !InInventory(inv, d)) inv.AddBox(d);
-            Log($"Spawned the box: uid {d.UID}, view {(nb != null ? viewId.ToString() : "local")}, size {d.Size}, open {d.IsOpen}, " +
+            Vlog($"Spawned the box: uid {d.UID}, view {(nb != null ? viewId.ToString() : "local")}, size {d.Size}, open {d.IsOpen}, " +
                 $"product {d.ProductID}, count {d.ProductCount}; added to the saved inventory");
             return box;
         }
@@ -336,7 +366,7 @@ internal static class PackUp
             var rb = box.m_RigidBody;
             if (rb != null) rb.isKinematic = true;
             Network.SendRegistration(viewId);
-            Log($"Spawned the box as a guest: view {viewId}, size {size}, product {pid}, count {data.ProductCount}; host asked to save it");
+            Vlog($"Spawned the box as a guest: view {viewId}, size {size}, product {pid}, count {data.ProductCount}; host asked to save it");
             return box;
         }
         catch (Exception e)
@@ -379,7 +409,7 @@ internal static class PackUp
         bi.SetCurrentDisplaySlot(slot);
         bi.TryTakeProductFromSlot();
         // Host and offline apply the take at once; a guest's answer comes back from the host a moment later.
-        Log($"Took a product from the slot: slot {before} -> {slot.ProductCount}, box {box.ProductCount} " +
+        Vlog($"Took a product from the slot: slot {before} -> {slot.ProductCount}, box {box.ProductCount} " +
             $"(product {(box.Product != null ? box.Product.ProductName : "?")}, open {box.IsOpen})");
     }
 
@@ -409,13 +439,20 @@ internal static class PackUp
                 pd.Opened = true;
                 pd.OpenedAt = Time.unscaledTime;
                 if (!pd.Box.IsOpen) pd.Box.OpenBox();
-                Log("Opened the new box (vanilla open, sent to everyone)");
+                Vlog("Opened the new box (vanilla open, sent to everyone)");
                 return;
             }
             if (!pd.Box.IsOpen && Time.unscaledTime - pd.OpenedAt < 1f) return;
             bi.m_IsBoxOpen = true;   // BoxInteraction's own copy of "open" (normally set after an open click)
             bi.UpdateOpeningBoxHint(); // swaps the "open" key hint for "close", as the vanilla open click does
             _pending = null;
+            // The click was up to a round trip ago: only take if the player still aims at that slot.
+            var aimed = FindSlot(bi);
+            if (!Same(aimed, pd.Slot))
+            {
+                Vlog("The player no longer aims at the shelf slot; leaving the new box empty and open");
+                return;
+            }
             TakeInto(p, pd.Box, pd.Slot);
             return;
         }
