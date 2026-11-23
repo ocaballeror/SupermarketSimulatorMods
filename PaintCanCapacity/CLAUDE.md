@@ -4,6 +4,10 @@ Player-facing info is in [README.md](README.md). This file holds implementation 
 
 ## Status
 
+v1.0.5: review fixes. `CapacityMultiplier` now uses the clamp-only `ClampedFloat` (text field in Mod Settings Tool instead of a slider; same 1..10 range). `ApplyToAll` / `RestoreAll` catch exceptions per object, and `RestoreAll` only forgets a can type's record once it was restored, instead of clearing all records.
+
+v1.0.4: GUID renamed from `oscar.paintcancapacity` to `flamboyanthopper.paintcancapacity`. This also changes the BepInEx config file name, so an old `oscar.paintcancapacity.cfg` is ignored and the multiplier resets to the default 2.
+
 v1.0.3: settings reduced (user's request): `Enabled`, `CapacityMultiplier` (1..10, unchanged) and `VerboseLogging` (default now false). Nothing else changed.
 
 v1.0.2: done, confirmed in-game (1.0.0). 1.0.1 and 1.0.2 are retrospective-review passes: docs corrected, hot-toggle reset now includes inactive (pooled) cans; host behaviour unchanged.

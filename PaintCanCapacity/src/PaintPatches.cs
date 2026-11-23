@@ -117,16 +117,24 @@ internal static class PaintPatches
     internal static void ApplyToAll()
     {
         if (!GameReady()) return;
+        // One try/catch per object, so a bad object doesn't skip the rest.
         try
         {
             foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppType.Of<BucketSo>()))
-                EnsureScaled(o.TryCast<BucketSo>());
+            {
+                try { EnsureScaled(o.TryCast<BucketSo>()); }
+                catch (Exception e) { Plugin.Logger.LogError($"[PaintCan] ApplyToAll (can type) failed: {e}"); }
+            }
             foreach (var o in UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<PaintBucket>(), true))
             {
-                var b = o.TryCast<PaintBucket>();
-                if (b == null) continue;
-                EnsureScaled(b, b.bucketData, b.paintCount);
-                if (b.gameObject.activeInHierarchy) RefreshFill(b);
+                try
+                {
+                    var b = o.TryCast<PaintBucket>();
+                    if (b == null) continue;
+                    EnsureScaled(b, b.bucketData, b.paintCount);
+                    if (b.gameObject.activeInHierarchy) RefreshFill(b);
+                }
+                catch (Exception e) { Plugin.Logger.LogError($"[PaintCan] ApplyToAll (can) failed: {e}"); }
             }
         }
         catch (Exception e) { Plugin.Logger.LogError($"[PaintCan] ApplyToAll failed: {e}"); }
@@ -136,29 +144,40 @@ internal static class PaintPatches
     internal static void RestoreAll()
     {
         if (!GameReady()) { SoAmounts.Clear(); return; }
+        // One try/catch per object. A can type's record is only dropped once it was restored (or needs no
+        // restoring), so a failed one keeps its record and can still be restored by a later call.
         try
         {
             foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppType.Of<BucketSo>()))
             {
-                var so = o.TryCast<BucketSo>();
-                if (so?.bucketData == null) continue;
-                if (SoAmounts.TryGetValue(so.Pointer, out var s) && so.bucketData.paintAmount == s.Applied)
-                    so.bucketData.paintAmount = s.Original;
+                try
+                {
+                    var so = o.TryCast<BucketSo>();
+                    if (so?.bucketData == null) continue;
+                    if (!SoAmounts.TryGetValue(so.Pointer, out var s)) continue;
+                    if (so.bucketData.paintAmount == s.Applied)
+                        so.bucketData.paintAmount = s.Original;
+                    SoAmounts.Remove(so.Pointer);
+                }
+                catch (Exception e) { Plugin.Logger.LogError($"[PaintCan] RestoreAll (can type) failed: {e}"); }
             }
             foreach (var o in UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<PaintBucket>(), true))
             {
-                var b = o.TryCast<PaintBucket>();
-                if (b == null) continue;
-                int vanilla = VanillaMaxOf(b, b.bucketData);
-                if (vanilla > 0 && b.m_MaxPaintCount != vanilla)
+                try
                 {
-                    b.m_MaxPaintCount = vanilla;
-                    if (b.gameObject.activeInHierarchy) RefreshFill(b);
+                    var b = o.TryCast<PaintBucket>();
+                    if (b == null) continue;
+                    int vanilla = VanillaMaxOf(b, b.bucketData);
+                    if (vanilla > 0 && b.m_MaxPaintCount != vanilla)
+                    {
+                        b.m_MaxPaintCount = vanilla;
+                        if (b.gameObject.activeInHierarchy) RefreshFill(b);
+                    }
                 }
+                catch (Exception e) { Plugin.Logger.LogError($"[PaintCan] RestoreAll (can) failed: {e}"); }
             }
         }
         catch (Exception e) { Plugin.Logger.LogError($"[PaintCan] RestoreAll failed: {e}"); }
-        SoAmounts.Clear();
     }
 
     private static void RefreshFill(PaintBucket b)

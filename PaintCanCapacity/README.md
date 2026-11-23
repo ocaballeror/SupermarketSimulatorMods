@@ -11,7 +11,7 @@ The liquid level shown inside the can is scaled too: a new can shows the same fi
 | Section | Setting | Default | What it does |
 |---|---|---|---|
 | General | `Enabled` | `true` | Enable the mod. Turning it off restores normal paint cans right away (including cans waiting in the game's reuse pool); no restart needed. |
-| Paint | `CapacityMultiplier` | `2` | How many times longer a can lasts (1 to 10). Decimals such as 1.5 work. |
+| Paint | `CapacityMultiplier` | `2` | How many times longer a can lasts (1 to 10). Type a number; decimals such as 1.5 work, and values outside the range are clamped. |
 | Diagnostics | `VerboseLogging` | `false` | Enable verbose logging for debugging purposes (`[PaintCan]` lines in `BepInEx/LogOutput.log`). |
 
 ## Who needs it (multiplayer)

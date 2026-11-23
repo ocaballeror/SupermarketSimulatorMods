@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.paintcancapacity";
     public const string Name = "Paint Can Capacity";
-    public const string Version = "1.0.4";
+    public const string Version = "1.0.5";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -37,7 +37,8 @@ public class Plugin : BasePlugin
             new ConfigDescription(
                 "How many times longer a paint can lasts. 2 = twice as many walls per can. " +
                 "Applies to cans bought after the change; cans you already own keep the paint they have.",
-                new AcceptableValueRange<float>(1f, 10f)));
+                // ClampedFloat instead of AcceptableValueRange: config managers draw a text field, not a slider.
+                new ClampedFloat(1f, 10f)));
         VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");
 

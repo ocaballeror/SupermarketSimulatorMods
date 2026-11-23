@@ -161,8 +161,10 @@ Auto pricing should also work for newly unlocked products. It should be applied 
 
 ## Improvement #2: Make Paint Cans Last Twice as Long
 
-**Status:** done 2026-11-14  
-**Code:** `PaintCanCapacity/`
+**Status:** reviewed  
+**Code:** `PaintCanCapacity/`  
+**Review:** 2026-11-23, 1 round, hash `1ad884bbf536`  
+**Waiting on:** In-game re-test of 1.0.5 (typed multiplier field, per-object restore).
 
 Make paint cans last twice as long as they currently do.
 
