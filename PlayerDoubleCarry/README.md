@@ -14,7 +14,7 @@ Carry two boxes at once.
 
 Only loose, closed boxes can be picked up as the second box, not boxes straight from a rack. A third box can't be added.
 
-While you hold a single box, left-clicking **while looking at another box** now picks that box up instead of opening the one in your hands. To open your box, look away from other boxes (for example at the shelf you are about to fill).
+While you hold a single box, left-clicking **while looking at another box** now picks that box up instead of opening the one in your hands. To open your box, look away from other boxes (for example at the shelf you are about to fill). This also applies while your box is open: a click on another box stacks it and closes the open one.
 
 As a guest, the host has to approve the second box like any pickup. If the host doesn't answer in time, your box stays locked for a few seconds (as the game does while it waits), and if the answer still comes it is stacked normally.
 

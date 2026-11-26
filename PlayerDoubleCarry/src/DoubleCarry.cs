@@ -86,6 +86,7 @@ internal static class DoubleCarry
     private const float StackTweenTime = 0.25f;
     /// <summary>Pause between the top box leaving the hands and the bottom box coming up.</summary>
     private const float PromoteDelay = 0.25f;
+    private const float PromoteMaxWait = 3f;   // longest wait for the interaction/placing mode to end before forcing
     /// <summary>After a timed-out request, keep the box interaction frozen until this long after the request.</summary>
     private const float FreezeSeconds = 5f;
     /// <summary>A requested second box that hasn't arrived after this long is forgotten.</summary>
@@ -96,6 +97,7 @@ internal static class DoubleCarry
     private static Box s_requested;          // second box asked for (pickup in flight)
     private static Box s_requestedOver;      // box that was in the hands when it was asked for
     private static float s_requestedAt;
+    private static bool s_frozenOnce;        // the freeze ended by our own timeout for the current request
     private static bool s_frozen;            // we re-set IsWaitingAvailability after the game's timeout
     private static Box s_top;                // current box (the game's held box) while two are carried
     private static Box s_releasedTop;        // the top box after it was seen leaving (re-armed if held again)
@@ -131,6 +133,7 @@ internal static class DoubleCarry
         s_requested = null;
         s_requestedOver = null;
         s_frozen = false;
+        s_frozenOnce = false;
         s_top = null;
         s_releasedTop = null;
         s_bottom = null;
@@ -395,6 +398,7 @@ internal static class DoubleCarry
             if (bi != null && Same(bi.m_Box, s_requestedOver)) bi.IsWaitingAvailability = false;
         }
         s_frozen = false;
+        s_frozenOnce = false;
         s_requested = null;
         s_requestedOver = null;
     }
@@ -407,6 +411,7 @@ internal static class DoubleCarry
         s_requestedOver = held;
         s_requestedAt = Time.unscaledTime;
         s_frozen = false;
+        s_frozenOnce = false;
         Info($"Picking up a second box: {Describe(target)} on top of {Describe(held)} " +
              $"({(!Online ? "offline" : PhotonNetwork.IsMasterClient ? "host" : "guest, asking the host")})");
         // The game's own pickup: offline and on the host this holds the box right away (HoldObject postfix
@@ -590,11 +595,17 @@ internal static class DoubleCarry
             return;
         }
         if (now - s_topReleasedAt < PromoteDelay) return;
-        if (pi.m_InInteraction || holder.m_PlacingMode)
+        if ((pi.m_InInteraction || holder.m_PlacingMode) && now - s_topReleasedAt < PromoteDelay + PromoteMaxWait)
         {
             if (!s_waitLogged) Info("Waiting for the current interaction to end before taking the second box");
             s_waitLogged = true;
             return;
+        }
+        if (pi.m_InInteraction || holder.m_PlacingMode)
+        {
+            // Never soft-lock: Interact is blocked while promoting, so give up waiting and force it.
+            Info("The interaction never ended; forcing the second box into your hands");
+            try { if (holder.m_PlacingMode) holder.CancelPlacingMode(); } catch (Exception e) { Info($"CancelPlacingMode failed: {e.Message}"); }
         }
         TakeBottomBox(p);
     }
@@ -617,7 +628,20 @@ internal static class DoubleCarry
             ForgetRequest(p);
             return;
         }
-        if (!s_frozen) return;
+        if (!s_frozen)
+        {
+            // After the freeze: the game clears m_AvailabilityTimedOut only in EndAvailabilityWait, i.e. on a late reply.
+            // A late grant is handled by the HoldObject postfix before this runs; if we are still here, it was a refusal.
+            var nbi = bi.m_NetworkBoxInteraction;
+            if (s_frozenOnce && nbi != null && !nbi.m_AvailabilityTimedOut)
+            {
+                Info($"The host answered late without giving {Describe(s_requested)}; forgetting the request");
+                s_requested = null;
+                s_requestedOver = null;
+                s_frozenOnce = false;
+            }
+            return;
+        }
         if (!bi.IsWaitingAvailability)
         {
             // Cleared by a late reply that didn't hand us the box (a late refusal skips the cancel).
@@ -633,6 +657,7 @@ internal static class DoubleCarry
                  "(if the host still hands the box over in the next seconds, it is stacked)");
             bi.IsWaitingAvailability = false;
             s_frozen = false;
+            s_frozenOnce = true;
         }
     }
 
@@ -642,6 +667,7 @@ internal static class DoubleCarry
         try
         {
             var p = LocalPlayer();
+            ForgetRequest(p);
             var holder = p != null ? p.PlayerObjectHolder : null;
             var hold = holder != null ? holder.m_ObjectHolder : null;
             if (!ReferenceEquals(s_bottom, null) && s_bottom != null && hold != null)
