@@ -49,7 +49,7 @@ Send back the `[MoveCancel]` lines from `BepInEx/LogOutput.log` (turn on `Verbos
   3. If the spot is valid:
      - Online, it calls `PhotonTransformViewOptimized.BroadcastCurrentTransform()` on the piece's view. This is the game's reliable `SyncTransform` RPC: receivers call `SetPositionAndRotation` and reset their interpolation target. It only sends when this client owns the view, which the mover does while carrying. Reliable RPCs arrive in order, so this one is processed before the place RPC.
      - Then the mod invokes `PlayerInteraction.onUse(true)` in the same frame, as if the player clicked, so each furniture type is placed and synced by its own vanilla code.
-     - If the piece has no such view, a prefix on `FurniturePlacer.Update` holds it at the origin for at least 0.3 s first. (There used to be an optional extra hold, `ReturnDelaySeconds`; removed in 1.0.3.)
+     - If the piece has no such view on its own root (a view on a parent or child is not used; some furniture may carry `PhotonTransformViewClassic`, unconfirmed, so which path runs per type is to be read from the `Escape pressed` log line), a prefix on `FurniturePlacer.Update` holds it at the origin for at least 0.3 s first. (There used to be an optional extra hold, `ReturnDelaySeconds`; removed in 1.0.3.)
      - If the interaction refuses (its short cooldown right after pickup, or a rule of its own), the player can press again.
   4. If it's not valid, the piece goes back to the crosshair.
 - Furniture unpacked from a box (ice cream stands included) is skipped. Unboxing goes through `FurnitureBoxInteraction.CheckFurnitureType`, which starts placement synchronously. A pickup in the same frame as that call is treated as from a box.

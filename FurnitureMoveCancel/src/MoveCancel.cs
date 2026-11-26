@@ -250,11 +250,10 @@ internal static class MoveCancel
     {
         try
         {
-            var view = piece.GetComponentInParent<PhotonTransformViewOptimized>(true);
-            if (view == null) view = piece.GetComponentInChildren<PhotonTransformViewOptimized>(true);
+            var view = piece.GetComponent<PhotonTransformViewOptimized>();
             if (view == null) return false;
-            // The view sends its own transform: it must have moved with the piece.
-            if (!view.transform.IsChildOf(piece)) return false;
+            // The view sends its own transform: it must be the piece's own (not a parent's or child's).
+            if (view.transform.Pointer != piece.Pointer) return false;
             var pv = view.photonView;
             if (pv == null || !pv.IsMine) return false;
             view.BroadcastCurrentTransform();

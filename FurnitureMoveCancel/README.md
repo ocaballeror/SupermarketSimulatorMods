@@ -22,7 +22,7 @@ Picked up a shelf, fridge, freezer, rack, checkout or other furniture by mistake
 
 Only the player who wants to use the key. It works for the host or a guest, whoever has it installed. Putting the furniture down uses the game's normal placement, so other players don't need the mod.
 
-For most furniture types (racks, fridges and other generic furniture, checkouts, category signs, scales, ice cream stands, the computer), the game doesn't send a position when an item is placed. Other players place their copy wherever its streamed position has got to. So just before putting the item down, the mod sends its exact position to everyone with the game's own sync message, and the item is still placed immediately. If a piece can't do that, the mod holds it at its spot for 0.3 s instead, so the other players' copies catch up.
+For many furniture types (racks, checkouts, category signs, scales, ice cream stands, the computer and others), the game doesn't send a position when an item is placed. Other players place their copy wherever its streamed position has got to. So just before putting the item down, the mod sends its exact position to everyone with the game's own sync message, and the item is placed immediately where possible. If a piece can't do that, the mod holds it at its spot for 0.3 s instead, so the other players' copies catch up.
 
 ## Notes
 
