@@ -287,6 +287,9 @@ internal static class HoverInfo
         return tp;
     }
 
+    // Vector3 component by index without the interop indexer.
+    private static float Axis(Vector3 v, int i) => i == 0 ? v.x : i == 1 ? v.y : v.z;
+
     /// <summary>
     /// Does the ray pass through one of the (scaled) tag quads under this "Icon UI"? Each quad is tested in its own
     /// local space: the ray is intersected with the quad's plane (the thinnest axis of its mesh bounds), and the hit
@@ -308,21 +311,19 @@ internal static class HoverInfo
             var lb = tp.Local[i];
             var c = lb.center;
             var e = lb.extents;
-            float[] ea = { e.x, e.y, e.z }, la = { ld.x, ld.y, ld.z }, oa = { lo.x, lo.y, lo.z }, ca = { c.x, c.y, c.z };
             int k = 0;                                   // the thin axis = the quad's normal
-            if (ea[1] < ea[k]) k = 1;
-            if (ea[2] < ea[k]) k = 2;
-            float dk = la[k];
+            if (e.y < Axis(e, k)) k = 1;
+            if (e.z < Axis(e, k)) k = 2;
+            float dk = Axis(ld, k);
             if (Mathf.Abs(dk) < 1e-8f) continue;         // ray parallel to the quad
-            float t = (ca[k] - oa[k]) / dk;
+            float t = (Axis(c, k) - Axis(lo, k)) / dk;
             if (t < 0f) continue;                        // quad is behind the camera
             var hit = lo + ld * t;
-            float[] ha = { hit.x, hit.y, hit.z };
             bool inside = true;
             for (int a2 = 0; a2 < 3; a2++)
             {
                 if (a2 == k) continue;
-                if (Mathf.Abs(ha[a2] - ca[a2]) > ea[a2] * 1.1f + 0.01f) { inside = false; break; }
+                if (Mathf.Abs(Axis(hit, a2) - Axis(c, a2)) > Axis(e, a2) * 1.1f + 0.01f) { inside = false; break; }
             }
             if (!inside) continue;
             var world = tr.TransformPoint(hit);

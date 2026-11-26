@@ -4,7 +4,7 @@ Improvement #11 (`TODO`). Bigger product tags on boxes (config multiplier, kept 
 style (icon, brand + name; on a box also quantity and box price) when the crosshair is on a box, shelf, rack or vending tag.
 
 ## Status
-- v0.3.9 (review round 1 of 0.3.8, approved): `HoverInfo.TagHit` copies the vector components into float arrays instead of using the interop `Vector3` indexer every frame; stale doc text fixed. No behaviour change.
+- v0.3.9 (review round 1 of 0.3.8, approved): `HoverInfo.TagHit` reads the vector components through a local helper (no allocation) instead of using the interop `Vector3` indexer every frame; stale doc text fixed. No behaviour change.
 
 - v0.3.8 (review round 2 of 0.3.7): the prune only runs again once the remembered tags exceed twice the live count found by the last prune (and 500), so a store with more than 500 live boxes no longer rescans every 120 s.
 - v0.3.7 (review round 1 of 0.3.6, approved with minor findings): diagnostic INFO lines (resize count per settings change, `hover panel created`, `OnGUI is drawing`) now go through `Plugin.Info` and only appear with `VerboseLogging`; `TagScaler.States` is pruned by `ResizeAll("prune")` from `ClearTagsBehaviour.Update` every 120 s once it holds more than 500 tags (previously only on settings changes); `Plugin.SetActive(false)` restores the tags even if `UnpatchSelf` throws; `HoverInfo.LastKind` is restored on a cache hit for label and price-tag targets (verbose log only); at an effective factor of 1 `TagScaler.Apply` assigns the captured base scale and position directly (exact, no float round trip). No other behaviour change.
