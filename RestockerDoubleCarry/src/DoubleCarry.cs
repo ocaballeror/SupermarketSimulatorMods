@@ -977,6 +977,7 @@ internal static class DoubleCarry
         var cur = Current(clerk);
         if (stash == null || cur == null) return;
 
+        TakeOwnership(stash);
         DropStash(clerk, stash, cur);
         if (!IsOnFloor(clerk, stash))
         {
@@ -991,6 +992,23 @@ internal static class DoubleCarry
         plan.FetchingFloor = false;
         LoggedReserved.Remove(stash.Pointer);   // log the reservation again for this set-down
         Info($"{Name(clerk)}: put box (product {ProductOf(stash)}) on the floor to unpack product {ProductOf(cur)}");
+    }
+
+    /// <summary>
+    /// A box a guest once picked up stays guest-owned (clerk pickups don't take the ownership back). While a
+    /// clerk holds it nobody else can, so the host takes it over before the set-down: otherwise the host
+    /// keeps the dropped box kinematic (floating) and MoveAside can't place it. Fails open.
+    /// </summary>
+    private static void TakeOwnership(Box box)
+    {
+        try
+        {
+            if (!(PhotonNetwork.IsConnected && PhotonNetwork.InRoom) || !PhotonNetwork.IsMasterClient) return;
+            var view = box.NetworkBox != null ? box.NetworkBox.m_PhotonTransformView : null;
+            if (view == null || view.photonView.IsMine) return;
+            view.photonView.TransferOwnership(PhotonNetwork.MasterClient);
+        }
+        catch (Exception e) { Plugin.Logger.LogWarning($"[DoubleCarry] taking over the box failed: {e.Message}"); }
     }
 
     /// <summary>
