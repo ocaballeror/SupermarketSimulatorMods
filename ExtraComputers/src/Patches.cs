@@ -110,7 +110,9 @@ internal static class PurchaseGatePatch
                 // Purchase reads FurnitureSO.FurniturePrefab for every furniture in the cart after the delivery has
                 // been created and throws on a null prefab (ISIL), and the box could never be opened anyway.
                 Plugin.Error("Purchase refused: the cart holds a computer, but the computer furniture couldn't be built " +
-                             "(see 'Building the computer furniture failed' earlier in this log). Remove it from the cart.");
+                             (ComputerFurniture._buildPending
+                                 ? "(the build was postponed while the store computer is in use; leave the computer and try again)."
+                                 : "(see 'Building the computer furniture failed' earlier in this log). Remove it from the cart."));
                 return false;
             }
             if (!Presence.Blocked(out var who)) return true;
@@ -187,7 +189,9 @@ internal static class OpenBoxGate
             {
                 // Opening would use up the box and spawn nothing, leaving the player in an empty placing mode.
                 Plugin.Error($"Computer box not opened ({side} side): the computer furniture couldn't be built " +
-                             "(see the 'Building the computer furniture failed' error earlier in this log).");
+                             (ComputerFurniture._buildPending
+                                 ? "(postponed while the store computer is in use; try again in a moment)."
+                                 : "(see the 'Building the computer furniture failed' error earlier in this log)."));
                 return true;
             }
             if (!Presence.Blocked(out var who)) return false;

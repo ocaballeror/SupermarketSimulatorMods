@@ -209,7 +209,7 @@ internal static class ComputerFurniture
         }
     }
 
-    private static bool _buildPending;
+    internal static bool _buildPending;
 
     /// <summary>Retries a build that <see cref="EnsureForLoadedScene"/> postponed, once the store computer is idle
     /// (called about once a second from Presence.Tick).</summary>
