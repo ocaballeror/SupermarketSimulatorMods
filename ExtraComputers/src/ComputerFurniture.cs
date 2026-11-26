@@ -218,7 +218,7 @@ internal static class ComputerFurniture
         if (!_buildPending) return;
         if (Template != null || Ids == null) { _buildPending = false; return; }
         var comp = FindRealComputer();
-        if (comp == null || comp.IsInPlacingMode || comp.OpenPC) return;
+        if (comp == null || comp.IsInPlacingMode || comp.OpenPC || ComputerSession.Active || ComputerSession.Lingering) return;
         _buildPending = false;
         EnsureTemplate();
         RefreshShopItem();
@@ -231,16 +231,7 @@ internal static class ComputerFurniture
     {
         if (Ids == null) return;
         EnsureSo();
-        // The template is a copy of the store computer as it is right now: not while it is being moved (placing
-        // hologram materials) or used. A later EnsureTemplate call (purchase, box, guest spawn) builds it instead.
-        var comp = FindRealComputer();
-        if (Template == null && comp != null && (comp.IsInPlacingMode || comp.OpenPC))
-        {
-            _buildPending = true; // Presence.Tick retries once the store computer is idle
-            Plugin.Debug("The store computer is in use or being moved; the computer prefab is built when it's idle");
-        }
-        else
-            EnsureTemplate();
+        EnsureTemplate(); // postpones itself (and retries from Presence.Tick) while the store computer is busy
         RefreshShopItem();
     }
 
@@ -291,6 +282,14 @@ internal static class ComputerFurniture
         var comp = FindRealComputer();
         ids ??= Ids;
         if (comp == null || ids == null) return false;
+        // The template is a copy of the store computer and MeasureFront reads the PC camera and screen where they
+        // are right now: not while it is being moved (hologram materials) or used (by anyone, incl. an extra computer).
+        if (comp.IsInPlacingMode || comp.OpenPC || ComputerSession.Active || ComputerSession.Lingering)
+        {
+            _buildPending = true; // Presence.Tick retries once it is idle
+            Plugin.Debug("The store computer is in use or being moved; the computer prefab is built when it's idle");
+            return false;
+        }
 
         _buildAttempts++;
         _buildStep = "start";

@@ -73,6 +73,9 @@ internal static class ComputerUiState
         _pendingKey = Unknown;
     }
 
+    /// <summary>The mod was switched on or off: the live screen may still show an extra computer's apps.</summary>
+    internal static void MarkLiveUnknown() => _liveKey = Unknown;
+
     /// <summary>A computer object (possibly a pooled one that is spawned again) starts without any saved state.</summary>
     internal static void Forget(int key)
     {

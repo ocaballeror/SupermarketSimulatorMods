@@ -344,6 +344,56 @@ internal static class SpawnFromSavePatch
     }
 }
 
+/// <summary>
+/// Keeps every placed computer at the end of <c>FurnitureManager.m_FurnituresDatas</c>. Without this mod the saved
+/// computer (id 917001) makes <c>LoadFurnitureDatas</c> throw and stop, losing everything saved after it; with the
+/// computers last, only they are lost. Runs after each placement (so it also covers the mod being removed later)
+/// and before loading (saves from older versions). The entries stay in the list, so they are saved again.
+/// </summary>
+internal static class ComputersLast
+{
+    internal static void Apply(FurnitureManager fm)
+    {
+        try
+        {
+            if (fm == null) return;
+            var list = fm.m_FurnituresDatas;
+            if (list == null) return;
+            int n = list.Count;
+            // Already in order? (no computer followed by another furniture)
+            bool seen = false, ordered = true;
+            for (int i = 0; i < n; i++)
+            {
+                var d = list[i];
+                bool pc = d != null && d.FurnitureID == ComputerFurniture.FurnitureId;
+                if (pc) seen = true; else if (seen) { ordered = false; break; }
+            }
+            if (ordered) return;
+            var pcs = new System.Collections.Generic.List<FurnitureData>();
+            for (int i = n - 1; i >= 0; i--)
+            {
+                var d = list[i];
+                if (d != null && d.FurnitureID == ComputerFurniture.FurnitureId) { pcs.Insert(0, d); list.RemoveAt(i); }
+            }
+            foreach (var d in pcs) list.Add(d);
+            Plugin.Debug($"Moved {pcs.Count} computer entries to the end of the furniture list");
+        }
+        catch (Exception e) { Plugin.Warn("Reordering the furniture list failed: " + e.Message); }
+    }
+}
+
+[HarmonyPatch(typeof(FurnitureManager), nameof(FurnitureManager.AddFurniture))]
+internal static class ComputersLastAddPatch
+{
+    private static void Postfix(FurnitureManager __instance) => ComputersLast.Apply(__instance);
+}
+
+[HarmonyPatch(typeof(FurnitureManager), nameof(FurnitureManager.LoadFurnitureDatas))]
+internal static class ComputersLastLoadPatch
+{
+    private static void Prefix(FurnitureManager __instance) => ComputersLast.Apply(__instance);
+}
+
 /// <summary>Other players' copies: make sure the prefab exists before Photon looks it up.</summary>
 [HarmonyPatch(typeof(DefaultPool), nameof(DefaultPool.Instantiate))]
 internal static class PhotonPoolPatch
