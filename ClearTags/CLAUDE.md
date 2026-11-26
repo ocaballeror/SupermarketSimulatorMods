@@ -4,6 +4,7 @@ Improvement #11 (`TODO`). Bigger product tags on boxes (config multiplier, kept 
 style (icon, brand + name; on a box also quantity and box price) when the crosshair is on a box, shelf, rack or vending tag.
 
 ## Status
+- v0.3.9 (review round 1 of 0.3.8, approved): `HoverInfo.TagHit` copies the vector components into float arrays instead of using the interop `Vector3` indexer every frame; stale doc text fixed. No behaviour change.
 
 - v0.3.8 (review round 2 of 0.3.7): the prune only runs again once the remembered tags exceed twice the live count found by the last prune (and 500), so a store with more than 500 live boxes no longer rescans every 120 s.
 - v0.3.7 (review round 1 of 0.3.6, approved with minor findings): diagnostic INFO lines (resize count per settings change, `hover panel created`, `OnGUI is drawing`) now go through `Plugin.Info` and only appear with `VerboseLogging`; `TagScaler.States` is pruned by `ResizeAll("prune")` from `ClearTagsBehaviour.Update` every 120 s once it holds more than 500 tags (previously only on settings changes); `Plugin.SetActive(false)` restores the tags even if `UnpatchSelf` throws; `HoverInfo.LastKind` is restored on a cache hit for label and price-tag targets (verbose log only); at an effective factor of 1 `TagScaler.Apply` assigns the captured base scale and position directly (exact, no float round trip). No other behaviour change.
@@ -32,11 +33,10 @@ style (icon, brand + name; on a box also quantity and box price) when the crossh
 - v0.2.0 (review round 2): `FurnitureBox` tags are scaled and have a hover text (see below); the tag hit test is now a ray vs
   quad-plane test (no depth slack).
 - v0.1.1 (review round 1): tag hit test per quad in local space; scale on all three axes; the full scan became a 30 s scan that
-  only runs while `VerboseLogging` is on (the hooks are what resize boxes; the scan is a diagnostic safety net, so once the test
-  confirms `sweep: N of M` never appears, set `VerboseLogging` to false by default); no game access from `Load`; tag renderers
+  only runs while `VerboseLogging` is on (the hooks are what resize boxes; the scan is a diagnostic safety net, (`VerboseLogging` is off by default since 0.3.4)); no game access from `Load`; tag renderers
   cached per box; separate error flags.
 - v0.1.0: written and builds. **Not tested in-game**; everything below marked "unverified" is untested.
-- Open questions for the first test: (1) is `OnGUI` called on the injected behaviour (look for
+- Open questions for the first test of 0.1.0 (historical, all answered since; VerboseLogging is off by default since 0.3.4): (1) is `OnGUI` called on the injected behaviour (look for
   `OnGUI is drawing the hover text (first time)`); (2) do the box and furniture-box tags look right at 2x (position, overlap,
   the furniture box's "Color Point"); (3) does the hover work near the tag's edge (the ray must first hit the box's own
   collider); (4) is the shelf Label's collider enabled and under the painted icon.
@@ -196,7 +196,7 @@ live in `RackSlotData`, which is what the rack tag reads).
 
 ## In-game test
 
-1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.3.8 loaded` and `Patches applied (5/5)`.
+1. Start the game with the mod; `LogOutput.log` has `Clear Tags 0.3.9 loaded` and `Patches applied (5/5)`.
 2. Load a save with boxes (storage room, racks). **Tag position:** a 15x15x15, an 8x8x8, a 20x10x7, a 30x20x20 and a 40x26x26 furniture box, loose, racked and in your hands: the
    tag lies completely on the lid (nothing hangs over an edge); on big boxes it is 2x, on the smallest (8x8x8, 20x10x7) about 1.7x. `[ClearTags] tag capped to x... (requested x2.0) ...`
    lines (once per lid size) show where it was reduced. A `[ClearTags] sweep: N of M ...` line (only while `VerboseLogging` is on) would mean a spawn path isn't hooked;
@@ -214,7 +214,7 @@ live in `RackSlotData`, which is what the rack tag reads).
 10. **New in 0.3.6:** put the crosshair on the **side, front and top (away from the tag)** of boxes standing in a storage rack, at several rack heights: the panel appears everywhere on the box (icon, name, `Quantity:`, `Box price:`), `[ClearTags] hover (racked box): ...` in the log. Also on boxes that were in the save and on boxes you rack during the session. A **loose** box (floor, table) still shows the panel only on its tag, and the box in your hands too. Left-click / E on a racked box and on its rack slot still picks it up / works as before; the vanilla key hints on a rack still show; the panel does not stay when you look past the box. On a guest (with or without the mod on the host) the same; if a racked box on the guest still only reacts on its tag, send the log line (that box's `m_Racked` may not be set there).
 11. Multiplayer (host with the mod, guest without, and the other way round): nothing different for the other player.
 
-Send back the `[ClearTags]` lines from `BepInEx/LogOutput.log` (turn on `VerboseLogging` in the cfg first; it's off by default) (the `hover panel created` line, `tag kept on its box face`, `hover (...)` lines, any warnings) and a screenshot of the panel
+Send back the `[ClearTags]` lines from `BepInEx/LogOutput.log` (turn on `VerboseLogging` in the cfg first; it's off by default) (the `hover panel created` line, `tag capped to x...`, `hover (...)` lines, any warnings) and a screenshot of the panel
 and of a big tag on a small box.
 
 ## Scope notes

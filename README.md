@@ -24,7 +24,7 @@ Each mod folder has its own `README.md` (what it does, its settings, who needs i
 | [Grid Mode Default](GridModeDefault) | Improvement #8 | Grid mode is on by default when placing furniture |
 | [Bulk Shelf Transfer](BulkShelfTransfer) | Improvement #9 | Shift+click moves a whole shelf slot into or out of a box, paper bag or crate |
 | [Player Double Carry](PlayerDoubleCarry) | Improvement #10 | Carry two boxes; neither can be opened until one is put down |
-| [Clear Tags](ClearTags) | Improvement #11 | Box tags are 2x bigger (configurable); a hover text on box, shelf and rack tags shows product, quantity and box price (local only) |
+| [Clear Tags](ClearTags) | Improvement #11 | Box tags are 2x bigger (configurable); a hover panel on box tags shows product, quantity and box price; on shelf, rack and vending tags the product (local only) |
 | [Auto Courier Load](AutoCourierLoad) | Improvement #12 | The returning courier picks up closed, name-tagged delivery bags near his parking space and leaves when his trunk covers every active order or a deadline is close (host only) |
 | [Product Highlight](ProductHighlight) | Improvement #13 | Holding a box outlines every shelf, fridge and freezer labeled for its product; holding an order bag outlines the stocked products the order still needs (local only) |
 | [Pack Up Products](PackUpProducts) | Improvement #14 | Right click a shelf product with empty hands to pack it into a new box of the right size (free; guests need the mod on the host too) |

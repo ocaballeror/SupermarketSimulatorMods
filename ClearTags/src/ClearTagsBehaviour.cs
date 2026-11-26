@@ -8,7 +8,7 @@ namespace ClearTags;
 /// <see cref="HoverPanel"/> (a uGUI panel in the game's style). Only when that panel can't be built does OnGUI draw the old
 /// IMGUI text (a dark box with the text under the crosshair). It also re-checks all boxes
 /// every 30 s as a diagnostic safety net for the tag scale (only while VerboseLogging is on; the Box hooks
-/// are what normally resize new boxes, a full scan is too heavy to run for nothing).
+/// are what normally resize new boxes, a full scan is too heavy to run for nothing). A separate silent prune scan (ResizeAll("prune"), regardless of VerboseLogging) runs at most every 120 s, only when the remembered tags exceed max(500, 2 x the live count of the last prune).
 /// </summary>
 public class ClearTagsBehaviour : MonoBehaviour
 {

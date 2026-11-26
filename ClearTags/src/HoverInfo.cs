@@ -308,19 +308,21 @@ internal static class HoverInfo
             var lb = tp.Local[i];
             var c = lb.center;
             var e = lb.extents;
+            float[] ea = { e.x, e.y, e.z }, la = { ld.x, ld.y, ld.z }, oa = { lo.x, lo.y, lo.z }, ca = { c.x, c.y, c.z };
             int k = 0;                                   // the thin axis = the quad's normal
-            if (e.y < e[k]) k = 1;
-            if (e.z < e[k]) k = 2;
-            float dk = ld[k];
+            if (ea[1] < ea[k]) k = 1;
+            if (ea[2] < ea[k]) k = 2;
+            float dk = la[k];
             if (Mathf.Abs(dk) < 1e-8f) continue;         // ray parallel to the quad
-            float t = (c[k] - lo[k]) / dk;
+            float t = (ca[k] - oa[k]) / dk;
             if (t < 0f) continue;                        // quad is behind the camera
             var hit = lo + ld * t;
+            float[] ha = { hit.x, hit.y, hit.z };
             bool inside = true;
             for (int a2 = 0; a2 < 3; a2++)
             {
                 if (a2 == k) continue;
-                if (Mathf.Abs(hit[a2] - c[a2]) > e[a2] * 1.1f + 0.01f) { inside = false; break; }
+                if (Mathf.Abs(ha[a2] - ca[a2]) > ea[a2] * 1.1f + 0.01f) { inside = false; break; }
             }
             if (!inside) continue;
             var world = tr.TransformPoint(hit);

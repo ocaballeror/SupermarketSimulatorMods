@@ -23,7 +23,7 @@ namespace ClearTags;
 ///
 /// When it runs: postfixes on Box.OnEnable, Initialize and Setup (every spawn path: store boxes, boxes
 /// loaded from the save, boxes the host spawned for a guest, pooled boxes coming back), plus a diagnostic sweep (every 30 s, only while VerboseLogging is on) over
-/// all boxes (<see cref="ClearTagsBehaviour"/>) that also logs when a box was missed by the hooks.
+/// all boxes (<see cref="ClearTagsBehaviour"/>) that also logs when a box was missed by the hooks. A silent prune scan (ResizeAll("prune"), every 120 s at most, only when the remembered tags exceed max(500, 2 x last live count)) drops state of destroyed tags.
 ///
 /// No compounding: the scale a tag had when the mod first saw it is remembered per "Icon UI" GameObject
 /// (instance id), and the applied value is always base * factor, set only when the factor changed. Disabling
