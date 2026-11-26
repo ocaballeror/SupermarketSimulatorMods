@@ -34,7 +34,7 @@ public class Plugin : BasePlugin
         // ClampedFloat instead of AcceptableValueRange: config managers draw a text field, not a slider.
         SpeedMultiplier = Config.Bind("SelfCheckout", "SpeedMultiplier", 2f,
             new ConfigDescription(
-                "How much faster items are scanned at checkouts (self checkouts and cashiers). Payment is not changed.",
+                "How much faster items are scanned at checkouts (self checkouts, employee help and cashiers). Payment is not changed.",
                 new ClampedFloat(1f, MaxMultiplier)));
         VerboseLogging = Config.Bind("Diagnostics", "VerboseLogging", false,
             "Enable verbose logging for debugging purposes.");

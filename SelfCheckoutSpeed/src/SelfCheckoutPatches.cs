@@ -205,7 +205,8 @@ internal static class SelfCheckoutPatches
             if (!Coros.TryGetValue(__instance.GetType(), out var coro)) return;
             // A coroutine's first step: anything recorded under this address belongs to an earlier
             // coroutine that was stopped from outside (the IL2CPP GC reuses addresses).
-            if (coro.State != null && coro.State.GetValue(__instance) is int st && st == 0)
+            int st = coro.State != null && coro.State.GetValue(__instance) is int sv ? sv : -1;
+            if (st == 0)
             {
                 Running.Remove(me);
                 Rushed.Remove(me);
@@ -214,7 +215,7 @@ internal static class SelfCheckoutPatches
             // The guest's employee-scanning loop stops as soon as the host's FinishHelperCheckout_RPC clears
             // SelfCheckout.IsScanning, leaving the rest on the belt. While catching up, keep it scanning
             // as long as products are left (then let it end as usual).
-            if (coro.IsHelpOrder && Rushed.Contains(me) && coro.This != null)
+            if (coro.IsHelpOrder && st == 1 && Rushed.Contains(me) && coro.This != null)
             {
                 var sc = coro.This.GetValue(__instance) as SelfCheckout;
                 var belt = sc != null && sc.m_Checkout != null ? sc.m_Checkout.m_Belt : null;
@@ -262,7 +263,12 @@ internal static class SelfCheckoutPatches
                 if (checkout != null)
                 {
                     if (Running.TryGetValue(me, out var known) && known != checkout.Pointer) Rushed.Remove(me);
-                    if (Running.Count > 256) { Running.Clear(); Rushed.Clear(); } // stopped coroutines never report false
+                    if (Running.Count > 256) // stopped coroutines never report false; keep the ones being rushed
+                    {
+                        var drop = new System.Collections.Generic.List<IntPtr>();
+                        foreach (var k in Running.Keys) if (!Rushed.Contains(k)) drop.Add(k);
+                        foreach (var k in drop) Running.Remove(k);
+                    }
                     Running[me] = checkout.Pointer;
                 }
             }
