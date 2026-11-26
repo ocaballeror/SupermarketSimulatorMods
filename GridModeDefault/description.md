@@ -7,7 +7,7 @@ Grid mode is switched on by default whenever you place or move furniture.
 [list]
 [*]No more pressing the grid key (X) for every shelf, fridge, rack or checkout.
 [*]It's the game's own grid mode: the grid shows on the floor and the piece snaps to it.
-[*]You can still toggle the grid with the usual key. If you turn it off, it stays off until you turn it on again.
+[*]You can still toggle the grid with the usual key. If you turn it off, it stays off until you turn it on again or load a save.
 [*]Pieces that can't use a grid (for example on walls) behave as before.
 [/list]
 
