@@ -34,7 +34,7 @@ Always on (not configurable): buying a second box at the wholesale store, and sh
 - **Only the player who wants to carry two boxes needs the mod.** It works whether that player is the host or a guest; the host and the other players can be unmodded.
 - The game's own pick-up messages are used, so every player agrees on who holds which box, and other players can't take either box out of your hands.
 - Players **without** the mod see your two boxes at the same spot in your hands (they look like one box, or one inside the other if they differ in size). Players with the mod see them stacked.
-- **Leaving while carrying two boxes** (quitting, crash, disconnect): the game only puts down the box it knows the player holds. With the mod installed on the **host**, the other box is put down on the host too, so it stays in the game. Guests (with or without the mod) don't see it again until they rejoin or the save is reloaded. Only the host needs the mod for this.
+- **Leaving while carrying two boxes** (quitting, crash, disconnect): the game only puts down the box it knows the player holds. With the mod installed on the **host**, the other box is put down on the host too, so it stays in the game. Guests (with or without the mod) don't see it again until they rejoin or the save is reloaded. Don't put that box on a rack before the save is reloaded. Only the host needs the mod for this.
 - A player who joins while you carry two boxes sees the bottom box wherever the game's join-time sync puts it (probably not in your hands) until it comes up into your hands; they can't pick it up meanwhile.
 
 ## Install
