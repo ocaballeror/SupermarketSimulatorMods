@@ -13,7 +13,7 @@ It works with:
 | Online-order paper bag | yes | yes (only the products that match the slot) |
 | Multi-product crate | yes | yes (only the products that match the slot) |
 
-**Paper bags for online orders:** when you are packing a bag for an order (the order selected in your notebook) that no other player and no courier is already handling, Shift + right click only takes as many of that product as the order still needs. If the order doesn't contain that product, or already has enough of it in the bag, Shift + right click does nothing (so a held button can't over-fill the order). Without such an order, it fills the bag as far as it can.
+**Paper bags for online orders:** when you are packing a bag for an order (the order selected in your notebook) that no other player and no courier is already handling, Shift + right click only takes as many of that product as the order still needs. If the order doesn't contain that product, or already has enough of it in the bag, Shift + right click does nothing (so a held button can't over-fill the order). Without such an order, it fills the bag as far as it can. In multiplayer, an order that another player is also viewing in their notebook counts as handled by them, so in that case the bag is filled without the limit.
 
 The game's own rules apply unchanged: a box only takes one kind of product and only if it is the right box size, a shelf slot only takes one kind of product of the right display type (an empty slot is relabelled as usual), and the box, bag, crate and slot capacities are respected. If the game refuses (wrong product, wrong box size, full), you get the game's usual warning and nothing moves.
 
@@ -39,7 +39,7 @@ Only the player who wants to use it, host or guest. Each product still moves thr
 
 When a guest fills or empties a **box**, every product goes through the host as in the normal game, so it can take a moment longer to finish on a slow connection. While a bulk transfer is running and its products are still on their way (at most about two seconds after it ends), the box stays in your hands: clicks, drop and throw on that box are ignored until everything has arrived. This keeps the box contents the same on every screen.
 
-With a box on the host or offline, a second Shift-click during a running transfer is ignored too. With a paper bag it restarts the transfer, and with the crate it stops the running transfer and starts a new one.
+With a box on the host or offline, further clicks on that box during a running transfer are ignored too. With a paper bag it restarts the transfer, and with the crate it stops the running transfer and starts a new one.
 
 With the crate, the transfer stops if you look away from the shelf slot before it is done.
 

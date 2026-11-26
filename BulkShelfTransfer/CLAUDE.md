@@ -5,6 +5,7 @@ Improvement #9 (`TODO`). Modifier (LeftShift) + Take/Use moves every product bet
 
 ## Status
 
+- Review round 2 (docs only): README now states that an order another player views counts as "worked on" (game's own `IsBeingWorkedOn` signal), so co-op players on the same order lose the cap; no stronger signal checked.
 - v0.2.3 (review round 1 of Improvement #9): a bag place burst now ends quietly when the bag has no product left for the slot (`!bag.IsTargetProductExist(slot)` in the quiet end checks), so a mixed bag no longer ends with the game's "no matching product" warning; a box or bag burst is finished as stale when its interaction's `Update` hasn't run for 1 s (container thrown / put away mid-burst, then picked up again); `Plugin.AnimationSpeed` is `static readonly` (CS0162 warning); doc fixes (0.02 s interval, second-click behaviour).
 - v0.2.2: only the `SecondsBetweenItems` value change back to 0.02 (see below).
 - v0.2.1 (settings reduced, commit "simplify mod settings"): only `Enabled`, `ModifierKey` and `VerboseLogging` (the cfg key `[Diagnostics] VerboseLogging` already existed, so existing cfgs keep their stored value; the default is now false for new configs) remain settings. `BulkTake`, `BulkPlace`, `Boxes`, `PaperBags`, `Crates` (all true), `SecondsBetweenItems` (**0.02**; the user's value, commit `0ca098e` set it back from 0.2, do not change it) and `AnimationSpeed` (5) are `const`s in `Plugin.cs`.
