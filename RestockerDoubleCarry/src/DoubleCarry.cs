@@ -732,6 +732,7 @@ internal static class DoubleCarry
                 if (cur != null && stash == null && ProductOf(cur) == plan.FirstProduct)
                 {
                     plan.First = cur;
+                    TakeOwnership(cur);   // async: done long before the set-down
                     if (plan.FirstToStorage) plan.Storage.Add(cur.Pointer);
                     if (TryFindSecondJob(h, clerk, cur, plan.FirstProduct, true, plan.FirstToStorage, out var job))
                     {
@@ -766,6 +767,7 @@ internal static class DoubleCarry
                     if (!Same(cur, plan.First) && !Same(cur, plan.Second))
                     {
                         plan.Second = cur;
+                        TakeOwnership(cur);
                         if (plan.SecondToStorage) plan.Storage.Add(cur.Pointer);
                     }
                     if (Same(cur, plan.Floor)) plan.Floor = null;
@@ -996,8 +998,9 @@ internal static class DoubleCarry
 
     /// <summary>
     /// A box a guest once picked up stays guest-owned (clerk pickups don't take the ownership back). While a
-    /// clerk holds it nobody else can, so the host takes it over before the set-down: otherwise the host
-    /// keeps the dropped box kinematic (floating) and MoveAside can't place it. Fails open.
+    /// clerk holds it nobody else can, so the host takes it over as soon as it is a plan box. The transfer is
+    /// asynchronous (one server round trip), so it must start long before the set-down, where MoveAside needs
+    /// IsMine. Fails open.
     /// </summary>
     private static void TakeOwnership(Box box)
     {
