@@ -401,8 +401,9 @@ shift clicking items to or from the paper bag does not work. i guess it is prior
 
 ## Improvement #10: Allow Players to Carry Two Boxes at Once
 
-**Status:** implemented  
+**Status:** reviewed  
 **Code:** `PlayerDoubleCarry/`  
+**Review:** 2026-11-27, 1 round, hash `2c1fb675e5c7`  
 **Waiting on:** In-game test of v0.2.6 (hold left click on a wholesale product while holding a box; send the `[PlayerCarry]` lines).
 
 Allow players to pick up and carry two boxes at a time.
