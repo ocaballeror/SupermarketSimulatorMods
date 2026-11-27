@@ -79,7 +79,7 @@
  *    are written to the mod's own file when the game saves (see Persistence), so they stay tied to the money.
  *  - The panel (a child of the tab, over its own opaque background Image; the tab's own cards are hidden while it is open
  *    and shown again when the session ends, with a safety net in the CustomizationTab.OnEnable patch) has: a RenderTexture preview, arrows to switch
- *    between the 8 employee types (HrEmployeeKind), the game's own ColorPicker widget (cloned from the store-name color
+ *    between the 8 employee types (HrEmployeeKind) and the Player type (the players' skins, 1.1.0), the game's own ColorPicker widget (cloned from the store-name color
  *    picker in the NameChangeCanvas; its Image material is reset so it makes its own), 12 swatches (a fallback if the
  *    picker's shader doesn't work), an "Apply to all" switch (a clone of the game's own ToggleSwitch from the HR tab:
  *    a Slider + handle Button + on/off colors; its gamepad glyph and caption are removed and onValueChanged is ours),
@@ -88,7 +88,7 @@
  *    opens (ClothesStore.UnlockedKinds): the HR tab hides the ice cream helper unless DLCTestController.IceCreamDLC and the
  *    baker unless DLCTestController.BakeryDLC (HiringTab.RefreshAvailability); on top of that a type needs a hired employee
  *    (EmployeeManager.IsEmployeeHired) or a hire slot (HrHiring.SlotIds) with no unmet requirement (HrHiring.MissingCount
- *    == 0: store level, checkouts, ovens ...). Any failure shows the type. Apply to all still writes all 8 types.
+ *    == 0: store level, checkouts, ovens ...). Any failure shows the type. Apply to all still writes all 9 types (8 employee types + Player).
  *  - The preview: a camera far below the map (y = -5000, layer 4 "Water": every layer of this game is named, and the
  *    URP renderers don't draw layer 31 "FPSHand", see Preview.cs) renders to a 1024x512 RenderTexture. It sees
  *    clones of the model sub-tree ("Animated Model", found as the top Animator) of every prefab of the selected type, in a
@@ -119,7 +119,7 @@
  * Patches (14, each applied on its own and logged if one fails): CustomizationTab.OnEnable (inject the card, keep the
  * cards visible), IDManager.Awake (a new game scene: forget cached objects), Computer.OpenPC setter (leaving the computer
  * ends the session), SaveManager.Save(string) / Clear / ApplySaveData (commit the colors with the game save) and the eight
- * employee Start postfixes of EmployeeTracker.cs (register new employees). Everything else
+ * employee Start postfixes plus the PlayerInstance one of EmployeeTracker.cs (register new employees and players). Everything else
  * is public API calls and a few slow polls (ClothesStore.Tick once a second, TabUi.Tick every 0.5 s), so a game update
  * breaks little.
  */
@@ -138,7 +138,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.employeeclothes";
     public const string Name = "Employee Clothes";
-    public const string Version = "1.1.0";
+    public const string Version = "1.1.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

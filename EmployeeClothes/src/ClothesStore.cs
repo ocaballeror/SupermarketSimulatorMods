@@ -158,7 +158,7 @@ internal static class ClothesStore
             if (detail != null) sb.Append(" (").Append(detail).Append(')');
         }
         report = sb.ToString();
-        if (list.Count == 0)
+        if (list.Count == 0 || (list.Count == 1 && list[0] == PlayerKind))   // Player always passes: judge the employee types only
         {
             Plugin.Warn("No employee type passed the unlock check; showing all of them.");
             return (HrEmployeeKind[])Kinds.Clone();

@@ -245,7 +245,15 @@ internal static class Preview
                 bool player = kind == ClothesStore.PlayerKind;
                 if (player) pivot.SetActive(false);   // keep the clone's Awakes from running until the Photon/rig components are gone
                 var clone = Object.Instantiate(src, pivot.transform);
-                if (player) { StripPlayerComponents(clone); pivot.SetActive(true); }
+                if (player)
+                {
+                    StripPlayerComponents(clone);
+                    // The game switched the local player's body renderers off (PlayerSkin.Toggle(!isLocal)) and Instantiate copies
+                    // that; switch them on for the preview (attachments like the mop are inactive GameObjects and stay hidden).
+                    var smrs = clone.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                    for (int i = 0; i < smrs.Length; i++) if (smrs[i] != null) smrs[i].enabled = true;
+                    pivot.SetActive(true);
+                }
                 clone.name = prefab.name + " (preview)";
                 clone.SetActive(true);
                 clone.transform.localPosition = Vector3.zero;
