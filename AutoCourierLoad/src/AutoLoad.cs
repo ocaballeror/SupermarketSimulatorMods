@@ -140,7 +140,6 @@ internal static class AutoLoad
         s_visits.Clear();
         s_ignored.Clear();
         s_takenBack.Clear();
-        s_modLoaded.Clear();
         s_nextIdleWatch = 0f;
         s_errorLoggedAt.Clear();
     }
@@ -239,7 +238,7 @@ internal static class AutoLoad
         float now = Time.time;
         if (now < s_next) return;
         s_next = now + TickInterval;
-        if (IsGuest) { s_visits.Clear(); s_takenBack.Clear(); return; }
+        if (IsGuest) { s_visits.Clear(); s_takenBack.Clear(); s_modLoaded.Clear(); return; }
 
         try { ReleaseTakenBack(); }
         catch (Exception e) { LogError("taken-back bookkeeping", e); }
@@ -266,9 +265,16 @@ internal static class AutoLoad
     /// </summary>
     private static void WatchIdleCouriers(float now)
     {
-        if (!NoktaSingleton<EmployeeManager>.HasInstance) return;
+        if (!NoktaSingleton<EmployeeManager>.HasInstance) { s_modLoaded.Clear(); return; }
         var couriers = NoktaSingleton<EmployeeManager>.Instance.ActiveCouriers;
-        if (couriers == null) return;
+        if (couriers == null) { s_modLoaded.Clear(); return; }
+        // Forget couriers that no longer exist (a new object could reuse the address). Kept across Reset on purpose.
+        if (s_modLoaded.Count > 0)
+        {
+            var alive = new HashSet<IntPtr>();
+            for (int k = 0; k < couriers.Count; k++) if (couriers[k] != null) alive.Add(couriers[k].Pointer);
+            s_modLoaded.RemoveWhere(p => !alive.Contains(p));
+        }
         for (int i = 0; i < couriers.Count; i++)
         {
             var c = couriers[i];
