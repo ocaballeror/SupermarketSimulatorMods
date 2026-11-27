@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.supermarketfixes";
     public const string Name = "Supermarket Fixes";
-    public const string Version = "0.11.12";
+    public const string Version = "0.11.13";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -41,6 +41,8 @@ public class Plugin : BasePlugin
         Patches.FloatingBoxFix.Bind(Config);
         Patches.JanitorCleanAlignFix.Bind(Config);
         Patches.CourierOrdersFix.Bind(Config);
+        Patches.OrderBagCountsFix.Bind(Config);
+        Patches.LabeledOrderFix.Bind(Config);
 
         Enabled.SettingChanged += (_, _) => SetActive(Enabled.Value);
         AddComponent<DiagnosticsBehaviour>();
@@ -68,6 +70,8 @@ public class Plugin : BasePlugin
         Patches.FloatingBoxFix.ResetState();
         Patches.JanitorCleanAlignFix.ResetState();
         Patches.CourierOrdersFix.ResetState();
+        Patches.OrderBagCountsFix.ResetState();
+        Patches.LabeledOrderFix.ResetState();
     }
 
     private void ApplyPatches()

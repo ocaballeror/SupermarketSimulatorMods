@@ -48,6 +48,8 @@ All types are in `SupermarketSimulator.Courier`; alias the class: `using Courier
 - Held bags are never touched: `IsHeld` is true for a bag under any transform parent and (online) for a non-empty holder, which `Take_RPC`/`Drop_RPC` set for guests as well. Residual race (not mitigated on purpose): a guest takes a bag locally and the host only learns of it one round trip later (`Take_RPC`), so a bag a guest grabs at the very moment the courier loads it (typically the first scan after he becomes ready, when bags lying there are already settled) can end up in both places. The same race exists in vanilla between two players. A "skip bags with a remote player nearby" filter was rejected: it would block the normal case of a guest dropping a bag by the courier and standing next to it.
 - Compatible with Bug #9's `CourierOrdersFix` (SupermarketFixes): `ReceiveBag` fires `ClaimChanged` as always, so the notebook hides the order on the screens that run that fix.
 
+- Related user finding (2026-11-27, "bag counts reset to zero" while filling a bag): not caused by this mod alone. Loading a labelled bag makes the courier claim fire `ClaimChanged`, and SupermarketFixes' Bug #9 hide then removes that order's notebook page; if it was the page the player was filling a bag against, the counts read 0 until the bag is reopened. SupermarketFixes 0.11.13 (Bug #10) refills the counts after any page removal.
+
 ## Open questions for the in-game test
 
 - Is `ParkPosition` where the scooter really stands, and is 4 m the right size? Is the drop area (where he gives bags back) inside that radius? (Harmless thanks to the ignore set.)

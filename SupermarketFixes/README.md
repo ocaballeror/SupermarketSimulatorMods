@@ -60,6 +60,22 @@ This only changes what your own screen shows, so every player who wants it needs
 
 With `VerboseLogging` on, the log has `[CourierOrders]` lines when an order is hidden or shown again.
 
+### Bug #10: the counts on the order notebook reset to zero while filling a bag
+
+While you filled an online-order bag, the numbers next to each product on the notebook sometimes all dropped to zero although the bag still held everything (closing and reopening the bag fixed it). It happened when another order was delivered, expired or taken by the courier at that moment and the notebook page you were using went away. Now the numbers are filled in again from the bag whenever a notebook page disappears while you hold a bag.
+
+This only changes what your own screen shows.
+
+With `VerboseLogging` on, the log has an `[OrderBagCounts]` line when this happens.
+
+### Bug #11: a labelled bag on the floor doesn't count as a taken order
+
+After taking an order, putting a name tag on its bag and dropping it, you could open a new bag for the same order, and the new-orders counter only cleared for you, not for the other players. Now an order with a labelled bag counts as taken: it no longer counts as new on your screen, and a new bag opens on the next order that has no labelled bag (you can still scroll back to a labelled order). The order stays in the notebook until it is delivered.
+
+This only changes what your own screen shows, so every player who wants it needs the mod (see below).
+
+With `VerboseLogging` on, the log has `[LabeledOrders]` lines when a new bag skips a labelled order.
+
 ### F9: "my hands are stuck" key
 
 Press **F9** if your hands or controls seem stuck on an item. It fixes the problems of Bug #2 and Bug #3 right away, and writes what it found to `BepInEx/LogOutput.log`. Please send those lines.
@@ -90,6 +106,8 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes the probl
 | FloatingBox | `WakeUnsupportedBoxes` | `true` | Boxes that float after the box under them was taken are woken up so they fall, and the host tells guests where its resting boxes lie. |
 | JanitorCleanAlign | `AlignToStain` | `true` | The cleaning lady aims her mop at the centre of the stain she cleans and stands where she fits, instead of standing on the stain (or inside a wall or shelf). Only needed on the host (or in single player). |
 | CourierOrders | `HideCourierOrders` | `true` | Orders the courier has already taken (in the trunk or out for delivery) are removed from your pending-orders notebook and the new-orders counter. They come back if the order is taken back from the courier. Only affects your own screen. |
+| OrderBagCounts | `ResyncBagCounts` | `true` | Keeps the product counts on the order notebook right while you fill a paper bag, even when another order is delivered, expires or is taken by the courier at that moment. |
+| LabeledOrders | `LabeledOrdersTaken` | `true` | An order whose paper bag has a name tag counts as taken: it no longer counts as new in the order counter, and a new bag opens on the next order without a labelled bag. Only affects your own screen. |
 
 ## Who needs it (multiplayer)
 
@@ -102,3 +120,5 @@ Press **F9** if your hands or controls seem stuck on an item. It fixes the probl
 - **Bug #3: whoever gets stuck.** The fix repairs the state of your own player, so it only helps on the machine where the problem shows up. The host should run the mod too: `RegrantToSameHolder` runs there and lets a guest's retry succeed. A guest without the mod is not affected by it. If the host does not run the mod, a guest's fix still frees the guest's controls, but the host may keep counting that box as held by the guest: nobody can pick that box up until the game is reloaded, and other players may see it in the guest's hands. If the host itself gets stuck, the guests are not told: they may keep seeing the box in the host's hands while it lies on the shelf, until the host picks it up again.
 - **Bugs #7 and #8: the host** (or the player, in single player). The cleaning lady is controlled by the host, and other players see where she stands and which way she faces through the game's normal sync, so guests don't need the mod for this fix.
 - **Bug #9: every player who wants it, host and guests alike.** The pending-orders notebook and the counter are local to each player's game, and the game has no message that only hides an order, so nothing the host does can change an unmodded guest's screen. A guest without the mod keeps seeing courier orders in the list as before. A host with the mod gets a correct list on its own screen; so does every guest with the mod. Nothing is sent over the network, so mixed setups don't desync.
+- **Bug #10: whoever fills the bag.** It only repairs your own screen; other players don't need the mod.
+- **Bug #11: every player who wants it, host and guests alike.** The new-orders counter and the notebook are local to each player's game and the game has no message that marks an order as handled, so a guest without the mod keeps counting a labelled order as new.

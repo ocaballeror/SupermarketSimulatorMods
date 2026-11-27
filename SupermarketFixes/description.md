@@ -14,6 +14,8 @@ Fixes for bugs in Supermarket Simulator, mostly ones that show up in online co-o
 [*][b]Boxes floating in the air[/b] after the box under them is taken now fall, including boxes that only a multiplayer guest saw floating (the host now tells guests where its resting boxes lie).
 [*][b]Cleaning lady[/b] stands properly and mops the stain itself, instead of beside it or inside a wall.
 [*][b]Courier orders[/b] disappear from your pending-orders notebook once the courier has them.
+[*][b]Order notebook counts[/b] no longer reset to zero while you fill a delivery bag.
+[*][b]Labelled delivery bags[/b] count as taken orders: they stop counting as new for everyone with the mod, and a new bag opens on the next free order.
 [*][b]F9 "my hands are stuck" key.[/b] Press it if your hands or controls seem stuck on an item.
 [/list]
 
