@@ -5,7 +5,7 @@ BepInEx mods for **Supermarket Simulator** (Nokta Games, Steam app 2670630). The
 1. **Fix game bugs.** They mostly show up in online co-op. All bug fixes ship together in one mod, **SupermarketFixes**.
 2. **Add improvements.** Each improvement is its own small, standalone mod, so it can be published separately for other players.
 
-What each mod does, and where it stands (open, in progress, implemented, reviewed, done), is tracked per request in [`TODO.md`](TODO.md).
+What each mod does, and where it stands (open, in progress, implemented, reviewed, done), is tracked per request in [`status.md`](status.md).
 
 ## Mods
 
@@ -70,8 +70,8 @@ Projects compile against the game's own `BepInEx/core` and `BepInEx/interop` DLL
 ```
 README.md                this file: project overview
 CLAUDE.md                instructions for coding agents: environment, tools, shared game knowledge
-WORKFLOW.md              TODO status workflow, subagent, review and commit rules (main agent only)
-TODO.md                  the requests (bugs and improvements) and the status of each
+WORKFLOW.md              status workflow, subagent, review and commit rules (main agent only)
+status.md                state of each request: code location, review record, what it waits on
 REVIEW_ORCHESTRATOR.md   agent definition for the implement-and-review loop
 SupermarketFixes/        the bug-fix mod (one BepInEx plugin, one patch file per bug)
 <ModName>/               one folder per improvement mod (see the Mods table); each has

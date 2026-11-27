@@ -1,6 +1,6 @@
 # ProductHighlight: agent notes
 
-Improvement #13 (`TODO`). While the local player holds a product box, outline the shelves/fridges/freezers labeled with its product (whole furniture,
+Improvement #13. While the local player holds a product box, outline the shelves/fridges/freezers labeled with its product (whole furniture,
 empty or not). While they hold an **open** online-order paper bag, outline the product groups on shelves that the order still needs. Local and visual only.
 
 ## Status

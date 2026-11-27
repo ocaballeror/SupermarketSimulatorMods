@@ -75,7 +75,7 @@ v1.0.1 (review round 1, still not verified in-game). Changes after the reviewer'
 - **Duplicate card:** `Forget` destroys what is still alive, and `Build` removes an existing `Employee Clothes UI` card / panel in the tab first.
 - **Gamepad:** the card's `GamepadUISelectable` events are emptied (their persistent targets belonged to the original card) and Submit opens this card. Whether the card is reachable with a gamepad is unverified; the panel isn't gamepad-aware.
 
-v1.0.0 (TODO Improvement #15): first implementation, written without being able to run the game. **Nothing has been verified in-game.** Every part below marked "unverified" can fail; the log lines in the test steps say which.
+v1.0.0 (Improvement #15): first implementation, written without being able to run the game. **Nothing has been verified in-game.** Every part below marked "unverified" can fail; the log lines in the test steps say which.
 
 ## Files
 
@@ -370,7 +370,7 @@ Improvement #15 review round 1 (v1.0.10): F1 (free apply by reloading / new game
 
 Round 1 (v1.0.1): all 11 findings applied (see Status). The v1.0.1 decline of cloning a real game toggle was reversed by the user's request in v1.0.2 (done, with the text button as fallback).
 
-Round 2 (v1.0.5): see the review record in TODO.md once the review has run.
+Round 2 (v1.0.5): see the review record in `status.md`.
 
 ## Second in-game test (v1.0.5; send these back)
 

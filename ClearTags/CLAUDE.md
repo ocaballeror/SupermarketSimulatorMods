@@ -1,6 +1,6 @@
 # ClearTags: agent notes
 
-Improvement #11 (`TODO`). Bigger product tags on boxes (config multiplier, kept on the box lid) and a hover panel in the game's UI
+Improvement #11. Bigger product tags on boxes (config multiplier, kept on the box lid) and a hover panel in the game's UI
 style (icon, brand + name; on a box also quantity and box price) when the crosshair is on a box, shelf, rack or vending tag.
 
 ## Status

@@ -1,4 +1,4 @@
-# Workflow: TODO status, subagents, reviews, commits
+# Workflow: status tracking, subagents, reviews, commits
 
 For the main agent (the one talking to the user) and the review orchestrator. **Implementer and reviewer subagents don't need this file**: they read `CLAUDE.md` (environment, tools, pitfalls, game knowledge) plus the mod's docs.
 
@@ -10,7 +10,7 @@ Each fact lives in one file. Look there first, and update it there.
 
 | File | What it holds | Written by |
 |---|---|---|
-| [`TODO.md`](TODO.md) | The user's requests, each with a **Status** block (state, code location, review record, what it waits on). The only place that tracks status. | The user writes the requests; agents maintain only the Status blocks |
+| [`status.md`](status.md) | One **Status** block per request (state, code location, review record, what it waits on). The only place that tracks status; no analysis or details. | agents |
 | [`README.md`](README.md) | Project overview, mods table, install and build, log collection | agents |
 | [`CLAUDE.md`](CLAUDE.md) | How to work here: where changes go, environment, tools, interop pitfalls, and the game systems that several mods share. Read by every agent. | agents |
 | `<Mod>/README.md` | What the mod does, for players and publishing: settings, who needs it in multiplayer, compatibility. **Required for every mod.** | agents |
@@ -22,11 +22,11 @@ Agents read a mod's `README.md` and `CLAUDE.md` before working on it (stated in 
 
 Per-mod information never goes in a root file.
 
-## 1. Always start with `TODO.md`
+## 1. Always start with `status.md`
 
-[`TODO.md`](TODO.md) is the source of truth for what to work on. The user updates it over time, so **read it fresh at the start of every session**; don't rely on memory or older notes.
+[`status.md`](status.md) is the source of truth for what to work on. **Read it fresh at the start of every session**; don't rely on memory or older notes. What a mod does is in its `README.md`, and how it works and how to do it right is in its `CLAUDE.md`; neither lives in `status.md`. New requests come from the user in chat: add an `open` entry for each.
 
-Each entry is a heading (`## Bug #N: ...` or `## Improvement #N: ...`), a **Status** block, and the user's request. The block looks like this:
+Each `status.md` entry is a heading (`## Bug #N: ...` or `## Improvement #N: ...`) and a **Status** block, The block looks like this:
 
 ```
 **Status:** reviewed
@@ -36,7 +36,7 @@ Each entry is a heading (`## Bug #N: ...` or `## Improvement #N: ...`), a **Stat
 ```
 
 - `Status` is always present. `Code` is the patch file (bugs) or the mod folder (improvements), once there is code. `Review` appears once a review passed. `Waiting on` is one short line; anything longer goes in the mod's `CLAUDE.md`.
-- **Don't rewrite or reorder the user's request text, and don't add analysis to TODO.md.** Change only the Status block. Investigations and notes go in the mod's `CLAUDE.md` (for bugs, `SupermarketFixes/CLAUDE.md`).
+- **Don't add analysis or request text to `status.md`.** Change only the Status blocks. Investigations and notes go in the mod's `CLAUDE.md` (for bugs, `SupermarketFixes/CLAUDE.md`).
 - If an entry is a question rather than a code task (Bug #4 asks how to collect logs), answer the user directly. The README's log section covers the common case.
 
 States, one per entry, in this lifecycle:
@@ -58,9 +58,9 @@ Allowed moves: `open` → `in-progress` → `implemented` → `reviewed` → `do
 
 ## 2b. Subagents do the work; every change is reviewed
 
-**The main agent (the one talking to the user) never changes mod code itself.** Every code change, whether a bug fix, an improvement, a review-round fix or a small tweak, is done by an **implementer subagent** launched with the Agent tool and `model: "sonnet"`. The main agent only reads, plans, briefs, relays and reports; it may edit docs and `TODO.md` Status blocks directly. This is what makes the model setting below enforceable.
+**The main agent (the one talking to the user) never changes mod code itself.** Every code change, whether a bug fix, an improvement, a review-round fix or a small tweak, is done by an **implementer subagent** launched with the Agent tool and `model: "sonnet"`. The main agent only reads, plans, briefs, relays and reports; it may edit docs and `status.md` Status blocks directly. This is what makes the model setting below enforceable.
 
-**Reviews are mandatory.** When the implementer has finished (it builds, and the mod's README, its CLAUDE.md if any, and the Status block in TODO.md are updated), set the entry to `implemented`, commit, and **launch a review subagent before you report back to the user**. Don't report an item as ready for the in-game test while it is still `implemented`; it must reach `reviewed` first. This applies to every code change, including review-round fixes (re-review until reviewer and implementer agree) and `needs-rework` changes. Doc-only and `TODO.md`-only changes need no review. (When working under `REVIEW_ORCHESTRATOR.md`, the orchestrator runs this loop instead.)
+**Reviews are mandatory.** When the implementer has finished (it builds, and the mod's README, its CLAUDE.md if any, and the Status block in status.md are updated), set the entry to `implemented`, commit, and **launch a review subagent before you report back to the user**. Don't report an item as ready for the in-game test while it is still `implemented`; it must reach `reviewed` first. This applies to every code change, including review-round fixes (re-review until reviewer and implementer agree) and `needs-rework` changes. Doc-only and `status.md`-only changes need no review. (When working under `REVIEW_ORCHESTRATOR.md`, the orchestrator runs this loop instead.)
 
 Launch the review subagent with the Agent tool:
 
@@ -75,7 +75,7 @@ Launch the review subagent with the Agent tool:
 
 The repo is a git repo; commit as you go so every step is recoverable and the history shows what changed and why.
 
-- **Commit at each stable point:** a fix or improvement that builds, a review round applied, a docs or `TODO.md` update, a new tool. Don't batch unrelated work into one commit.
+- **Commit at each stable point:** a fix or improvement that builds, a review round applied, a docs or `status.md` update, a new tool. Don't batch unrelated work into one commit.
 - **One logical change per commit.** Keep a mod's code and its README/CLAUDE.md update in the same commit; keep changes to different mods in separate commits.
 - **Commit messages are a brief title only:** one short imperative line (for example `Fix rack move desync when guest joins`). No body, no trailers or attribution lines, and no type tags or prefixes such as `feat:`, `fix:` or `chore:`.
 - **Stage explicitly** (`git add <paths>`), never `git add -A` blindly. Don't commit `bin/`, `obj/`, `decompiled/` (all gitignored) or log files such as `bug-1/`.

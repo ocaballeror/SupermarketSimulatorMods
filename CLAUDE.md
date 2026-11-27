@@ -2,7 +2,7 @@
 
 Read [README.md](README.md) for the project overview. This file covers how to work here.
 
-**Main agent and review orchestrator:** also read [`WORKFLOW.md`](WORKFLOW.md) (sections 0, 1, 2b, 2c: where information lives, the `TODO.md` status workflow, subagent and review rules, commit rules). Implementer and reviewer subagents skip it; this file is everything they need.
+**Main agent and review orchestrator:** also read [`WORKFLOW.md`](WORKFLOW.md) (sections 0, 1, 2b, 2c: where information lives, the `status.md` workflow, subagent and review rules, commit rules). Implementer and reviewer subagents skip it; this file is everything they need.
 
 **When you work on a mod, read its `README.md` and, if it exists, its `CLAUDE.md` first.** Bug fixes all live in `SupermarketFixes/`, so read that mod's docs for any bug. This saves you re-deriving the mechanism from the dumps, and it tells you what is already known to work, fail or be untested. Per-mod information never goes in a root file (the table of what lives where is in `WORKFLOW.md` section 0).
 
@@ -16,7 +16,7 @@ Read [README.md](README.md) for the project overview. This file covers how to wo
 - **Never use the user's real name (oscar) in package names, GUIDs, keys, file names or published text; use `flamboyanthopper`.**
 - **Plugin GUIDs:** `flamboyanthopper.<modname-lowercase>` (for example `flamboyanthopper.supermarketfixes`). Use semantic versioning, kept in sync between `Plugin.Version` and the csproj `<Version>`.
 - **Mod docs.** Keep them current in the same change whenever you alter behaviour, settings, patches or multiplayer requirements.
-  - **`README.md` (every mod, including SupermarketFixes):** a readable, high-level description for players and for publishing. What the mod does, a settings table, whether the host, guest or both need it, compatibility notes. For SupermarketFixes, one subsection per bug. No implementation details, and no development status such as "awaiting in-game test" (that lives in TODO.md).
+  - **`README.md` (every mod, including SupermarketFixes):** a readable, high-level description for players and for publishing. What the mod does, a settings table, whether the host, guest or both need it, compatibility notes. For SupermarketFixes, one subsection per bug. No implementation details, and no development status such as "awaiting in-game test" (that lives in status.md).
   - **`CLAUDE.md` (optional):** create it only when there is something agents would otherwise have to dig out again: the game mechanism involved, which methods are patched and why, multiplayer reasoning, pitfalls and open questions, in-game test steps with the log lines to send back, and game knowledge that only this mod uses. A trivial mod doesn't need one. Its "Status" section is implementation history (what changed in each version and why), not the item's tracking state. The full root-cause analysis stays in the patch file's doc comment; the CLAUDE.md summarises it and points there.
 
 ## 2a. Keep the shared knowledge up to date
@@ -78,7 +78,7 @@ dotnet tools/Il2CppDump/bin/Release/net6.0/Il2CppDump.dll <outDir> <TypeFullName
 tools/isil.sh decompiled/native-all/Rack.txt "Rack::Place"         # one method's ISIL, prologue/noise stripped
 tools/callers.sh decompiled/native-all RackSlot.AddBox              # every method that calls it (constructors: Type..ctor)
 tools/build-mods.sh [<mod folder>]                           # build and deploy one mod into BepInEx/plugins, or every mod with no argument; extra args go to dotnet build (e.g. -p:Deploy=false)
-tools/modhash.sh SupermarketFixes/src/Patches/X.cs   # short hash of a mod's code (dir: src/**.cs + csproj), for stale-review checks (the `Review` hash in TODO.md)
+tools/modhash.sh SupermarketFixes/src/Patches/X.cs   # short hash of a mod's code (dir: src/**.cs + csproj), for stale-review checks (the `Review` hash in status.md)
 tools/readconst.py 0x1838CEBA8 [--type f|d|i|q]                     # value of a literal ISIL shows only as [0x18...] (default float)
 tools/bindings.py escape                                            # default input bindings: map/action -> key (filter optional)
 <venv>/bin/python -I tools/unity_tree.py "<game>/Supermarket Simulator_Data" level3 --component CustomizationTab [--depth N]   # sub-tree of every object with that component (UI scene objects), or --root <PrefabName> with sharedassets2.assets for prefab roots; shows components, RectTransform anchors/sizes, layers and renderer materials (shader, base texture, base colour)

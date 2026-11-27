@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Short content hash of the code behind a TODO.md entry.
+# Short content hash of the code behind a status.md entry.
 # Usage: tools/modhash.sh <path> [<path>...]   (run from the repo root, or pass absolute paths)
 #   dir  -> hashes <dir>/src/** and <dir>/*.csproj
 #   file -> hashes that file

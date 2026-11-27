@@ -1,6 +1,6 @@
 # BulkShelfTransfer: agent notes
 
-Improvement #9 (`TODO`). Modifier (LeftShift) + Take/Use moves every product between the looked-at
+Improvement #9. Modifier (LeftShift) + Take/Use moves every product between the looked-at
 `DisplaySlot` and the held container in one click, with the game's fly animation sped up.
 
 ## Status
