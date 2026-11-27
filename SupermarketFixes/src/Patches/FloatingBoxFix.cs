@@ -46,8 +46,9 @@ namespace SupermarketFixes.Patches;
 ///
 /// Fix: after every player pickup (boxes within 2.5 m, 0.25 s and 1 s later) and every 5 s for the loose boxes
 /// of StorageStreet.Instance.boxes (all boxes if there is no StorageStreet), on a machine that simulates the
-/// box (see Simulated: offline, the Photon owner, or on a guest a box that isn't kinematic), find boxes whose Rigidbody is asleep, not kinematic and has solid
-/// colliders, and probe a thin slab just under their collider bounds. Nothing solid there = unsupported:
+/// box (see Simulated: offline, the Photon owner, or on a guest a box that isn't kinematic), find boxes whose
+/// Rigidbody is asleep, not kinematic and has solid colliders, and probe a thin slab just under their collider
+/// bounds. Nothing solid there = unsupported:
 /// Rigidbody.WakeUp(), and the normal physics lets it fall. A supported box is left alone (its slab hits the
 /// box or floor it rests on). Right after a pickup every simulated sleeping neighbour is woken, supported or
 /// not (a box left half overhanging passes the slab test but would fall); only the unsupported ones are
@@ -71,8 +72,8 @@ namespace SupermarketFixes.Patches;
 /// the game's reliable SyncTransform RPC. Its receivers SetPositionAndRotation without looking at m_SyncEnabled,
 /// so the guest copy is put at the pose the host copy rests in; only once per pose (re-sent when the box moves
 /// and settles again), at most 12 per pass. Guest, mod installed: Simulated also accepts a non-kinematic box
-/// that isn't owned, so such a sleeping box with nothing under it is woken locally (not on the host, where a non-kinematic
-/// box owned by a guest, seen only while ownership moves, is left to its owner's stream).
+/// that isn't owned, so such a sleeping box with nothing under it is woken locally (not on the host, where a
+/// non-kinematic box owned by a guest, seen only while ownership moves, is left to its owner's stream).
 /// Not covered: boxes a guest owns (picked up and put down by it): only that guest's machine can move them.
 ///
 /// VerboseLogging: every unsupported box this fix does not wake is logged once ([FloatBox]) with its state:
