@@ -116,7 +116,7 @@
  *    previous save are dropped as soon as a scene starts (IDManager.Awake) instead of when the next Tick loads the new
  *    key. The "Apply to all" switch is global and is written at once (it costs nothing).
  *
- * Patches (14, each applied on its own and logged if one fails): CustomizationTab.OnEnable (inject the card, keep the
+ * Patches (15, each applied on its own and logged if one fails): CustomizationTab.OnEnable (inject the card, keep the
  * cards visible), IDManager.Awake (a new game scene: forget cached objects), Computer.OpenPC setter (leaving the computer
  * ends the session), SaveManager.Save(string) / Clear / ApplySaveData (commit the colors with the game save) and the eight
  * employee Start postfixes plus the PlayerInstance one of EmployeeTracker.cs (register new employees and players). Everything else
