@@ -39,9 +39,10 @@ Tracking state of every bug and improvement. States and rules: `WORKFLOW.md`, se
 
 ## Bug #6: Boxes Sometimes Remain Floating When Removing Boxes from a Stack
 
-**Status:** implemented  
+**Status:** reviewed  
 **Code:** `SupermarketFixes/src/Patches/FloatingBoxFix.cs`  
-**Waiting on:** In-game test of 0.11.12 on host and guest (VerboseLogging on); send the `[FloatBox]` lines, with the time and what floated (`nearRack=` separates this from Bug #1).  
+**Review:** 2026-11-27, 2 rounds, hash `a63f3e2b9cb5`  
+**Waiting on:** In-game test of 0.11.14 on host and guest (VerboseLogging on); send the `[FloatBox]` lines, with the time and what floated (`nearRack=` separates this from Bug #1).  
 
 ## Bug #7: Cleaning Lady Is Visually Misaligned When Cleaning Stains
 
