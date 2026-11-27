@@ -88,6 +88,7 @@ internal static class PackUp
     private static float _nextWarn;
     private static bool _wasDown;       // the action was held on the previous frame (own edge detection)
     private static float _nextIdleLog;  // rate limit for the "not aimed at a slot" diagnostics
+    private static float _nextStateLog; // rate limit for the "no local player / no input actions" diagnostics
 
     internal static void Reset()
     {
@@ -128,7 +129,16 @@ internal static class PackUp
         if (!Plugin.Enabled.Value) { Abandon(); return; }
 
         var p = LocalPlayer();
-        if (p == null) { Abandon(); return; }
+        if (p == null)
+        {
+            if (Plugin.VerboseLogging.Value && Time.unscaledTime >= _nextStateLog)
+            {
+                _nextStateLog = Time.unscaledTime + 30f;
+                Vlog("No local player yet (or it isn't yours); nothing to watch");
+            }
+            Abandon();
+            return;
+        }
 
         if (_pending != null) { TickPending(p); return; }
         if (Time.unscaledTime < _nextClick) return;
@@ -164,7 +174,15 @@ internal static class PackUp
         var ia = p.InputActions;
         var pin = ia != null ? ia.m_PlayerInput : null;
         var actions = pin != null ? pin.actions : null;
-        if (actions == null) return false;
+        if (actions == null)
+        {
+            if (Plugin.VerboseLogging.Value && Time.unscaledTime >= _nextStateLog)
+            {
+                _nextStateLog = Time.unscaledTime + 30f;
+                Vlog("The player has no input actions yet");
+            }
+            return false;
+        }
         if (!_looked || _actionName != name || _actionsPtr != actions.Pointer)
         {
             _action = actions.FindAction(name, false);
@@ -200,9 +218,7 @@ internal static class PackUp
         var holder = p.PlayerObjectHolder;
         var bi = p.BoxInteraction;
         if (pi == null || holder == null || bi == null) return "player components missing";
-        // Cursor.lockState alone can read "None" under some setups while playing; the game's own flag decides
-        // as well (InputActions.m_CursorLocked, set by InputActions.SetCursorState).
-        if (Cursor.lockState == CursorLockMode.None && !CursorFlagLocked(p)) return "cursor is free (a menu is open)";
+        if (Cursor.lockState == CursorLockMode.None) return "cursor is free (a menu is open; Cursor.lockState = None)";
         if (pi.m_InInteraction) return "already in an interaction";
         if (pi.m_Paused || pi.m_InGameMenu || pi.m_IsInteractionStoped) return "paused / menu open";
         if (pi.InSkateboard) return "riding a skateboard";
@@ -238,12 +254,6 @@ internal static class PackUp
         return null;
     }
 
-    private static bool CursorFlagLocked(PlayerInstance p)
-    {
-        try { var ia = p.InputActions; return ia != null && ia.m_CursorLocked; }
-        catch (Exception) { return false; }
-    }
-
     private static DisplaySlot FindSlot(BoxInteraction bi) => FindSlot(bi, out _);
 
     /// <summary>The same ray as BoxInteraction.CheckForInteraction; <paramref name="why"/> says what it hit when there is no slot.</summary>
@@ -268,9 +278,6 @@ internal static class PackUp
         var slot = col.GetComponent<DisplaySlot>();
         if (slot == null)
         {
-            // BoxInteraction takes the slot from the collider's own object; a collider on a child would be missed.
-            slot = col.GetComponentInParent<DisplaySlot>();
-            if (slot != null) { why = null; return slot; }
             why = $"the ray hit \"{col.name}\" (layer {col.gameObject.layer}, {hit.distance:0.00} m), which is not a shelf slot";
         }
         return slot;
@@ -303,7 +310,11 @@ internal static class PackUp
         int pid = slot.ProductID;
         if (count <= 0 || pid <= 0) { Vlog($"Slot is empty (product {pid}, count {count})"); return; }
 
-        if (!NoktaSingleton<IDManager>.HasInstance || !NoktaSingleton<BoxGenerator>.HasInstance) return;
+        if (!NoktaSingleton<IDManager>.HasInstance || !NoktaSingleton<BoxGenerator>.HasInstance)
+        {
+            Vlog("IDManager or BoxGenerator has no instance; nothing done");
+            return;
+        }
         var so = NoktaSingleton<IDManager>.Instance.ProductSO(pid);
         var layout = so != null ? so.GridLayoutInBox : null;
         if (so == null || layout == null) { Warn($"No product definition / box layout for product {pid}"); return; }
