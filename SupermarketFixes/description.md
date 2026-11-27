@@ -11,7 +11,7 @@ Fixes for bugs in Supermarket Simulator, mostly ones that show up in online co-o
 [*][b]Item stuck in your hands.[/b] A stray image of an item left in front of your camera after putting it down is cleared automatically.
 [*][b]Stuck on a box after buying it in a market.[/b] Your controls are freed and the game retries picking the box up.
 [*][b]Can't place items from an open box onto a shelf.[/b] Placing works without having to close and reopen the box. Crates are fixed too.
-[*][b]Boxes floating in the air[/b] after the box under them is taken now fall.
+[*][b]Boxes floating in the air[/b] after the box under them is taken now fall, including boxes that only a multiplayer guest saw floating (the host now tells guests where its resting boxes lie).
 [*][b]Cleaning lady[/b] stands properly and mops the stain itself, instead of beside it or inside a wall.
 [*][b]Courier orders[/b] disappear from your pending-orders notebook once the courier has them.
 [*][b]F9 "my hands are stuck" key.[/b] Press it if your hands or controls seem stuck on an item.
