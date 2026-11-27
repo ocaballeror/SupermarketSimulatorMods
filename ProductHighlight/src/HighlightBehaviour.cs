@@ -21,7 +21,9 @@ namespace ProductHighlight;
 ///     <c>DisplayManager.DisplayedProducts[productId]</c> (the dictionary the game's open-box highlight uses). Carried or removed
 ///     displays are not in the manager, so they aren't outlined. Where <c>DisplayManager.m_Displays</c> is null (a guest) the labels are
 ///     scanned directly (<c>GuestScan</c>).
-///   - holding an online-order <b>paper bag</b>: the product groups (<c>DisplaySlot.m_Highlightable.m_RenderersToHighlight</c>, all product
+///   - holding an <b>open</b> online-order <b>paper bag</b> (<c>OrderPaperBag.m_IsOpen</c>, +0x80, the same flag as <c>IsOpen</c>; set by
+///     <c>Open()</c>/<c>Close()</c> on the player who holds it, and on other clients by <c>SetOpen_RPC</c> -> <c>SetOpenVisual</c>; a closed bag,
+///     including one just picked up or still labelled, outlines nothing): the product groups (<c>DisplaySlot.m_Highlightable.m_RenderersToHighlight</c>, all product
 ///     renderers of the slot) of every slot that holds a product the order still needs (order quantity minus what is in the bag). An
 ///     empty slot is never outlined. The order is the same one the bag is packed for in BulkShelfTransfer: the bag's own tag if attached,
 ///     else the order selected in the notebook.
@@ -118,8 +120,13 @@ public class HighlightBehaviour : MonoBehaviour
                 }
                 else if (bag != null)
                 {
-                    description = "paper bag";
-                    description += CollectOrderGroups(player, bag);
+                    // Only an OPEN bag means the player is packing it: a closed or just picked up bag outlines nothing.
+                    if (bag.m_IsOpen)
+                    {
+                        description = "paper bag (open)";
+                        description += CollectOrderGroups(player, bag);
+                    }
+                    else description = "paper bag (closed)";
                 }
                 else if (held != null) description = "something else";
             }
