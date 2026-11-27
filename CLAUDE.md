@@ -218,7 +218,7 @@ Verified in the dumps unless marked otherwise. Addresses and offsets are specifi
 - Hints live in `Hints` (Dictionary keyed by `(int)InputActionID`), so there's **one hint per id**. `RemoveHint(id, player)` removes one; `Clear(player)` empties the dictionary, which interactions do when they start and end.
 
 **Interaction dispatch** (`PlayerInteraction`).
-- `Raycast()` hits colliders in `m_InteractableLayer`. It takes the `IInteractable` from the **hit collider's own GameObject** (`TryGetComponent`, no parent search) and stores it in `m_CurrentInteractable`.
+- `Raycast()` hits colliders in `m_InteractableLayer`. It takes the `IInteractable` from the **hit collider's own GameObject** (`TryGetComponent`) and stores it. **This lookup does have a parent search too**, but a mod doing its own raycast must not rely on the hit collider's own object: the wholesale `PurchasableProduct` sits on the parent of the box model that carries the collider, so use `GetComponentInParent<T>()` (verified from the scene tree, PlayerDoubleCarry 0.2.6; not yet confirmed in-game). It stores it in `m_CurrentInteractable`.
 - `Interact(hold, custom)` calls `InstantInteract()` or `HoldingInteract()` on it.
   - If that returns true, it sets `m_InInteraction` and calls `SetCurrentInteraction(m_CurrentInteractable.Type)`, which enables the `*Interaction` component of that `InteractactableType` and hands it the interactable. (`ComputerInteraction.set_Interactable` casts to `Computer`.)
   - Then it calls `SetCurrentInteractable(null)`.
