@@ -1,6 +1,6 @@
 # Orchestrator: implement and review loop (prompt for the master agent)
 
-**This is the manual review request.** Reviews aren't part of the normal workflow (`WORKFLOW.md` section 2b): implemented items sit at `implemented` until the user tests them or loads this file to have them reviewed.
+**This is the mandatory review loop** (`WORKFLOW.md` section 2b), run by a dedicated orchestrator: every implemented item must pass it before it goes to the user's in-game test.
 
 Paste this whole file as the prompt of a fresh agent (or tell an agent to read it). It drives an implement-and-review loop over the work listed in `TODO.md`: items that are missing or only half done are implemented first, then every item goes through the review loop.
 
@@ -41,7 +41,7 @@ Read `TODO.md` fresh every time: it holds the user's requests and, in each entry
 |---|---|---|
 | `open` | No code yet | **Eligible for implementation** (step 0b), then review. |
 | `in-progress` | Code partly written | **Eligible.** The "Code" column says where it lives. It may be finished or only half done; step 0b decides. |
-| `implemented` | Built, not code-reviewed, pending the user's in-game test | **Eligible for review** (step 1): this is what a review request is for. |
+| `implemented` | Built, review pending | **Eligible for review** (step 1). |
 | `reviewed` | **Code review only**, pending the user's in-game test | Skip, unless the user names the item explicitly. Before skipping, run `tools/modhash.sh <Code paths>`: if the hash differs from the stored one, the review is stale. Set the state back to `implemented` and treat the item as eligible. |
 | `needs-rework` | The in-game test failed or the user asked for changes | **Eligible for implementation**: the implementer makes the requested changes first (step 0b), then review. |
 | `done YYYY-MM-DD` | Tested in-game **and** accepted by the user | Skip. |
