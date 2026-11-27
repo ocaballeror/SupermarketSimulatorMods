@@ -242,15 +242,19 @@ public class HighlightBehaviour : MonoBehaviour
         _scanFound.Clear();
         for (int i = 0; i < _scanDisplays.Length; i++)
         {
-            var d = _scanDisplays[i] != null ? _scanDisplays[i].TryCast<Display>() : null;
-            if (d == null || d.IsPlacingMode || !IsShelfLike(d) || !d.gameObject.activeInHierarchy) continue;
-            var slots = d.m_DisplaySlots;
-            if (slots == null) continue;
-            for (int k = 0; k < slots.Length; k++)
+            try
             {
-                var sl = slots[k];
-                if (sl != null && sl.ProductID == pid) { _scanFound.Add(d); break; }
+                var d = _scanDisplays[i] != null ? _scanDisplays[i].TryCast<Display>() : null;
+                if (d == null || d.IsPlacingMode || !IsShelfLike(d) || !d.gameObject.activeInHierarchy) continue;
+                var slots = d.m_DisplaySlots;
+                if (slots == null) continue;
+                for (int k = 0; k < slots.Length; k++)
+                {
+                    var sl = slots[k];
+                    if (sl != null && sl.ProductID == pid) { _scanFound.Add(d); break; }
+                }
             }
+            catch (Exception e) { WarnOnce(-1 - i, $"skipped a display in the fallback scan: {e.Message}"); }
         }
         for (int i = 0; i < _scanFound.Count; i++) _wantedShelves[_scanFound[i].GetInstanceID()] = _scanFound[i];
         string msg = $"fallback scan (DisplayManager.m_Displays is null or empty, as on a guest): {_scanFound.Count} display(s) labeled with product {pid}";
@@ -259,10 +263,14 @@ public class HighlightBehaviour : MonoBehaviour
 
     private void AddShelf(DisplaySlot slot, int pid)
     {
-        if (slot == null || slot.ProductID != pid) return;   // the dictionary can hold stale entries
-        var d = slot.m_Display;
-        if (d == null || !IsShelfLike(d) || !d.gameObject.activeInHierarchy) return;
-        _wantedShelves[d.GetInstanceID()] = d;
+        try
+        {
+            if (slot == null || slot.ProductID != pid) return;   // the dictionary can hold stale entries
+            var d = slot.m_Display;
+            if (d == null || !IsShelfLike(d) || !d.gameObject.activeInHierarchy) return;
+            _wantedShelves[d.GetInstanceID()] = d;
+        }
+        catch (Exception e) { WarnOnce(-1000, $"skipped a slot while collecting labeled displays: {e.Message}"); }
     }
 
     /// <summary>Fills <see cref="_wantedGroups"/> for the bag's order; returns a short text for the log.</summary>
@@ -294,11 +302,15 @@ public class HighlightBehaviour : MonoBehaviour
             if (!dict.TryGetValue(pid, out var slots) || slots == null) continue;
             for (int i = 0; i < slots.Count; i++)
             {
-                var s = slots[i];
-                if (s == null || s.ProductID != pid || s.ProductCount <= 0) continue;
-                var d = s.m_Display;
-                if (d == null || !IsShelfLike(d) || !d.gameObject.activeInHierarchy) continue;
-                _wantedGroups[s.GetInstanceID()] = s;
+                try
+                {
+                    var s = slots[i];
+                    if (s == null || s.ProductID != pid || s.ProductCount <= 0) continue;
+                    var d = s.m_Display;
+                    if (d == null || !IsShelfLike(d) || !d.gameObject.activeInHierarchy) continue;
+                    _wantedGroups[s.GetInstanceID()] = s;
+                }
+                catch (Exception e) { WarnOnce(-1001, $"skipped a slot while collecting product groups: {e.Message}"); }
             }
         }
         return $" for order #{order.ID} ({needed} product(s) still needed)";
@@ -487,22 +499,24 @@ public class HighlightBehaviour : MonoBehaviour
     /// <summary>A hash of the renderer list of the slot's products (the game keeps them in the slot's Highlightable), without building a list.</summary>
     private static int ProductSignature(DisplaySlot slot)
     {
+        // Cheap change detector: list length plus the first and last renderer. Products are added and removed at the ends of the
+        // list, so walking every entry (one interop call and wrapper each) every poll isn't needed.
         int sig = 17;
-        int count = 0;
         var h = slot.m_Highlightable;
         var list = h != null ? h.m_RenderersToHighlight : null;
-        if (list != null)
+        int n = list != null ? list.Count : 0;
+        sig = sig * 31 + n;
+        if (n > 0)
         {
-            for (int i = 0; i < list.Count; i++)
+            var first = list[0];
+            var last = n > 1 ? list[n - 1] : first;
+            foreach (var r in new[] { first, last })
             {
-                var r = list[i];
-                if (r == null) continue;
-                count++;
-                long ptr = r.Pointer.ToInt64();
+                long ptr = r != null ? r.Pointer.ToInt64() : 0;
                 sig = sig * 31 + (int)(ptr ^ (ptr >> 32));
             }
         }
-        return sig * 31 + count;
+        return sig;
     }
 
     /// <summary>The renderers of every product on the slot; only called when the signature changed.</summary>

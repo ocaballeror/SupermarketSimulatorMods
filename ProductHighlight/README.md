@@ -4,7 +4,7 @@ Shows you where the product in your hands belongs, with the same green outline t
 
 - **Holding a box of products:** every shelf, fridge, freezer, pegboard, hanger, stall, bakery shelf and oven that has a **label for that product** is outlined as a whole, **even when it is empty**. So you can find where a product goes before anything is on the shelf, just by its labels. (The game already outlines the matching boxes in the storage racks; this adds the shelves.)
 - **Holding a paper bag for an online order:** the **groups of products** on those same kinds of displays that the order still needs are outlined. Only products that are really there are marked, never empty shelves, so if nothing on the shelves matches, nothing is outlined. What the bag already holds isn't counted as needed any more. The order is the one the bag is tagged for, or the one selected in your order notebook.
-- **Always up to date:** the outlines follow the labels and the stock live. Relabel a shelf, stock it, empty it, or add a product to the bag, and the outlines change within a fraction of a second. They disappear as soon as the box or bag leaves your hands (drop, throw, put in a rack, trash, hand over).
+- **Always up to date:** the outlines follow the labels and the stock live. Relabel a shelf, stock it, empty it, or add a product to the bag, and the outlines change within a fraction of a second (a newly placed shelf can take a few seconds when you are not the host). They disappear as soon as the box or bag leaves your hands (drop, throw, put in a rack, trash, hand over).
 
 ## Settings
 
