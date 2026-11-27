@@ -86,6 +86,8 @@ internal static class PackUp
     private static IntPtr _actionsPtr;
     private static bool _looked;   // a lookup was done for _actionName/_actionsPtr (also when it found nothing)
     private static float _nextWarn;
+    private static bool _wasDown;       // the action was held on the previous frame (own edge detection)
+    private static float _nextIdleLog;  // rate limit for the "not aimed at a slot" diagnostics
 
     internal static void Reset()
     {
@@ -93,6 +95,7 @@ internal static class PackUp
         _action = null;
         _actionsPtr = IntPtr.Zero;
         _looked = false;
+        _wasDown = false;
         Network.Reset();
     }
 
@@ -131,6 +134,7 @@ internal static class PackUp
         if (Time.unscaledTime < _nextClick) return;
         if (!Pressed(p)) return;
         _nextClick = Time.unscaledTime + ClickCooldown;
+        Vlog($"\"{Plugin.TriggerAction.Value}\" pressed");
         TryPack(p);
     }
 
@@ -176,8 +180,15 @@ internal static class PackUp
                 }
                 return false;
             }
+            Vlog($"Watching the input action \"{name}\" ({_action.bindings.Count} bindings)");
         }
-        return _action != null && _action.WasPressedThisFrame();
+        if (_action == null) return false;
+        // WasPressedThisFrame() follows the Input System's own update mode (a fixed-update mode can make it miss
+        // a press seen from Update), so the held state is also compared with the previous frame.
+        bool down = _action.IsPressed();
+        bool edge = down && !_wasDown;
+        _wasDown = down;
+        return edge || _action.WasPressedThisFrame();
     }
 
     // ------------------------------------------------------------------ the click
@@ -189,23 +200,37 @@ internal static class PackUp
         var holder = p.PlayerObjectHolder;
         var bi = p.BoxInteraction;
         if (pi == null || holder == null || bi == null) return "player components missing";
-        if (Cursor.lockState == CursorLockMode.None) return "cursor is free (a menu is open)";
+        // Cursor.lockState alone can read "None" under some setups while playing; the game's own flag decides
+        // as well (InputActions.m_CursorLocked, set by InputActions.SetCursorState).
+        if (Cursor.lockState == CursorLockMode.None && !CursorFlagLocked(p)) return "cursor is free (a menu is open)";
         if (pi.m_InInteraction) return "already in an interaction";
         if (pi.m_Paused || pi.m_InGameMenu || pi.m_IsInteractionStoped) return "paused / menu open";
         if (pi.InSkateboard) return "riding a skateboard";
         if (holder.m_PlacingMode) return "placing something";
         if (bi.Enable || bi.IsWaitingAvailability) return "a box is already in your hands";
         var hold = holder.m_ObjectHolder;
-        if (hold != null && hold.childCount > 0) return $"hands are not empty ({hold.GetChild(0).name})";
-        // A box stashed beside the hold point (another carry mod parks the first box there) is still carried.
+        if (hold != null)
+        {
+            for (int i = 0; i < hold.childCount; i++)
+            {
+                var ch = hold.GetChild(i);
+                if (ch != null && ch.gameObject.activeSelf) return $"hands are not empty ({ch.name})";
+            }
+        }
+        // A box stashed beside the hold point by another carry mod (its colliders are switched off while it is
+        // carried there) is still carried. Only that case counts: an ordinary box that happens to be a child
+        // of the hold point's parent must not block packing for good.
         var par = hold != null ? hold.parent : null;
         if (par != null)
         {
             for (int i = 0; i < par.childCount; i++)
             {
                 var ch = par.GetChild(i);
-                if (ch != null && ch.gameObject.activeInHierarchy && ch.GetComponent<Box>() != null)
-                    return $"a box is stashed on you ({ch.name})";
+                if (ch == null || !ch.gameObject.activeInHierarchy) continue;
+                var bx = ch.GetComponent<Box>();
+                if (bx == null) continue;
+                var col = ch.GetComponentInChildren<Collider>();
+                if (col != null && !col.enabled) return $"a box is stashed on you ({ch.name})";
             }
         }
         var active = pi.GetActiveInteracts();
@@ -213,28 +238,59 @@ internal static class PackUp
         return null;
     }
 
-    private static DisplaySlot FindSlot(BoxInteraction bi)
+    private static bool CursorFlagLocked(PlayerInstance p)
     {
+        try { var ia = p.InputActions; return ia != null && ia.m_CursorLocked; }
+        catch (Exception) { return false; }
+    }
+
+    private static DisplaySlot FindSlot(BoxInteraction bi) => FindSlot(bi, out _);
+
+    /// <summary>The same ray as BoxInteraction.CheckForInteraction; <paramref name="why"/> says what it hit when there is no slot.</summary>
+    private static DisplaySlot FindSlot(BoxInteraction bi, out string why)
+    {
+        why = null;
         var cam = bi.m_MainCamera;
         if (cam == null) cam = Camera.main;
-        if (cam == null) return null;
+        if (cam == null) { why = "no camera"; return null; }
         float dist = bi.m_MaxRaycastDistance;
         if (!(dist > 0.1f)) dist = 3f;
         int mask = bi.m_BoxInteractionLayer.value;
         if (mask == 0) mask = ~0;
         var t = cam.transform;
-        if (!Physics.Raycast(new Ray(t.position, t.forward), out RaycastHit hit, dist, mask)) return null;
+        if (!Physics.Raycast(new Ray(t.position, t.forward), out RaycastHit hit, dist, mask))
+        {
+            why = $"the ray hit nothing (distance {dist:0.0}, mask 0x{mask:X})";
+            return null;
+        }
         var col = hit.collider;
-        if (col == null) return null;
-        return col.GetComponent<DisplaySlot>();
+        if (col == null) { why = "the ray hit no collider"; return null; }
+        var slot = col.GetComponent<DisplaySlot>();
+        if (slot == null)
+        {
+            // BoxInteraction takes the slot from the collider's own object; a collider on a child would be missed.
+            slot = col.GetComponentInParent<DisplaySlot>();
+            if (slot != null) { why = null; return slot; }
+            why = $"the ray hit \"{col.name}\" (layer {col.gameObject.layer}, {hit.distance:0.00} m), which is not a shelf slot";
+        }
+        return slot;
     }
 
     private static void TryPack(PlayerInstance p)
     {
         var bi = p.BoxInteraction;
         if (bi == null) return;
-        var slot = FindSlot(bi);
-        if (slot == null) return; // not aimed at a shelf slot: not our click, stay silent
+        var slot = FindSlot(bi, out string why);
+        if (slot == null)
+        {
+            // Not aimed at a shelf slot: not our click. Say why in the verbose log, at most once per 2 s.
+            if (Plugin.VerboseLogging.Value && Time.unscaledTime >= _nextIdleLog)
+            {
+                _nextIdleLog = Time.unscaledTime + 2f;
+                Vlog($"Right click seen, but not aimed at a shelf slot: {why ?? "unknown"}");
+            }
+            return;
+        }
         string busy = Busy(p);
         if (busy != null) { Vlog($"Right click on a shelf ignored: {busy}"); return; }
 
