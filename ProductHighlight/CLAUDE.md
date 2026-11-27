@@ -40,7 +40,7 @@ empty or not). While they hold an online-order paper bag, outline the product gr
   `BulkShelfTransfer/src/BagBulk.cs`, without the courier/other-player checks: it is only a hint). Needed products = `OrderListData.OrderItems` where
   the order's quantity per product (lines of one product merged) minus the products of that id in `bag.m_SortedProducts`, > 0. Slots = `DisplayedProducts[pid]` with `slot.ProductID == pid` and `ProductCount > 0`; renderers =
   `slot.m_Highlightable.m_RenderersToHighlight` (all product renderers; `DisplaySlot.AddProduct` appends the new product's `GetComponentsInChildren<Renderer>(true)` to it). The outline
-  is rebuilt when a hash of that list changes, which is how stock changes show up.
+  is rebuilt when the list's length or its first/last renderer changes (products are appended and removed at the end), which is how stock changes show up.
 - **Outline recipe** (`OutlineHandle`): child `GameObject` + `AddComponent<Outlinable>()` (EPOOutline, in `Assembly-CSharp-firstpass`), `outlineParameters.color = HighlightManager.m_OutlineColor`,
   `TryAddTarget(new OutlineTarget(renderer, submesh))` for `submesh < GetSubmeshCount(renderer)`; destroy the GameObject to remove it. Own object so the game's `ClearScrollHighlights`,
   hover highlight and other mods (WholeTruckHighlight uses `Highlightable.AddOrRemoveRenderer` on a vehicle's `SortedBoxPlacementArea`; no overlap) never touch it.

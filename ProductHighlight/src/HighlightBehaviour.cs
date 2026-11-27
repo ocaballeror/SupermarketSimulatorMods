@@ -254,7 +254,7 @@ public class HighlightBehaviour : MonoBehaviour
                     if (sl != null && sl.ProductID == pid) { _scanFound.Add(d); break; }
                 }
             }
-            catch (Exception e) { WarnOnce(-1 - i, $"skipped a display in the fallback scan: {e.Message}"); }
+            catch (Exception e) { WarnOnceKey("scan", $"skipped a display in the fallback scan: {e.Message}"); }
         }
         for (int i = 0; i < _scanFound.Count; i++) _wantedShelves[_scanFound[i].GetInstanceID()] = _scanFound[i];
         string msg = $"fallback scan (DisplayManager.m_Displays is null or empty, as on a guest): {_scanFound.Count} display(s) labeled with product {pid}";
@@ -270,7 +270,7 @@ public class HighlightBehaviour : MonoBehaviour
             if (d == null || !IsShelfLike(d) || !d.gameObject.activeInHierarchy) return;
             _wantedShelves[d.GetInstanceID()] = d;
         }
-        catch (Exception e) { WarnOnce(-1000, $"skipped a slot while collecting labeled displays: {e.Message}"); }
+        catch (Exception e) { WarnOnceKey("shelf", $"skipped a slot while collecting labeled displays: {e.Message}"); }
     }
 
     /// <summary>Fills <see cref="_wantedGroups"/> for the bag's order; returns a short text for the log.</summary>
@@ -310,7 +310,7 @@ public class HighlightBehaviour : MonoBehaviour
                     if (d == null || !IsShelfLike(d) || !d.gameObject.activeInHierarchy) continue;
                     _wantedGroups[s.GetInstanceID()] = s;
                 }
-                catch (Exception e) { WarnOnce(-1001, $"skipped a slot while collecting product groups: {e.Message}"); }
+                catch (Exception e) { WarnOnceKey("group", $"skipped a slot while collecting product groups: {e.Message}"); }
             }
         }
         return $" for order #{order.ID} ({needed} product(s) still needed)";
@@ -426,6 +426,13 @@ public class HighlightBehaviour : MonoBehaviour
         Plugin.Info($"outline created on {what}: {h.TargetCount} target(s) from {renderers} renderer(s), colour ({c.r:0.##}, {c.g:0.##}, {c.b:0.##}, {c.a:0.##})");
     }
 
+    private readonly HashSet<string> _warnedKeys = new();   // collection-phase warnings, one per kind (separate from the instance-id set)
+
+    private void WarnOnceKey(string key, string msg)
+    {
+        if (_warnedKeys.Add(key)) Plugin.Warn(msg);
+    }
+
     private void WarnOnce(int id, string msg)
     {
         if (_warned.Add(id)) Plugin.Warn(msg);
@@ -496,7 +503,7 @@ public class HighlightBehaviour : MonoBehaviour
         return false;
     }
 
-    /// <summary>A hash of the renderer list of the slot's products (the game keeps them in the slot's Highlightable), without building a list.</summary>
+    /// <summary>A change detector for the slot's products: the length of the renderer list (kept in the slot's Highlightable) plus its first and last renderer. Products are appended and removed at the end, so that catches every change without walking or building the list.</summary>
     private static int ProductSignature(DisplaySlot slot)
     {
         // Cheap change detector: list length plus the first and last renderer. Products are added and removed at the ends of the
