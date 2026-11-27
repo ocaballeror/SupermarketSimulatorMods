@@ -703,25 +703,19 @@ internal static class DoubleCarry
     }
 
     /// <summary>
-    /// Walking length of the trip when <paramref name="a"/> is dealt with first, as the mod runs it:
-    /// here -> a's destination; if a is unpacked at a shelf the other box is set down there, a's leftovers or
-    /// empty box go to storage and the clerk comes back (twice the shelf-to-storage walk); then a's destination ->
-    /// b's destination; finally b's shelf -> storage. Storage legs are 0 when no rack place is known.
+    /// Walking length of the trip when a is dealt with first, as the mod runs it: here -> a's destination
+    /// <paramref name="da"/>; if a is unpacked at a shelf and the other box is for a shelf too, that box is set down
+    /// there, a's leftovers or empty box go to storage and the clerk comes back (twice the shelf-to-storage walk
+    /// <paramref name="sa"/>); then a's destination -> b's destination; finally b's shelf -> storage
+    /// (<paramref name="sb"/>). Storage legs are 0 when no rack place is known. If b goes to storage, leftovers of a
+    /// are racked together with it (regroup), so there is no extra leg. An approximation: the trash can isn't modelled.
     /// </summary>
-    private static float RouteLength(SearchHandler h, Vector3 here, Box a, Vector3 da, string wa, Box b, Vector3 db, string wb)
+    private static float RouteLength(Vector3 here, Vector3 da, string wa, Vector3? sa, Vector3 db, string wb, Vector3? sb)
     {
         float len = PathLength(here, da);
-        if (wa == "shelf")
-        {
-            var sa = StoragePoint(h, a);
-            if (sa.HasValue) len += 2f * PathLength(da, sa.Value);
-        }
+        if (wa == "shelf" && wb == "shelf" && sa.HasValue) len += 2f * PathLength(da, sa.Value);
         len += PathLength(da, db);
-        if (wb == "shelf")
-        {
-            var sb = StoragePoint(h, b);
-            if (sb.HasValue) len += PathLength(db, sb.Value);
-        }
+        if (wb == "shelf" && sb.HasValue) len += PathLength(db, sb.Value);
         return len;
     }
 
@@ -739,8 +733,10 @@ internal static class DoubleCarry
         float lCur, lOther;
         if (dCur.HasValue && dOther.HasValue)
         {
-            lCur = RouteLength(h, here, cur, dCur.Value, wCur, other, dOther.Value, wOther);
-            lOther = RouteLength(h, here, other, dOther.Value, wOther, cur, dCur.Value, wCur);
+            var sCur = wCur == "shelf" ? StoragePoint(h, cur) : null;
+            var sOther = wOther == "shelf" ? StoragePoint(h, other) : null;
+            lCur = RouteLength(here, dCur.Value, wCur, sCur, dOther.Value, wOther, sOther);
+            lOther = RouteLength(here, dOther.Value, wOther, sOther, dCur.Value, wCur, sCur);
         }
         else
         {

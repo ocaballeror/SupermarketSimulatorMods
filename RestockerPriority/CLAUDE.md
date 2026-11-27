@@ -4,6 +4,8 @@ Player-facing info is in [README.md](README.md). The full analysis is in the doc
 
 ## Status
 
+v1.0.1 (review fixes). (1) Never touches a `StreetBoxTarget` whose box is outside `StorageStreet.IsWithinRestockableArea` (vanilla never picks one; that is RestockerDoubleCarry's `FetchFromFloor`/regroup result, which would otherwise be swapped for an emptier product on every search until its 180 s give-up). (2) Also acts when vanilla ended with a delivery-area storage/throw-away job or no job (vanilla skips its rack pass once any product had a street box, even one targeted by another restocker or with all displays reserved). Never when a box is in hand, and never on vehicle or rack results. (3) The delivery-area branch was dropped (vanilla's pass already rejected every earlier product); only rack boxes are tried. (4) A product whose emptiest slot is reserved by another restocker is no longer skipped: its next slot is tried.
+
 v1.0.0 (2026-11-27, user finding "restockers should have a priority system ... check that this is not how it's working at the moment"). Result of the check: the game already ranks products by fill ratio; the only deviation is delivery-area boxes before rack boxes. The mod is one `SearchHandler.PerformSearch` postfix that corrects that. Untested in-game.
 
 ## How the vanilla choice works (verified in the dumps)
@@ -16,7 +18,7 @@ v1.0.0 (2026-11-27, user finding "restockers should have a priority system ... c
 
 ## What the mod does
 
-Postfix on `PerformSearch` (host only, `[HarmonyBefore("flamboyanthopper.restockerdoublecarry")]`, priority High). Only when the clerk has no box in hand, vanilla chose a `StreetBoxTarget` with display targets, and its product P is not at 0%. Walk `GetDisplaySlotsRequiredRefill()` up to P; for each earlier product Q (not occupied by others) with `GetShelfFillStatus` ratio strictly below P's: street box (same checks as vanilla), else rack box. First usable job (non-empty `SearchBestFit`) replaces `BoxTarget`/`DisplayTargets` (`RackTarget` null) and P's reservations are cleared. Not changed: vehicle boxes, rack picks (already emptiest-first), ties, storage jobs.
+Postfix on `PerformSearch` (host only, `[HarmonyBefore("flamboyanthopper.restockerdoublecarry")]`, priority High). Only when the clerk has no box in hand and vanilla ended with a delivery-area restock (product P, not at 0%), a delivery-area storage/throw-away job, or no job; a street box outside the restockable area is skipped. Walk `GetDisplaySlotsRequiredRefill()` up to P; for each earlier product Q (a slot not occupied by others) with `GetShelfFillStatus` ratio strictly below P's (any product when there was no restock job): rack box. First usable job (non-empty `SearchBestFit`) replaces `BoxTarget`/`DisplayTargets` (`RackTarget` null) and P's reservations are cleared. Not changed: vehicle boxes, rack picks (already emptiest-first), ties, storage jobs.
 
 ## Interplay with RestockerDoubleCarry
 

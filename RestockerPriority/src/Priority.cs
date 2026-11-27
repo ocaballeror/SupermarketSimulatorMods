@@ -19,10 +19,14 @@
  *   So the rank is only respected inside each pass. A product at 60% with a box in the delivery area beats a product
  *   at 0% whose box is in a rack, and the restocker leaves the empty shelves empty until the delivery area is clear.
  *
- * This mod fixes exactly that: a PerformSearch postfix (host only). When the vanilla search picked a delivery-area
- * box for product P (BoxTarget is a StreetBoxTarget, DisplayTargets filled, no box in hand) and a product Q that is
- * STRICTLY emptier (lower GetShelfFillStatus ratio) has a usable box (delivery area, else rack: the same checks and
- * SearchBestFitDisplaySlotsForRestock call as the game's own search), the results are replaced by Q's job. Ties keep
+ * This mod fixes exactly that: a PerformSearch postfix (host only), no box in hand. When the vanilla search picked a
+ * delivery-area box for product P (StreetBoxTarget with DisplayTargets), or ended with a storage/throw-away job from
+ * a delivery-area box or with no job (the rack pass is also skipped when a street box was seen but rejected, e.g.
+ * targeted by another restocker), and a product Q that is STRICTLY emptier than P (any product when there was no
+ * restock job) has a usable rack box (same checks and SearchBestFitDisplaySlotsForRestock call as the game's own rack
+ * pass; delivery-area boxes of earlier products were already rejected by vanilla), the results become Q's job.
+ * A street box outside the delivery area (IsWithinRestockableArea false) is never touched: vanilla never picks one,
+ * it is RestockerDoubleCarry's FetchFromFloor result. Ties keep
  * the vanilla choice. If Q's job is not usable nothing changes, so a restocker is never left without work by this mod.
  * Q's displays are reserved by the game's own SearchBestFit call (DisplaySlot.m_OccupiedRestocker); P's reservation
  * (made by the vanilla search) is released by hand.
@@ -71,61 +75,56 @@ internal static class PriorityLogic
         var clerk = h.m_Clerk;
         if (clerk == null) return;
         if (clerk.m_CarryingBox && clerk.m_CurrentBox != null) return;
-        var bt = h.BoxTarget;
-        var displays = h.DisplayTargets;
-        if (bt == null || displays == null || displays.Count == 0) return;
-        var street = bt.TryCast<StreetBoxTarget>();
-        if (street == null) return;
         var mgmt = clerk.ManagementData;
         if (mgmt == null || !mgmt.IsActive || !mgmt.RestockShelf) return;
 
-        int p0 = bt.ProductID;
-        float fill0 = Fill(p0);
-        if (fill0 <= Epsilon) return;   // already the emptiest possible
+        // What vanilla ended with. Acted on: a delivery-area box to restock from, a delivery-area box for storage or
+        // to throw away, or no job at all. Left alone: a carried box, vehicle and rack boxes, and a street box that
+        // is outside the delivery area (vanilla never picks one: it is RestockerDoubleCarry's box on the floor).
+        int p0 = -1;
+        float fill0 = float.PositiveInfinity;
+        var bt = h.BoxTarget;
+        if (bt != null)
+        {
+            var street = bt.TryCast<StreetBoxTarget>();
+            if (street == null) return;
+            var box = street.Box;
+            if (box == null || !NoktaSingleton<StorageStreet>.HasInstance
+                || !NoktaSingleton<StorageStreet>.Instance.IsWithinRestockableArea(box.transform.position)) return;
+            var displays0 = h.DisplayTargets;
+            if (displays0 != null && displays0.Count > 0)
+            {
+                p0 = bt.ProductID;
+                fill0 = Fill(p0);
+                if (fill0 <= Epsilon) return;   // already the emptiest possible
+            }
+        }
 
         var all = h.GetDisplaySlotsRequiredRefill();
         if (all == null) return;
         var tried = new HashSet<int>();
-        var self = clerk.transform;
         for (int i = 0; i < all.Count; i++)
         {
             var slot = all[i];
             if (slot == null) continue;
             int pid = slot.ProductID;
             if (pid == p0) break;          // reached the vanilla choice: nothing emptier is usable
-            if (pid < 0 || !tried.Add(pid)) continue;
-            if (slot.IsOccupiedByOthers(clerk)) continue;
-            if (Fill(pid) >= fill0 - Epsilon) continue;   // not strictly emptier
+            if (pid < 0 || tried.Contains(pid)) continue;
+            if (slot.IsOccupiedByOthers(clerk)) continue;   // another slot of the product may be free
+            tried.Add(pid);
+            if (Fill(pid) >= fill0 - Epsilon) continue;     // not strictly emptier
 
-            IBoxTarget target = null;
-            DisplaySlotList list = null;
-            string source = null;
-            if (mgmt.PickUpBoxGround && h.CheckStreetForRequiredProduct(pid, out Box box) && box != null
-                && !box.IsOccupiedByAnother(self) && !box.IsTargeted)
-            {
-                list = h.SearchBestFitDisplaySlotsForRestock(box, h.GetDisplaySlotsRequiredRefill(pid));
-                if (list != null && list.Count > 0)
-                {
-                    target = new IBoxTarget(new StreetBoxTarget(box).Pointer);
-                    source = "the delivery area";
-                }
-            }
-            if (target == null && h.HasRackSlotForRequiredProduct(pid, out RackSlot rack) && rack != null)
-            {
-                list = h.SearchBestFitDisplaySlotsForRestock(rack, h.GetDisplaySlotsRequiredRefill(pid));
-                if (list != null && list.Count > 0)
-                {
-                    target = new IBoxTarget(new RackSlotBoxTarget(rack).Pointer);
-                    source = "a storage rack";
-                }
-            }
-            if (target == null) continue;
+            // Only a rack box can be new here: vanilla's delivery-area pass already tried every earlier product.
+            if (!h.HasRackSlotForRequiredProduct(pid, out RackSlot rack) || rack == null) continue;
+            var list = h.SearchBestFitDisplaySlotsForRestock(rack, h.GetDisplaySlotsRequiredRefill(pid));
+            if (list == null || list.Count == 0) continue;
 
-            Release(clerk, displays);
-            h.BoxTarget = target;
+            if (p0 >= 0) Release(clerk, h.DisplayTargets);
+            h.BoxTarget = new IBoxTarget(new RackSlotBoxTarget(rack).Pointer);
             h.DisplayTargets = list;
             h.RackTarget = null;
-            Info($"restocker #{Id(clerk)}: product {pid} ({Fill(pid):P0} stocked) from {source} goes before product {p0} ({fill0:P0}, delivery area)");
+            Info($"restocker #{Id(clerk)}: product {pid} ({Fill(pid):P0} stocked) from a storage rack goes before " +
+                 (p0 >= 0 ? $"product {p0} ({fill0:P0}, delivery area)" : "the job the game chose (storage or none)"));
             return;
         }
     }

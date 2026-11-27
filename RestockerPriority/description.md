@@ -5,7 +5,7 @@ Restockers fill the emptiest products first, even when the box is in a storage r
 [size=5][b]Features[/b][/size]
 
 [list]
-[*]The game already restocks the product with the emptiest shelves first, but always prefers boxes in the delivery area over boxes in racks. This mod removes that exception: a product with completely empty shelves is restocked before a half-stocked product with a box outside.
+[*]The game already restocks the product with the emptiest shelves first, but always prefers boxes in the delivery area over boxes in racks. This mod removes that exception: a product with completely empty shelves and a box in a rack is restocked before a half-stocked product with a box outside.
 [*]Works for every restocker, whatever its level.
 [*]Never leaves a restocker without work: if the emptier product's box can't be used, the normal choice stands.
 [/list]
