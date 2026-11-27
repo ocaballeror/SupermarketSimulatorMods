@@ -13,12 +13,12 @@ Each mod folder has its own `README.md` (what it does, its settings, who needs i
 
 | Mod | Request | What it does |
 |---|---|---|
-| [Supermarket Fixes](SupermarketFixes) | Bugs | All bug fixes: rack-move ghost boxes, ghost items in hands, stuck boxes, shelf placing, floating boxes, janitor mop alignment and stand spot |
+| [Supermarket Fixes](SupermarketFixes) | Bugs | All bug fixes: rack-move ghost boxes, ghost items in hands, stuck boxes, shelf placing, floating boxes, janitor mop alignment and stand spot, order bag counts, labelled order bags |
 | [Paint Can Capacity](PaintCanCapacity) | Improvement #2 | Paint cans last longer (2x by default, configurable) |
 | [Price Markup Keeper](PriceMarkupKeeper) | Improvement #1 | Prices keep your global markup when market prices change; new products start at it |
 | [Player Crouch](PlayerCrouch) | Improvement #3 | Hold Ctrl to crouch; the character model crouches too (visible to modded players) |
 | [Self Checkout Speed](SelfCheckoutSpeed) | Improvement #4 | Faster scanning at self checkouts, employee help and cashiers (configurable, follows the host; payment unchanged) |
-| [Restocker Double Carry](RestockerDoubleCarry) | Improvement #5 | High-level restockers fetch two boxes per trip |
+| [Restocker Double Carry](RestockerDoubleCarry) | Improvement #5 | High-level restockers fetch two boxes per trip and plan the shortest route |
 | [Furniture Move Cancel](FurnitureMoveCancel) | Improvement #6 | Escape puts moved furniture back where it was |
 | [Extra Computers](ExtraComputers) | Improvement #7 | Buyable extra computers, each with its own screen |
 | [Grid Mode Default](GridModeDefault) | Improvement #8 | Grid mode is on by default when placing furniture |
@@ -28,7 +28,9 @@ Each mod folder has its own `README.md` (what it does, its settings, who needs i
 | [Auto Courier Load](AutoCourierLoad) | Improvement #12 | The returning courier picks up closed, name-tagged delivery bags near his parking space and leaves when his trunk covers every active order or a deadline is close (host only) |
 | [Product Highlight](ProductHighlight) | Improvement #13 | Holding a box outlines every shelf, fridge and freezer labeled for its product; holding an order bag outlines the stocked products the order still needs (local only) |
 | [Pack Up Products](PackUpProducts) | Improvement #14 | Right click a shelf product with empty hands to pack it into a new box of the right size (free; guests need the mod on the host too) |
-| [Employee Clothes](EmployeeClothes) | Improvement #15 | Pick the colour of each employee type's clothes from the computer's Customization tab ($1000 each time; the host chooses, guests with the mod see it) |
+| [Employee Clothes](EmployeeClothes) | Improvement #15 | Pick the colour of each employee type's (and the players') clothes from the computer's Customization tab ($1000 each time; the host chooses, guests with the mod see it) |
+| [Auto Lights](AutoLights) | Improvement #16 | The shop lights switch on by themselves at 19:00 (host only) |
+| [Restocker Priority](RestockerPriority) | Improvement #17 | Restockers fetch the emptiest product first, even when its box is in a rack and another product's box is outside (host only) |
 
 ## Game and platform
 

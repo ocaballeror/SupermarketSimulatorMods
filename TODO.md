@@ -84,10 +84,9 @@ The current workaround is:
 
 ## Bug #6: Boxes Sometimes Remain Floating When Removing Boxes from a Stack
 
-**Status:** reviewed  
+**Status:** implemented  
 **Code:** `SupermarketFixes/src/Patches/FloatingBoxFix.cs`  
-**Review:** 2026-11-19, 3 rounds, hash `5ebc164b87c3`
-**Waiting on:** In-game test (host and guest, VerboseLogging on); send the `[FloatBox]` lines.
+**Waiting on:** In-game test of 0.11.12 on host and guest (VerboseLogging on); send the `[FloatBox]` lines, with the time and what floated (`nearRack=` separates this from Bug #1).
 
 When there is a pile of boxes, such as after placing a large online order, sometimes removing the box directly underneath another box does not cause the upper box to fall.
 
@@ -96,6 +95,10 @@ Instead, the upper box remains floating in the air until someone picks it up.
 Removing another box from underneath the floating box does cause it to fall.
 
 This does not seem to be related to Bug #1.
+
+### Rework requested after in-game testing (2026-11-27)
+
+the bug with the floating boxes is still there. they appear floating only on the guest machine, not the host
 
 ## Bug #7: Cleaning Lady Is Visually Misaligned When Cleaning Stains
 
@@ -137,6 +140,26 @@ More generally, orders that have already been picked up by the courier or are cu
 Players should no longer see these orders in their pending order lists.
 
 Currently, orders are only removed when they have been delivered to the customer.
+
+## Bug #10: Order Bag Counts Reset While Picking Up Items for a Delivery
+
+**Status:** implemented  
+**Code:** `SupermarketFixes/src/Patches/OrderBagCountsFix.cs`  
+**Waiting on:** In-game test of v0.11.13 (hold an open bag with products, then let another order expire or hand one to the courier; steps in `SupermarketFixes/CLAUDE.md`, Bug #10); send the `[OrderBagCounts]` lines.
+
+may or may not come from the auto courier pickup mod. investigate if it has anything to do or introduces it as a new bug:
+
+sometimes the bag just clears when picking up items for a delivery. this may be related with trying to pick up the same item that a customer is interacting with, but i'm not sure. the count of every item in the bag resets to zero, but if closed and reopened it fixes itself.
+
+## Bug #11: Same Order Can Be Taken Twice and the Pending Notification Stays for Other Players
+
+**Status:** implemented  
+**Code:** `SupermarketFixes/src/Patches/LabeledOrderFix.cs`  
+**Waiting on:** In-game test of v0.11.13 on host and a modded guest (take an order, label the bag, drop it; steps in `SupermarketFixes/CLAUDE.md`, Bug #11); send the `[LabeledOrders]` lines.
+
+may or may not come from the auto courier pickup mod. investigate if it has anything to do or introduces it as a new bug:
+
+taking an order, labeling the bag and dropping it on the floor allows you to open a new bag and take the same order again. the pending order notification clears from the player's screen, but not from the other players.
 
 ---
 
@@ -185,10 +208,9 @@ The mod works, but there is no animation for the player crouching, so it does no
 
 ## Improvement #4: Make Self-Checkout Machines Faster
 
-**Status:** reviewed  
+**Status:** implemented  
 **Code:** `SelfCheckoutSpeed/`  
-**Review:** 2026-11-19, 2 rounds, hash `2839d1f4e16f`
-**Waiting on:** In-game test of v1.2.0: cashier scans faster, payment stays at vanilla speed (steps in the mod's `CLAUDE.md`); host and a modded guest.
+**Waiting on:** In-game test of v1.2.1 (diagnostics only: with VerboseLogging on, send both machines' `[SelfCheckout]` lines when it happens, and say which PC shows it and which kind of checkout).
 
 Make customers using self-checkout machines 2x faster.
 
@@ -202,12 +224,15 @@ Allow values up to `10x`.
 - The setting should be typed into a text field in the in-game mod settings, not set with a slider.
 - The higher speed should also apply when the customer needs help from an employee.
 
+### Rework requested after in-game testing (2026-11-27)
+
+may or may not be related to faster self checkouts mod but after customers left, the machines still look like they have a bunch of products on them, although nobody is interacting with them and the screens are clear.
+
 ## Improvement #5: Allow Level 10 Restockers to Carry Two Boxes
 
-**Status:** reviewed  
+**Status:** implemented  
 **Code:** `RestockerDoubleCarry/`  
-**Review:** 2026-11-19, 2 rounds, hash `a91366ab2a58`
-**Waiting on:** In-game test of v1.3.1 (a dropped box is not taken by other restockers; no walk back for a missing box, including when regrouping with leftovers); send the `[DoubleCarry]` lines.
+**Waiting on:** In-game test of v1.4.0 (route planning for two boxes; send the `[DoubleCarry]` trip lines).
 
 Make level 10 restockers capable of carrying two product boxes at a time.
 
@@ -250,6 +275,10 @@ The implementation should be efficient and avoid unnecessary trips.
 ### Rework requested after in-game testing (2026-11-15)
 
 When restockers are carrying two boxes and they drop the bottom one, the top one should move down so it takes its place. Right now the top one stays floating.
+
+### Rework requested after in-game testing (2026-11-27)
+
+restocker double carry should prioritize the shortest route when taking two boxes. plan what is the most optimal box to use first, then go there.
 
 ## Improvement #6: Allow Furniture to Be Returned to Its Original Position
 
@@ -313,10 +342,9 @@ Make grid mode the default placement mode when placing furniture of any kind.
 
 ## Improvement #9: Add Bulk Item Transfer Between Shelves and Containers
 
-**Status:** reviewed  
+**Status:** implemented  
 **Code:** `BulkShelfTransfer/`  
-**Review:** 2026-11-19, 2 rounds, hash `d82ddc72ce11`
-**Waiting on:** In-game test of v0.2.3 (paper-bag bulk take and place; steps in the mod's `CLAUDE.md`, "In-game test"); send the `[Bulk]` lines.
+**Waiting on:** In-game test of v0.2.4 (shift-click with an open bag: products the order needs, other products, and putting back; send the `[Bulk]` lines, especially `not started (...)`).
 
 Allow players to transfer multiple products at once using `Shift + Right Click`.
 
@@ -367,12 +395,15 @@ Shift-clicking should work with paper bags for delivery too.
 - Otherwise, load as many products of that type as the bag can carry.
 - "Active delivery" means there is a delivery order present, and the currently selected delivery is not already being handled by another player or the courier.
 
+### Rework requested after in-game testing (2026-11-27)
+
+shift clicking items to or from the paper bag does not work. i guess it is prioritizing the logic to take as many items as necessary for the online order, but when the item is not related to any orders, it should work the same as with the crate. just take all of them at once, until there is no more space.
+
 ## Improvement #10: Allow Players to Carry Two Boxes at Once
 
-**Status:** reviewed  
+**Status:** implemented  
 **Code:** `PlayerDoubleCarry/`  
-**Review:** 2026-11-23, 3 rounds, hash `70da0cbd113c`
-**Waiting on:** In-game test of v0.2.4 (buying a second box at the wholesale store; stacking while the held box is open); send the `[PlayerCarry]` log lines.
+**Waiting on:** In-game test of v0.2.6 (hold left click on a wholesale product while holding a box; send the `[PlayerCarry]` lines).
 
 Allow players to pick up and carry two boxes at a time.
 
@@ -387,6 +418,10 @@ As soon as the player drops, throws, or places one of the boxes, they should be 
 ### Rework requested after in-game testing (2026-11-15)
 
 It should also work at the wholesale store. When the player is holding a box and goes to a shelf, fridge or freezer at the wholesale store, they should still be able to click and hold to buy another box and stack it on top of the one they already hold. The same limit of at most 2 boxes in hand still applies.
+
+### Rework requested after in-game testing (2026-11-27)
+
+still cannot pick up a second box from wholesale if holding one already, because picking the box uses the same binding (holding left click) as opening the one in your hand (left clicking), so it just opens the box, nothing else. need to drop the current one on the floor, then buy the second, and pick the first one from the floor for it to work.
 
 ## Improvement #11: More clear tags
 
@@ -411,10 +446,9 @@ When the courier comes back from a delivery, he scans a small area around and in
 
 ## Improvement #13: Highlight same products
 
-**Status:** reviewed  
+**Status:** implemented  
 **Code:** `ProductHighlight/`  
-**Review:** 2026-11-23, 2 rounds, hash `6bbd8905880d`
-**Waiting on:** In-game test of v0.1.5 on host and guest (steps in the mod's `CLAUDE.md`); send the `[Highlight]` lines.
+**Waiting on:** In-game test of v0.1.7 (outlines only while the order bag is open; steps in the mod's `CLAUDE.md`); send the `[Highlight]` lines.
 
 Currently, hen holding a box of products, the game highlights boxes of the same type that are in the storage racks, with a green outline. Do the same for shelves/fridges/freezers that are labeled with this type of product, even if they're empty at the moment. Unlike the storage, where the boxes are highlighted, mark the whole shelf/fridge/freezer in this case, since the shelves could all be empty but we still want to find where those products would go, based on their labels.
 
@@ -424,12 +458,15 @@ In both cases, make sure that the highlighting is updated live, since the labels
 stock of each shelf can change after the player picked up the box/bag. The highlighting
 needs to be updated to match
 
+### Rework requested after in-game testing (2026-11-27)
+
+items in shelves are sometimes highlighted for a delivery even when the paper bag is not open. player only cares about those items when they have opened the delivery bag and are actively looking for them. otherwise remove the highlight.
+
 ## Improvement #14: Pack up products
 
-**Status:** reviewed  
+**Status:** implemented  
 **Code:** `PackUpProducts/`  
-**Review:** 2026-11-23, 2 rounds, hash `c84550d497b2`
-**Waiting on:** In-game test of v0.1.5 on the host, then a modded guest (steps in the mod's `CLAUDE.md`); send the `[PackUp]` lines.
+**Waiting on:** In-game test of v0.1.7 with VerboseLogging on (the cause of the failure is not known; the `[PackUp]` lines name what blocks the right click).
 
 Right clicking on a product that is in a shelf/fridge/freezer currently does nothing, as
 it requires the user to use the crate tool or a paper bag to pack products in a specific
@@ -441,12 +478,15 @@ box. Keep in mind that boxes in this game have different sizes, and each product
 one box size that is the right one for it, and the game does not allow to put items into
 the wrong box type, so make sure to spawn the right one.
 
+### Rework requested after in-game testing (2026-11-27)
+
+the mod to pick up things into boxes just doesnt work at all. it used to work in a previous version, but i assume it was broken or disabled after recent changes.
+
 ## Improvement #15: Employee clothes
 
-**Status:** reviewed  
+**Status:** implemented  
 **Code:** `EmployeeClothes/`  
-**Review:** 2026-11-23, 2 rounds, hash `55ddc4d35ffd`
-**Waiting on:** In-game test of v1.0.10 (colors saved with the game save: quit without saving, new game on a used slot, load; steps in the mod's `CLAUDE.md`, "Review notes").
+**Waiting on:** In-game test of v1.1.0 (the new Players type, with a second player present; the guest colour check; steps in the mod's `CLAUDE.md`); send the `[EmployeeClothes]` lines from both machines.
 
 Create a new entry in the customization menu from the game's computer that allows the
 player to pick the color scheme of the clothes of the employees. It costs $500 to access
@@ -460,3 +500,25 @@ to the clothes of the employees, which still retain the same character models an
 that are built in, just with the new colors. A checkbox is offered called "Apply to all"
 that will apply it all of the employee types, although the user can still switch to
 another type and override the color for that one specifically.
+
+### Rework requested after in-game testing (2026-11-27)
+
+clothing mod should also include player skins.
+
+the color of the clothing mod does not properly sync to the guest. they look slightly different for some reason, but it could be just the screens being different. check if you find any issue on this, or just close this item.
+
+## Improvement #16: Auto lights
+
+**Status:** implemented  
+**Code:** `AutoLights/`  
+**Waiting on:** In-game test of v1.0.0 (lights come on at 19:00; steps in the mod's `CLAUDE.md`); send the `[AutoLights]` lines.
+
+add a new mod to turn on the lights automatically at 7pm
+
+## Improvement #17: Restocker priority
+
+**Status:** implemented  
+**Code:** `RestockerPriority/`  
+**Waiting on:** In-game test of v1.0.0 (a 60% product with a box outside versus a 0% product with a box in a rack; steps in the mod's `CLAUDE.md`); send the `[RestockerPriority]` lines.
+
+check the existing logic first, but restockers should have a priority system. make the box priority based on the ratio of how many logical shelves are empty for their product, that is, the ratio of empty slots in shelves by the amount of slots that each shelf can hold. e.g. potato bags fill a shelf with only two items. if there are 4 shelves of potato bags and each of them has only one, there are 4 empty slots in total, or 2 logical shelves. in other words, prioritize restocking based on the percentage of empty slots that the product has, so that products that are completely empty (or 0%) are taken first, and those that are completely full (100%) are done last (in those cases, the boxes are just taken to storage). check that this is not how it's working at the moment.
