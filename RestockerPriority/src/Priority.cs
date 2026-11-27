@@ -70,7 +70,7 @@ internal static class PriorityLogic
         catch (Exception) { return 1f; }
     }
 
-    internal static void AfterSearch(SearchHandler h)
+    internal static void AfterSearch(SearchHandler h)  // only called when the original search ran
     {
         var clerk = h.m_Clerk;
         if (clerk == null) return;
@@ -83,6 +83,8 @@ internal static class PriorityLogic
         // is outside the delivery area (vanilla never picks one: it is RestockerDoubleCarry's box on the floor).
         int p0 = -1;
         float fill0 = float.PositiveInfinity;
+        // Vanilla only skips its rack pass after seeing a delivery-area box, which needs this setting.
+        if (!mgmt.PickUpBoxGround) return;
         var bt = h.BoxTarget;
         if (bt != null)
         {
@@ -112,7 +114,7 @@ internal static class PriorityLogic
             if (pid < 0 || tried.Contains(pid)) continue;
             if (slot.IsOccupiedByOthers(clerk)) continue;   // another slot of the product may be free
             tried.Add(pid);
-            if (Fill(pid) >= fill0 - Epsilon) continue;     // not strictly emptier
+            if (p0 >= 0 && Fill(pid) >= fill0 - Epsilon) continue;   // not strictly emptier
 
             // Only a rack box can be new here: vanilla's delivery-area pass already tried every earlier product.
             if (!h.HasRackSlotForRequiredProduct(pid, out RackSlot rack) || rack == null) continue;
@@ -152,11 +154,13 @@ internal static class PriorityLogic
 [HarmonyPriority(Priority.High)]
 internal static class PerformSearchPatch
 {
-    private static void Postfix(SearchHandler __instance)
+    private static void Postfix(SearchHandler __instance, bool __runOriginal)
     {
         try
         {
-            if (!PhotonNetwork.IsConnectedAndSlave) PriorityLogic.AfterSearch(__instance);
+            // A prefix that skipped the original filled the results itself (RestockerDoubleCarry: floor box, second box,
+            // storage box in hand): leave those alone.
+            if (__runOriginal && !PhotonNetwork.IsConnectedAndSlave) PriorityLogic.AfterSearch(__instance);
         }
         catch (Exception e)
         {
