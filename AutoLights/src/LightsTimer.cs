@@ -26,8 +26,10 @@ namespace AutoLights;
 ///  - The light state is not part of the save: the managers' <c>m_IsOn</c> is false after a load.
 ///
 /// Rules implemented here: host (or offline) only; a firing needs the clock to be seen moving forward from before
-/// 19:00 to 19:00 or later in a small step (so loading a save that is already past 19:00, or a jump of the clock,
-/// does nothing); once per <c>CurrentDay</c>; only switches whose manager is off and has lamps; nothing if no switch exists.
+/// 19:00 to 19:00 or later in a small step (so a jump of the clock does nothing). In the dumps
+/// <c>LoadSaveProgress</c> (from <c>DayCycleManager.Awake</c> / <c>NetworkDayCycleManager.Awake</c>) sets hour =
+/// <c>m_DayStartingTime</c>, AM true and <c>m_CurrentTimeInFloat</c> 0 and nothing restores hour/minute from the
+/// save, so a save loaded "past 19:00" probably cannot happen; the first-sight and step guards are harmless safety; once per <c>CurrentDay</c>; only switches whose manager is off and has lamps; nothing if no switch exists.
 /// </summary>
 internal static class LightsTimer
 {
@@ -111,14 +113,14 @@ internal static class LightsTimer
                     if (!NoktaSingleton<StoreLightManager>.HasInstance) continue;
                     var m = NoktaSingleton<StoreLightManager>.Instance;
                     off = !m.TurnOn;
-                    hasLamps = Count(m.m_InteriorLights) + Count(m.m_OutdoorLights) > 0;
+                    hasLamps = Alive(m.m_InteriorLights) + Alive(m.m_OutdoorLights) > 0;
                 }
                 else if (section == "Storage")
                 {
                     if (!NoktaSingleton<StorageLightManager>.HasInstance) continue;
                     var m = NoktaSingleton<StorageLightManager>.Instance;
                     off = !m.TurnOn;
-                    hasLamps = Count(m.m_InteriorLights) > 0;
+                    hasLamps = Alive(m.m_InteriorLights) > 0;
                 }
                 else continue;
 
@@ -137,8 +139,16 @@ internal static class LightsTimer
         if (flipped > 0) Plugin.Logger.LogInfo($"[AutoLights] 19:00: switched on {flipped} light switch(es)");
     }
 
-    private static int Count<T>(Il2CppSystem.Collections.Generic.List<T> list)
+    /// <summary>Number of lamps in the list that are not destroyed (the managers' lists can still hold dead entries).</summary>
+    private static int Alive<T>(Il2CppSystem.Collections.Generic.List<T> list) where T : UnityEngine.Object
     {
-        return list == null ? 0 : list.Count;
+        if (list == null) return 0;
+        int n = 0;
+        for (int i = 0; i < list.Count; i++)
+        {
+            var l = list[i];
+            if (l != null) n++;
+        }
+        return n;
     }
 }

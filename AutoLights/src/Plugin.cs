@@ -11,7 +11,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.autolights";
     public const string Name = "Auto Lights";
-    public const string Version = "1.0.0";
+    public const string Version = "1.0.1";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;
@@ -34,7 +34,7 @@ public class Plugin : BasePlugin
 
         // The mod has no patches: a per-frame behaviour reads the clock and does nothing while disabled,
         // so toggling Enabled works live. Nothing touches the game from Load().
-        Enabled.SettingChanged += (_, _) => LightsTimer.Reset();
+        Enabled.SettingChanged += (_, _) => { LightsBehaviour.Failed = false; LightsTimer.Reset(); };
         AddComponent<LightsBehaviour>();
         Log.LogInfo($"{Name} {Version} loaded ({(Enabled.Value ? "enabled" : "disabled")})");
     }

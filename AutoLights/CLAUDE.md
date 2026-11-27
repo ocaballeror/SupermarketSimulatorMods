@@ -4,6 +4,8 @@ Player-facing info is in [README.md](README.md). Shared rules and game internals
 
 ## Status
 
+v1.0.1 (review): a failing `Tick` is logged once (LogError) and ticking stops until `Enabled` is toggled (was an error every frame); lamp lists are counted without destroyed entries; docs corrected: in the dumps `LoadSaveProgress` (from `DayCycleManager.Awake` / `NetworkDayCycleManager.Awake`) sets hour = `m_DayStartingTime`, AM true, `m_CurrentTimeInFloat` 0 and nothing restores hour/minute from the save, so a "save loaded past 19:00" probably can't happen on the host (unverified in-game); the first-sight and 120-minute guards stay as harmless safety.
+
 v1.0.0: new mod (request: "turn on the lights automatically at 7pm"). Written and built, **not tested in-game**. No Harmony patches: a per-frame `LightsBehaviour` (added with `AddComponent` in `Load()`, touches no game state there) calls `LightsTimer.Tick()`.
 
 ## Game mechanism (verified in the dumps)
@@ -18,7 +20,7 @@ v1.0.0: new mod (request: "turn on the lights automatically at 7pm"). Written an
 ## What the mod does
 
 - Host or offline only (`PhotonNetwork.IsConnected && !IsMasterClient` returns).
-- Each frame: read the clock. On the first sight of a clock instance (pointer), on a new `CurrentDay`, or after re-enabling, it only records the time. Otherwise a forward step of 0..120 minutes (`MaxStepMinutes`) from before 19:00 to 19:00 or later fires, at most once per `CurrentDay`. A bigger step (save load setting the clock from the start hour to the saved time, a time-skipping mod) or a backward step never fires.
+- Each frame: read the clock. On the first sight of a clock instance (pointer), on a new `CurrentDay`, or after re-enabling, it only records the time. Otherwise a forward step of 0..120 minutes (`MaxStepMinutes`) from before 19:00 to 19:00 or later fires, at most once per `CurrentDay`. A bigger step (a time-skipping mod; a save load is not expected to move the clock, see the 1.0.1 status line) or a backward step never fires.
 - Fire: `FindObjectsOfType<LightSwitch>()`; for section "Store"/"Storage" whose manager is off **and** has at least one lamp (store: interior + outdoor), call `InstantInteract()`. Both sections are done (storage room lights count as shop lights). No switch means nothing.
 - Pitfall: a save loaded just before 19:00 (say 18:59) still fires at 19:00, which is intended.
 
@@ -37,5 +39,5 @@ Host-side only; the game's buffered RPC carries the state to guests and late joi
 1. Turn on `VerboseLogging` in `BepInEx/config/flamboyanthopper.autolights.cfg`. Place at least one store lamp (and a storage lamp if you want to test that), make sure the lights are off, and play through an evening.
 2. At 19:00: expect `[AutoLights] Clock crossed 19:00 ...`, `[AutoLights] Switched the Store lights on`, the lamps on, a switch sound, the lever moved; with a guest connected, the lamps on for them as well. Turn the lights off again: they must stay off.
 3. Next day (sleep): lights go off at the day start (game behaviour) and come on again at 19:00.
-4. Load a save that is past 19:00: nothing switches (`Watching the clock` line only). Join as a guest mid-evening: nothing happens on the guest.
+4. Load a save made after 19:00: expect the clock to start at the day start hour; nothing switches (`Watching the clock` line only). Join as a guest mid-evening: nothing happens on the guest.
 5. Send back the `[AutoLights]` lines from `BepInEx/LogOutput.log` plus the in-game time at which the lights came on.
