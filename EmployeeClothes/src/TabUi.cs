@@ -584,12 +584,12 @@ internal static class TabUi
         {
             if (ClothesStore.IsGuest || _panel == null || _open) return;
             price = Plugin.Price;
-            if (!Affordable(price)) { Plugin.Info("Not enough money for Employee Clothes"); UpdateCard(); return; }
+            if (!Affordable(price)) { Plugin.Debug("Not enough money for Employee Clothes"); UpdateCard(); return; }
             if (price > 0f)
             {
                 Charge(price);
                 charged = true;
-                Plugin.Info($"Charged {PriceText()} for opening Employee Clothes");
+                Plugin.Debug($"Charged {PriceText()} for opening Employee Clothes");
             }
             Open();
         }
@@ -602,7 +602,7 @@ internal static class TabUi
                 try
                 {
                     NoktaSingleton<MoneyManager>.Instance.MoneyTransition(price, MoneyManager.TransitionType.UPGRADE_COSTS, true);
-                    Plugin.Info("Refunded the charge");
+                    Plugin.Debug("Refunded the charge");
                 }
                 catch (Exception e2) { Plugin.Error("Refunding the charge failed: " + e2.Message); }
             }
@@ -911,7 +911,7 @@ internal static class TabUi
             else
                 ClothesStore.Set(kind, pend);
             ClothesStore.MarkChanged();   // written to the mod's file with the next game save (not now), so money and colors stay together
-            Plugin.Info($"Applied #{hex} to {(_applyAll ? "all employee types" : ClothesStore.NameOf(kind))}");
+            Plugin.Debug($"Applied #{hex} to {(_applyAll ? "all employee types" : ClothesStore.NameOf(kind))}");
             Employees.Sweep();
             _message = _applyAll ? "Applied to all types." : $"Applied to {ClothesStore.PluralOf(kind).ToLowerInvariant()}.";
             RefreshTexts();
@@ -939,7 +939,7 @@ internal static class TabUi
             ClothesStore.MarkChanged();
             Preview.SetColor(null);
             _message = _applyAll ? "Reset all types to the original clothes." : $"Reset {ClothesStore.PluralOf(CurrentKind).ToLowerInvariant()} to the original clothes.";
-            Plugin.Info($"Reset to the original clothes: {(_applyAll ? "all employee types" : ClothesStore.NameOf(CurrentKind))}");
+            Plugin.Debug($"Reset to the original clothes: {(_applyAll ? "all employee types" : ClothesStore.NameOf(CurrentKind))}");
             Employees.Sweep();
             RefreshTexts();
         }

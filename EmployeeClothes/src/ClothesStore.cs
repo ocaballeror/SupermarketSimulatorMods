@@ -385,6 +385,9 @@ internal static class ClothesStore
         {
             var s = Serialize();
             WriteLine(key, s);
+            var rk = SaveKey();
+            if (rk != null && rk != key)
+                Plugin.Warn($"Save key mismatch: wrote colors under '{key}' but the reader uses '{rk}' (the game's save naming changed?)");
             _key = key;
             _dirty = false;
             _fresh = false;
