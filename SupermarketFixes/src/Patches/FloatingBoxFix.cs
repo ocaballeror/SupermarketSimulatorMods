@@ -24,8 +24,8 @@ namespace SupermarketFixes.Patches;
 /// StorageStreet.Instance.boxes and calls Rigidbody.WakeUp on each. Box.Start / Box.Setup subscribe every box
 /// to that list through StorageStreet.SubscribeBox, which skips only racked boxes and boxes on a placement
 /// area, so it holds every loose box in the store, not just the delivery street. OnTakeBoxFromStreet (a clerk
-/// taking a box from the street) wakes the same list; Restocker.PickUpBox invokes it before Box.FrezeeBox. The wake is therefore store-wide, not limited by the 100-collider
-/// buffer of GetBoxesInArea.
+/// taking a box from the street) wakes the same list; Restocker.PickUpBox invokes it before Box.FrezeeBox.
+/// The wake is therefore store-wide, not limited by the 100-collider buffer of GetBoxesInArea.
 ///
 /// So on a host in a room, every player pickup already wakes every loose, host-owned box. What stays uncovered
 /// by the game, and what this fix adds:
@@ -39,14 +39,14 @@ namespace SupermarketFixes.Patches;
 ///    support is removed).
 /// What it cannot fix on a host: a box a guest picked up and put down stays owned by that guest
 /// (NetworkBox.PickUp_Broadcast transfers the ownership) and is kinematic on the host, so only the guest's
-/// machine simulates it; and host-owned boxes whose transform sync is switched off fall on the host but stay
-/// put for guests. Taking ownership back (PhotonView.TransferOwnership to the master, as the game does in
+/// machine simulates it. Taking ownership back (PhotonView.TransferOwnership to the master, as the game does in
 /// PlaceBoxToRack) was not added: nothing in the dumps shows it is safe for a box a guest may still be
-/// moving, so those cases are only logged.
+/// moving, so those cases are only logged. (Host-owned boxes whose transform sync is switched off fall on the
+/// host but would stay put for guests; PushPoses below covers them.)
 ///
 /// Fix: after every player pickup (boxes within 2.5 m, 0.25 s and 1 s later) and every 5 s for the loose boxes
-/// of StorageStreet.Instance.boxes (all boxes if there is no StorageStreet), on the machine that simulates the
-/// box (offline, or the Photon owner), find boxes whose Rigidbody is asleep, not kinematic and has solid
+/// of StorageStreet.Instance.boxes (all boxes if there is no StorageStreet), on a machine that simulates the
+/// box (see Simulated: offline, the Photon owner, or on a guest a box that isn't kinematic), find boxes whose Rigidbody is asleep, not kinematic and has solid
 /// colliders, and probe a thin slab just under their collider bounds. Nothing solid there = unsupported:
 /// Rigidbody.WakeUp(), and the normal physics lets it fall. A supported box is left alone (its slab hits the
 /// box or floor it rests on). Right after a pickup every simulated sleeping neighbour is woken, supported or
@@ -71,7 +71,8 @@ namespace SupermarketFixes.Patches;
 /// the game's reliable SyncTransform RPC. Its receivers SetPositionAndRotation without looking at m_SyncEnabled,
 /// so the guest copy is put at the pose the host copy rests in; only once per pose (re-sent when the box moves
 /// and settles again), at most 12 per pass. Guest, mod installed: Simulated also accepts a non-kinematic box
-/// that isn't owned, so such a sleeping box with nothing under it is woken locally.
+/// that isn't owned, so such a sleeping box with nothing under it is woken locally (not on the host, where a non-kinematic
+/// box owned by a guest, seen only while ownership moves, is left to its owner's stream).
 /// Not covered: boxes a guest owns (picked up and put down by it): only that guest's machine can move them.
 ///
 /// VerboseLogging: every unsupported box this fix does not wake is logged once ([FloatBox]) with its state:
@@ -106,6 +107,7 @@ internal static class FloatingBoxFix
         s_woken = 0;
         s_otherLogs = 0;
         s_loggedErrors = false;
+        s_loggedPushError = false;
         s_seenOther.Clear();
     }
 
@@ -121,6 +123,7 @@ internal static class FloatingBoxFix
     private static int s_woken;
     private static int s_otherLogs;
     private static bool s_loggedErrors;
+    private static bool s_loggedPushError;
     private static readonly HashSet<IntPtr> s_seenOther = new();
 
     /// <summary>A player picked this box up: its neighbours may have lost their support.</summary>
@@ -136,7 +139,7 @@ internal static class FloatingBoxFix
     {
         if (!WakeUnsupported.Value) return;
         if (s_events.Count > 0) RunEvents(now);
-        if (now >= s_nextPush) { s_nextPush = now + PushInterval; try { PushPoses(); } catch (Exception e) { LogCheckError(e); } }
+        if (now >= s_nextPush) { s_nextPush = now + PushInterval; try { PushPoses(); } catch (Exception e) { LogPushError(e); } }
         if (now < s_next) return;
         s_next = now + SweepInterval;
         if (!NoktaSingleton<PlayerManager>.HasInstance) return;
@@ -194,6 +197,13 @@ internal static class FloatingBoxFix
         Plugin.Logger.LogError($"[FloatBox] checking a box failed (further errors suppressed): {e}");
     }
 
+    private static void LogPushError(Exception e)
+    {
+        if (s_loggedPushError) return;
+        s_loggedPushError = true;
+        Plugin.Logger.LogError($"[FloatBox] sending resting box poses to the guests failed (further errors suppressed): {e}");
+    }
+
     /// <summary>
     /// Host: tell guests where each resting box that has transform sync off lies (see the doc comment).
     /// </summary>
@@ -211,8 +221,6 @@ internal static class FloatingBoxFix
         {
             var box = list[i];
             if (box == null || !box.gameObject.activeInHierarchy || box.Racked) continue;
-            var tr = box.transform;
-            if (tr.parent != null) continue;
             var nb = box.NetworkBox;
             if (nb == null) continue;
             var view = nb.PhotonView;
@@ -221,6 +229,8 @@ internal static class FloatingBoxFix
             if (ptv == null || ptv.m_SyncEnabled) continue;
             var rb = box.RigidBody;
             if (rb == null || rb.isKinematic || !rb.IsSleeping()) continue;
+            var tr = box.transform;
+            if (tr.parent != null) continue;
             var ptr = box.Pointer;
             s_pushSeen.Add(ptr);
             var pos = tr.position;
@@ -247,15 +257,17 @@ internal static class FloatingBoxFix
     }
 
     /// <summary>
-    /// True if this machine's physics moves the box: offline, the Photon owner, or a box that is not kinematic
-    /// here. The last case is a host-owned box on a guest after an employee dropped it (Box.DropBox makes it a
-    /// free body on every client, and its transform sync stays off), see the Bug #6 doc comment.
+    /// True if this machine's physics moves the box: offline, the Photon owner, or (on a guest only) a box that
+    /// is not kinematic here. The last case is a host-owned box on a guest after an employee dropped it
+    /// (Box.DropBox makes it a free body on every client, and its transform sync stays off), see the Bug #6 doc
+    /// comment. On the host it is excluded: a non-kinematic guest-owned box there is only transient (during the
+    /// ownership transfer around a guest's drop) and the guest's stream moves it.
     /// </summary>
     private static bool Simulated(Box box, Rigidbody rb)
     {
         if (!PhotonNetwork.IsConnected) return true;
         var view = box.NetworkBox != null ? box.NetworkBox.PhotonView : null;
-        return view == null || view.IsMine || !rb.isKinematic;
+        return view == null || view.IsMine || (!PhotonNetwork.IsMasterClient && !rb.isKinematic);
     }
 
     private static void Check(Box box, bool probe)
