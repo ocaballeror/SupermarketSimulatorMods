@@ -75,6 +75,9 @@ namespace PlayerDoubleCarry;
 ///    interaction), the spawned box is caught in a SpawnBoxLocalMarket postfix, and it is then requested as
 ///    the second box exactly like a loose box (RequestSecondBox -> InstantInteract), so the host-grant,
 ///    refusal and stacking paths are the same.
+///  - Finding the product (0.2.6): PurchasableProduct is on the parent object of the collider that is hit
+///    (a BoxCollider on the child "CardboardBox_..._Model"), so the look-up searches upwards. Before that, a
+///    plain GetComponent on the hit object found nothing and the click opened the held box.
 ///  - OnPlayerLeftRoom prefix (master only): before the leaving player's avatar is destroyed, release
 ///    every box under their hold point that isn't their BoxInteraction.m_Box (unparent, solid, not occupied,
 ///    transform sync on, physics on), so the box isn't destroyed with the avatar on the host. Guests don't do
@@ -218,6 +221,7 @@ internal static class DoubleCarry
         var col = hit.collider;
         if (col == null) return null;
         var box = col.gameObject.GetComponent<Box>();   // the game takes the interactable from the hit collider itself
+        if (box == null) box = col.gameObject.GetComponentInParent<Box>();   // ...and falls back to the parents
         if (box == null || Same(box, held)) return null;
         // Same checks as a vanilla click; online the host still decides (occupied by someone, claimed by an NPC).
         if (!box.gameObject.activeInHierarchy || box.m_Racked) return null;
@@ -237,8 +241,28 @@ internal static class DoubleCarry
             return null;
         var col = hit.collider;
         if (col == null) return null;
+        // The collider of a wholesale product is on a child (the cardboard box model); PurchasableProduct sits
+        // on the parent object, so the component is searched upwards (the game's Raycast has a parent
+        // fallback too). A plain GetComponent on the hit object found nothing, which is why a click just
+        // opened the held box.
         var pp = col.gameObject.GetComponent<PurchasableProduct>();
+        if (pp == null) pp = col.gameObject.GetComponentInParent<PurchasableProduct>();
+        if (pp == null && Plugin.VerboseLogging.Value) LogLookedAt(col, hit.distance);
         return pp != null && pp.isActiveAndEnabled ? pp : null;
+    }
+
+    private static float s_lookedLogAt = -10f;
+
+    /// <summary>Verbose diagnostic: what the ray hit when it wasn't a box or a wholesale product (at most once per 2 s).</summary>
+    private static void LogLookedAt(Collider col, float dist)
+    {
+        float now = Time.unscaledTime;
+        if (now - s_lookedLogAt < 2f) return;
+        s_lookedLogAt = now;
+        var t = col.transform;
+        string chain = "";
+        for (int i = 0; i < 4 && t != null; i++, t = t.parent) chain += (i > 0 ? " < " : "") + t.name;
+        Info($"Click with a held box: the ray hit \"{chain}\" (layer {col.gameObject.layer}, {dist:0.00} m), not a loose box or a wholesale product");
     }
 
     private static void StartBuy(PlayerInstance p, Box held, PurchasableProduct pp)
