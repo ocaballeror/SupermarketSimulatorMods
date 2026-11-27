@@ -207,6 +207,9 @@ internal static class Network
             }
         }
         Done.RemoveWhere(t => !SeenNow.Contains(t));
+        List<string> stale = null;
+        foreach (var k in FirstSeen.Keys) if (!SeenNow.Contains(k)) (stale ??= new List<string>()).Add(k);
+        if (stale != null) foreach (var k in stale) FirstSeen.Remove(k);
     }
 
     private static bool TryRegister(int viewId, string who, out string why)

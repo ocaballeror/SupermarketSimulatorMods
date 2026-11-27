@@ -84,6 +84,7 @@ internal static class PackUp
     private static InputAction _action;
     private static string _actionName;
     private static IntPtr _actionsPtr;
+    private static bool _looked;   // a lookup was done for _actionName/_actionsPtr (also when it found nothing)
     private static float _nextWarn;
 
     internal static void Reset()
@@ -91,6 +92,7 @@ internal static class PackUp
         _pending = null;
         _action = null;
         _actionsPtr = IntPtr.Zero;
+        _looked = false;
         Network.Reset();
     }
 
@@ -159,11 +161,12 @@ internal static class PackUp
         var pin = ia != null ? ia.m_PlayerInput : null;
         var actions = pin != null ? pin.actions : null;
         if (actions == null) return false;
-        if (_action == null || _actionName != name || _actionsPtr != actions.Pointer)
+        if (!_looked || _actionName != name || _actionsPtr != actions.Pointer)
         {
             _action = actions.FindAction(name, false);
             _actionName = name;
             _actionsPtr = actions.Pointer;
+            _looked = true;
             if (_action == null)
             {
                 if (Time.unscaledTime >= _nextWarn)
@@ -174,7 +177,7 @@ internal static class PackUp
                 return false;
             }
         }
-        return _action.WasPressedThisFrame();
+        return _action != null && _action.WasPressedThisFrame();
     }
 
     // ------------------------------------------------------------------ the click
@@ -313,6 +316,7 @@ internal static class PackUp
     private static Box SpawnAsHost(BoxSize size, int pid, Vector3 pos, Quaternion rot, out int viewId)
     {
         viewId = 0;
+        Box box = null;
         try
         {
             var data = new BoxData(size, pos, rot, true, pid, 0);
@@ -324,10 +328,10 @@ internal static class PackUp
                 int uid = NoktaSingleton<IDManager>.Instance.GenerateBoxUniqueID();
                 if (uid > 0) data.m_UID = uid;
             }
-            var box = NoktaSingleton<BoxGenerator>.Instance.SpawnBox(pos, rot, data);
+            box = NoktaSingleton<BoxGenerator>.Instance.SpawnBox(pos, rot, data);
             if (box == null) { Warn("BoxGenerator.SpawnBox returned no box"); return null; }
             var d = box.Data;
-            if (d == null) { Warn("The spawned box has no data"); return null; }
+            if (d == null) { Warn("The spawned box has no data; it lies at the hold point, pick it up by hand"); return null; }
             var nb = box.NetworkBox;
             if (nb != null) viewId = nb.ViewId;
             var inv = NoktaSingleton<InventoryManager>.Instance;
@@ -339,6 +343,7 @@ internal static class PackUp
         catch (Exception e)
         {
             Warn($"Spawning the box failed: {e}");
+            Release(box);
             return null;
         }
     }
@@ -346,15 +351,16 @@ internal static class PackUp
     private static Box SpawnAsGuest(BoxSize size, int pid, Vector3 pos, Quaternion rot, out int viewId)
     {
         viewId = 0;
+        Box box = null;
         try
         {
             // Closed: the host's copy of a client-spawned box starts closed (see Network.TryRegister), so every
             // client agrees on closed and the vanilla open (Box.OpenBox -> OpenBox_RPC to All) opens it everywhere.
             var data = new BoxData(size, pos, rot, false, pid, 0);
-            var box = NoktaSingleton<NetworkObjectGenerator>.Instance.SpawnNetworkBoxClient(pos, rot, data, -1);
+            box = NoktaSingleton<NetworkObjectGenerator>.Instance.SpawnNetworkBoxClient(pos, rot, data, -1);
             if (box == null) { Warn("NetworkObjectGenerator.SpawnNetworkBoxClient returned no box"); return null; }
             var nb = box.NetworkBox;
-            if (nb == null || nb.PhotonView == null) { Warn("The spawned box has no NetworkBox / PhotonView"); return null; }
+            if (nb == null || nb.PhotonView == null) { Warn("The spawned box has no NetworkBox / PhotonView"); Release(box); return null; }
             viewId = nb.ViewId;
             if (data.UID <= 0) data.m_UID = viewId;   // what BoxGenerator.SpawnBoxLocalMarket does
             box.Data = data;
@@ -370,6 +376,7 @@ internal static class PackUp
         catch (Exception e)
         {
             Warn($"Spawning the box failed: {e}");
+            Release(box);
             return null;
         }
     }
@@ -449,6 +456,12 @@ internal static class PackUp
             if (!Same(aimed, pd.Slot))
             {
                 Vlog("The player no longer aims at the shelf slot; leaving the new box empty and open");
+                return;
+            }
+            // Vanilla CheckForTakingItem checks the slot before every take; the shelf may have changed meanwhile.
+            if (pd.Slot.ProductCount <= 0 || pd.Slot.ProductID != pd.Box.Data.ProductID)
+            {
+                Vlog("The shelf slot was emptied or restocked with another product while waiting; leaving the new box empty and open");
                 return;
             }
             TakeInto(p, pd.Box, pd.Slot);

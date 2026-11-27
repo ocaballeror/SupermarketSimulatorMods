@@ -31,6 +31,7 @@ Free. The products are already yours, and a box taken from a shelf is not a purc
 
 - **Playing alone, or hosting: install it on the host.** The host spawns the box and everybody sees it, including guests without the mod.
 - **A guest can pack too, but only if the host also has the mod.** The guest's game creates the box and the host saves it. If the host does not have the mod, a guest with the mod does nothing (the mod logs why), so no box or product can be lost.
+- A box a guest packed is that guest's own object: it disappears when the guest leaves the game, and comes back when the host reloads the save.
 - Guests without the mod simply don't get the feature; they see the host's and other guests' boxes normally.
 
 ## Limits
