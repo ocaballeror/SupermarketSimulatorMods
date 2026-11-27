@@ -59,3 +59,11 @@ internal static class IceCreamHelperStartPatch
 {
     private static void Postfix(IceCreamHelper __instance) => Employees.OnStarted(HrEmployeeKind.IceCreamHelper, __instance);
 }
+
+// The players (1.1.0): PlayerInstance.Start runs when a player object is first activated (the four scene players are
+// activated as people join). Registered as the ninth type; its renderers are those of all skins (Employees.RescanPlayer).
+[HarmonyPatch(typeof(PlayerInstance), nameof(PlayerInstance.Start))]
+internal static class PlayerInstanceStartPatch
+{
+    private static void Postfix(PlayerInstance __instance) => Employees.OnStarted(ClothesStore.PlayerKind, __instance);
+}

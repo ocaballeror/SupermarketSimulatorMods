@@ -136,6 +136,7 @@ internal static class Preview
     /// <summary>The scene-asset prefab of every employee of this type (the ScriptableObjects the HR screen lists).</summary>
     private static List<GameObject> PrefabsOf(HrEmployeeKind kind)
     {
+        if (kind == ClothesStore.PlayerKind) return PlayerSkins();
         var list = new List<GameObject>();
         if (!NoktaSingleton<IDManager>.HasInstance) return list;
         var ids = NoktaSingleton<IDManager>.Instance;
@@ -170,6 +171,54 @@ internal static class Preview
         return list;
     }
 
+    /// <summary>
+    /// The distinct player models: the PlayerSkin objects of the local player (Man_01, Man_01_Rig_Test Variant, Man_02,
+    /// Woman_01, Woman_02). Skins whose material lists are the same (the rig-test variant of Man_01) count once.
+    /// </summary>
+    private static List<GameObject> PlayerSkins()
+    {
+        var list = new List<GameObject>();
+        try
+        {
+            if (!NoktaSingleton<PlayerManager>.HasInstance) return list;
+            var lp = NoktaSingleton<PlayerManager>.Instance.LocalPlayer;
+            var sc = lp != null ? lp.SkinController : null;
+            var skins = sc != null ? sc.m_Skins : null;
+            if (skins == null) return list;
+            var seen = new HashSet<string>();
+            for (int i = 0; i < skins.Length; i++)
+            {
+                var skin = skins[i];
+                if (skin == null) continue;
+                var rs = skin.gameObject.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                var key = new System.Text.StringBuilder();
+                for (int r = 0; r < rs.Length; r++)
+                {
+                    var mats = rs[r].sharedMaterials;
+                    for (int m = 0; m < mats.Length; m++) key.Append(mats[m] != null ? mats[m].name : "-").Append('|');
+                }
+                if (seen.Add(key.ToString())) list.Add(skin.gameObject);
+            }
+        }
+        catch (Exception e) { Plugin.Warn("Listing the player skins failed: " + e.Message); }
+        return list;
+    }
+
+    // Components that must not live on a preview clone of a player model: PhotonAnimatorView (no PhotonView on the model,
+    // its Update would fail) and the Animation Rigging RigBuilder (IK is irrelevant for a still pose).
+    private static void StripPlayerComponents(GameObject clone)
+    {
+        var comps = clone.GetComponentsInChildren<Component>(true);
+        for (int i = 0; i < comps.Length; i++)
+        {
+            var c = comps[i];
+            if (c == null) continue;
+            string n;
+            try { n = c.GetIl2CppType().Name; } catch (Exception) { continue; }
+            if (n == "PhotonAnimatorView" || n == "RigBuilder") Object.DestroyImmediate(c);
+        }
+    }
+
     private static void SetLayer(GameObject go, int layer)
     {
         var ts = go.GetComponentsInChildren<Transform>(true);
@@ -193,7 +242,10 @@ internal static class Preview
 
                 var pivot = new GameObject("Pivot " + prefab.name);
                 pivot.transform.SetParent(_root.transform, false);
+                bool player = kind == ClothesStore.PlayerKind;
+                if (player) pivot.SetActive(false);   // keep the clone's Awakes from running until the Photon/rig components are gone
                 var clone = Object.Instantiate(src, pivot.transform);
+                if (player) { StripPlayerComponents(clone); pivot.SetActive(true); }
                 clone.name = prefab.name + " (preview)";
                 clone.SetActive(true);
                 clone.transform.localPosition = Vector3.zero;

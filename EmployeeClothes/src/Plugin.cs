@@ -138,7 +138,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.employeeclothes";
     public const string Name = "Employee Clothes";
-    public const string Version = "1.0.11";
+    public const string Version = "1.1.0";
 
     internal static ManualLogSource Logger;
     internal static ConfigEntry<bool> Enabled;

@@ -59,12 +59,13 @@ internal static class Employees
     private static int _initialPos;        // rolling first scan of all 8 types (after a scene start / enabling)
     private static int _rotation;          // steady-state safety net: which type next
     private static int _fastRotation;
-    private static readonly bool?[] Hooked = new bool?[8];
+    private static readonly bool?[] Hooked = new bool?[9];
 
     private static readonly HrEmployeeKind[] Kinds =
     {
         HrEmployeeKind.Cashier, HrEmployeeKind.Restocker, HrEmployeeKind.CustomerHelper, HrEmployeeKind.SecurityGuard,
         HrEmployeeKind.Janitor, HrEmployeeKind.Courier, HrEmployeeKind.Baker, HrEmployeeKind.IceCreamHelper,
+        ClothesStore.PlayerKind,
     };
 
     /// <summary>True when the driver should run a pass right away instead of waiting for its next tick.</summary>
@@ -186,6 +187,7 @@ internal static class Employees
 
     private static void Rescan(Tracked t)
     {
+        if (t.Kind == ClothesStore.PlayerKind) { RescanPlayer(t); return; }
         var anim = t.Go.GetComponentInChildren<Animator>(true);
         var model = anim != null ? anim.gameObject : t.Go;
         var list = model.GetComponentsInChildren<Renderer>(true);
@@ -193,6 +195,38 @@ internal static class Employees
         for (int r = 0; r < rends.Length; r++) rends[r] = list[r];
         t.Model = model;
         t.Rends = rends;
+    }
+
+    /// <summary>
+    /// A player: the renderers of EVERY skin under Network Objects/Skins (PlayerSkinController.m_Skins; four distinct models,
+    /// the inactive ones included), so a skin change or a late join needs no new pass. The player root is not scanned as a
+    /// whole: it also holds tools (mop, crate, bag, scanner) that must stay as they are.
+    /// </summary>
+    private static void RescanPlayer(Tracked t)
+    {
+        var list = new List<Renderer>();
+        PlayerSkinController sc = null;
+        var pi = t.Go.GetComponent<PlayerInstance>();
+        if (pi != null) sc = pi.SkinController;
+        if (sc == null) sc = t.Go.GetComponentInChildren<PlayerSkinController>(true);
+        if (sc != null)
+        {
+            var skins = sc.m_Skins;
+            if (skins != null)
+                for (int i = 0; i < skins.Length; i++)
+                {
+                    if (skins[i] == null) continue;
+                    var rs = skins[i].gameObject.GetComponentsInChildren<Renderer>(true);
+                    for (int r = 0; r < rs.Length; r++) list.Add(rs[r]);
+                }
+            if (list.Count == 0)
+            {
+                var rs = sc.gameObject.GetComponentsInChildren<Renderer>(true);
+                for (int r = 0; r < rs.Length; r++) list.Add(rs[r]);
+            }
+        }
+        t.Model = sc != null ? sc.gameObject : t.Go;
+        t.Rends = list.ToArray();
     }
 
     private static void Remove(int index, Tracked t)
@@ -297,6 +331,7 @@ internal static class Employees
         HrEmployeeKind.Courier => typeof(CourierT),
         HrEmployeeKind.Baker => typeof(Baker),
         HrEmployeeKind.IceCreamHelper => typeof(IceCreamHelper),
+        ClothesStore.PlayerKind => typeof(PlayerInstance),
         _ => null,
     };
 
@@ -340,6 +375,7 @@ internal static class Employees
             case HrEmployeeKind.Courier: Scan<CourierT>(k); break;
             case HrEmployeeKind.Baker: Scan<Baker>(k); break;
             case HrEmployeeKind.IceCreamHelper: Scan<IceCreamHelper>(k); break;
+            case ClothesStore.PlayerKind: Scan<PlayerInstance>(k); break;
         }
     }
 

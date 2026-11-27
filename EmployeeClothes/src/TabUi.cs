@@ -51,7 +51,7 @@ internal static class TabUi
     private static TMP_Text _resetLabel, _applyLabel;
     private static bool _suppress;
     private static bool _open;
-    private static readonly Color?[] Pending = new Color?[8];
+    private static readonly Color?[] Pending = new Color?[9];
     private static float _nextFind;
     private static bool _warnedMissing;
     private static bool _gaveUp;          // the tab has an unexpected layout: the fallback scan stops (until a new scene)

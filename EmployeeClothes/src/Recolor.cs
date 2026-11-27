@@ -27,7 +27,7 @@ internal static class Recolor
     // Names that mean "clothes", looked up in "<material name> | <base texture name>". The game's names lie, so the
     // texture name counts too. See "Employee materials" in CLAUDE.md for the verified table of every renderer.
     private static readonly Regex ClothesRx = new(
-        @"shirt|pants|jacket|waistcoat|handkerchief|dres|trouser|_top_|_btm_|bouncerbody|helmet|hat_|_hat_|britney",
+        @"shirt|pants|jacket|waistcoat|handkerchief|dres|trouser|_top_|_btm_|bouncerbody|helmet|hat_|_hat_|britney|cloth|short_",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // Never recolored, even when a clothes word also matches: shoes and boots, and everything hair. The materials called
@@ -148,7 +148,7 @@ internal static class Recolor
 
     private static float GarmentShade(string lowerName)
     {
-        if (lowerName.Contains("pants") || lowerName.Contains("trouser") || lowerName.Contains("_btm_") || lowerName.Contains("britney")) return 0.7f;
+        if (lowerName.Contains("pants") || lowerName.Contains("trouser") || lowerName.Contains("_btm_") || lowerName.Contains("britney") || lowerName.Contains("short_")) return 0.7f;
         if (lowerName.Contains("waistcoat")) return 0.8f;
         return 1f;
     }
@@ -216,6 +216,17 @@ internal static class Recolor
         catch (Exception) { return false; }
     }
 
+    /// <summary>Diagnostic: which mip level of the source is resident (0 = full size). A shade map built from a smaller mip is blurrier and its mean differs slightly, so compare this between host and guest.</summary>
+    private static string MipInfo(Texture src)
+    {
+        try
+        {
+            var t2 = src.TryCast<Texture2D>();
+            return t2 != null ? $"loaded mip {t2.loadedMipmapLevel}{(t2.streamingMipmaps ? " (streaming)" : "")}" : "mip n/a";
+        }
+        catch (Exception) { return "mip n/a"; }
+    }
+
     private static Texture2D MakeNeutral(Texture src)
     {
         int sw = src.width, sh = src.height;
@@ -281,9 +292,9 @@ internal static class Recolor
         if (!_loggedFirstMap)
         {
             _loggedFirstMap = true;
-            Plugin.Debug($"First shade map: '{src.name}' {sw}x{sh} -> {tw}x{th}, mean luminance {mean:0.000}, fast copy {fast}");
+            Plugin.Debug($"First shade map: '{src.name}' {sw}x{sh} -> {tw}x{th}, mean luminance {mean:0.000}, {MipInfo(src)}, fast copy {fast}");
         }
-        else Plugin.Debug($"Shade map '{src.name}' {sw}x{sh} -> {tw}x{th}, mean {mean:0.000}");
+        else Plugin.Debug($"Shade map '{src.name}' {sw}x{sh} -> {tw}x{th}, mean {mean:0.000}, {MipInfo(src)}");
         return tex;
     }
 

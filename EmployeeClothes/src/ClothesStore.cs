@@ -25,9 +25,17 @@ internal static class ClothesStore
     {
         HrEmployeeKind.Restocker, HrEmployeeKind.Cashier, HrEmployeeKind.CustomerHelper, HrEmployeeKind.IceCreamHelper,
         HrEmployeeKind.Baker, HrEmployeeKind.Janitor, HrEmployeeKind.SecurityGuard, HrEmployeeKind.Courier,
+        PlayerKind,
     };
 
-    private static readonly Color?[] Colors = new Color?[8]; // indexed by (int)HrEmployeeKind
+    /// <summary>
+    /// The players' skins as a ninth "type" (1.1.0). It is not a real HrEmployeeKind (the game's enum ends at 7 = Courier):
+    /// the value 8 is only used as an index and as the recolor slot. Saved and published as "Player=rrggbb".
+    /// </summary>
+    internal const HrEmployeeKind PlayerKind = (HrEmployeeKind)8;
+    private const string PlayerKey = "Player";
+
+    private static readonly Color?[] Colors = new Color?[9]; // indexed by (int)HrEmployeeKind (8 = players)
     private static string _key;               // save file the colors belong to (host / solo)
     private static string _lastRemote = "\u0001"; // last room string applied on a guest (sentinel = none yet)
     private static bool _wasGuest;
@@ -56,6 +64,7 @@ internal static class ClothesStore
         HrEmployeeKind.Baker => "Baker",
         HrEmployeeKind.SecurityGuard => "Security guard",
         HrEmployeeKind.Courier => "Courier",
+        PlayerKind => "Player",
         _ => k.ToString(),
     };
 
@@ -70,6 +79,7 @@ internal static class ClothesStore
         HrEmployeeKind.Baker => "Bakers",
         HrEmployeeKind.SecurityGuard => "Security guards",
         HrEmployeeKind.Courier => "Couriers",
+        PlayerKind => "Players",
         _ => k + "s",
     };
 
@@ -91,6 +101,7 @@ internal static class ClothesStore
     internal static bool IsUnlocked(HrEmployeeKind k, out string detail)
     {
         detail = null;
+        if (k == PlayerKind) { detail = "players are always available"; return true; }
         try
         {
             if (k == HrEmployeeKind.IceCreamHelper && !DLCTestController.IceCreamDLC) { detail = "no Ice Cream DLC (IceCreamDLC=False)"; return false; }
@@ -165,10 +176,14 @@ internal static class ClothesStore
     {
         int i = (int)k;
         if (i < 0 || i >= Colors.Length) return;
-        if (c.HasValue) c = new Color(Mathf.Clamp01(c.Value.r), Mathf.Clamp01(c.Value.g), Mathf.Clamp01(c.Value.b), 1f);
+        // Rounded to 8 bits per channel: that is all the save file and the room property carry, so the host shows exactly
+        // the color a guest (or a reload) gets, not a float a fraction of a step away from it.
+        if (c.HasValue) c = new Color(Q(c.Value.r), Q(c.Value.g), Q(c.Value.b), 1f);
         Colors[i] = c;
         Version++;
     }
+
+    private static float Q(float v) => Mathf.RoundToInt(Mathf.Clamp01(v) * 255f) / 255f;
 
     // ------------------------------------------------------------------ network state
 
@@ -200,7 +215,7 @@ internal static class ClothesStore
             var c = Colors[(int)k];
             if (!c.HasValue) continue;
             if (sb.Length > 0) sb.Append(';');
-            sb.Append(k.ToString()).Append('=').Append(Hex(c.Value));
+            sb.Append(k == PlayerKind ? PlayerKey : k.ToString()).Append('=').Append(Hex(c.Value));
         }
         return sb.ToString();
     }
@@ -214,7 +229,10 @@ internal static class ClothesStore
             {
                 int eq = part.IndexOf('=');
                 if (eq <= 0) continue;
-                if (!Enum.TryParse<HrEmployeeKind>(part.Substring(0, eq).Trim(), out var kind)) continue;
+                string kname = part.Substring(0, eq).Trim();
+                HrEmployeeKind kind;
+                if (kname == PlayerKey) kind = PlayerKind;
+                else if (!Enum.TryParse<HrEmployeeKind>(kname, out kind) || kind >= PlayerKind) continue;
                 if (!TryParseHex(part.Substring(eq + 1).Trim(), out var c)) continue;
                 int idx = (int)kind;
                 if (idx >= 0 && idx < Colors.Length) Colors[idx] = c;

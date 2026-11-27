@@ -6,7 +6,7 @@ Choose the color of your employees' clothes.
 
 [list]
 [*]A new [b]Employee Clothes[/b] card in the computer's [b]Customization[/b] tab. It costs $1000 to open, and then you can try as many colors as you like.
-[*]Pick a color for each employee type: restockers, cashiers, customer helpers, ice cream helpers, bakers, janitors, security guards and couriers.
+[*]Pick a color for each employee type: restockers, cashiers, customer helpers, ice cream helpers, bakers, janitors, security guards, couriers and the [b]players[/b] (the clothes of the player characters, visible to everyone with the mod).
 [*]A live preview shows the change while you pick.
 [*][b]Apply to all[/b] gives every employee type the same color.
 [*][b]Reset[/b] brings back the original clothes.
