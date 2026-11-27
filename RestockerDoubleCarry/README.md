@@ -9,7 +9,7 @@ Experienced restockers carry **two boxes per trip**, both when they restock shel
 
    So a trip can be two restocks, two boxes for storage, or one of each.
 3. A box picked up for storage always goes to storage, as in the normal game, even if its product's shelves have a little room left.
-4. With both boxes in hand, it deals first with the box whose destination (its shelf, or its storage rack) is the shorter walk from where it picked up the second box.
+4. With both boxes in hand, it plans the whole trip (here, first destination, second destination, then storage for the leftovers or empty box) and deals first with the box that makes the shorter walk overall, counting the walk to storage and back when the box set down at the first shelf has to wait.
 5. Putting a box in a storage rack (including topping up a box of the same product already there) works with both boxes in hand: the restocker racks one and keeps carrying the other. **But a restocker never unpacks onto a shelf while holding two boxes.** When it reaches a shelf with two boxes in hand, it puts the other box on the floor next to it, then opens the box for that shelf and restocks.
 6. Then it finishes with the box it unpacked:
    - **If the box is empty**, it takes it to the trash (as it normally would), then comes back for the box it left on the floor and deals with that one: it unpacks it at its own shelves, or takes it to storage.
@@ -23,7 +23,7 @@ The restocker always goes back for a box it put down itself, even when its "pick
 
 If there's no second job when it picks up the first box, or the second box is gone by the time it gets there, the restocker just carries on with one box. Lower-level restockers aren't affected.
 
-All the restocker's own settings (use unlabeled racks, pick up boxes from the ground, drop empty boxes, restock shelves) are respected: for example a restocker that may not pick up boxes from the ground never takes a delivered box to storage as its second job. The second box is chosen the same way the game chooses the first, with these differences:
+All the restocker's own settings (use unlabeled racks, pick up boxes from the ground, drop empty boxes, restock shelves) are respected: for example a restocker that may not pick up boxes from the ground never takes a delivered box to storage as its second job. The second box is chosen the same way the game chooses the first: restocking goes by how empty a product's shelves are (the product with the emptiest shelves first, as in the normal game), and for the second box a product's box in the delivery area or in a rack counts equally, so an emptier product is never skipped just because a fuller one has a box outside. Differences from the first box:
 - it is always a box from the outside area or from a storage rack: a box in a delivery vehicle can be the first box but never the second;
 - a second restock job is always for a different product than the first box;
 - the restocker never chooses a rack itself: each box is put in storage exactly as the game normally does (a rack labelled for that product with room left, or an empty unlabelled rack only if the restocker may use unlabelled racks). Before it takes a box for storage as part of a pair, it checks with those same rules, and the rack sizes the game uses for each box size (a rack fits 1, 2 or 4 boxes depending on the box), that every box in the pair that may need a rack place will have one. Otherwise it takes just one box, so it isn't left holding a box with nowhere to put it.
@@ -53,4 +53,4 @@ Guests don't need the mod: every pick-up, product placement, racking and box put
 - A guest who joins in the middle of a two-box trip may see the second box floating near the restocker until the restocker next handles it.
 - A restocker that can't find anywhere to put a leftover box behaves as in the normal game: it waits, then puts the box on the floor. It then deals with the other box.
 - Saving while a restocker carries two boxes saves both boxes where they are, just as the game does for the single box a restocker carries.
-- Compatible with MoreEmployees. It may conflict with other mods that change how restockers choose their work.
+- Compatible with MoreEmployees and with Restocker Priority (which makes the first box follow the same emptiest-product-first rule). It may conflict with other mods that change how restockers choose their work.

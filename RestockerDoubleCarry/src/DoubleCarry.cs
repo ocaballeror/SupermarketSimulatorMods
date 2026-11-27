@@ -40,8 +40,11 @@
  *                      the hands and becomes the "stash".
  *   Phase FetchSecond: next search: holding B2 with B1 stashed -> work out where each box would go next
  *                      (the vanilla carried-box rule: displays of its product, else a rack slot) and make
- *                      the box with the shorter NavMesh path to its destination the current one. Vanilla
- *                      then handles that box; the other is the stash, on top.
+ *                      the box of the shorter planned trip the current one (1.4.0: whole trip, both orders:
+ *                      here -> first destination -> second destination -> storage, NavMesh path lengths; see
+ *                      RouteLength). Vanilla then handles that box; the other is the stash, on top.
+ *                      The second box itself is the next product in the game's fill-ratio order (emptiest first;
+ *                      for each product the delivery area, then a rack), see TryFindSecondJob.
  *   Racking:           putting a box into a rack (RackBox, merge included) isn't unpacking, so it happens
  *                      with the stash still in hand; when the hands empty the stash is handed over.
  *   Storage boxes:     a box picked up for storage (Plan.Storage) is racked by vanilla in one uninterrupted
@@ -459,19 +462,22 @@ internal static class DoubleCarry
         var all = mgmt.RestockShelf ? h.GetDisplaySlotsRequiredRefill() : null;
         if (all != null && all.Count > 0)
         {
+            // `all` is already ordered emptiest product first (the game's fill ratio). Walk the products in that
+            // order and, for each, try the delivery area and then the racks, so a rack box of an emptier product
+            // beats a delivery-area box of a fuller one (the game's own search would do both passes separately).
             var tried = new HashSet<int>();
-            for (int pass = 0; pass < 2; pass++)
+            for (int i = 0; i < all.Count; i++)
             {
-                if (pass == 0 && !mgmt.PickUpBoxGround) continue;
-                tried.Clear();
-                for (int i = 0; i < all.Count; i++)
+                var slot = all[i];
+                if (slot == null) continue;
+                int pid = slot.ProductID;
+                if (pid < 0 || pid == firstProduct || tried.Contains(pid)) continue;
+                if (slot.IsOccupiedByOthers(clerk)) continue;
+                tried.Add(pid);
+
+                for (int pass = 0; pass < 2; pass++)
                 {
-                    var slot = all[i];
-                    if (slot == null) continue;
-                    int pid = slot.ProductID;
-                    if (pid < 0 || pid == firstProduct || tried.Contains(pid)) continue;
-                    if (slot.IsOccupiedByOthers(clerk)) continue;
-                    tried.Add(pid);
+                    if (pass == 0 && !mgmt.PickUpBoxGround) continue;
 
                     if (pass == 0)
                     {
@@ -682,20 +688,69 @@ internal static class DoubleCarry
         return Vector3.Distance(from, to);
     }
 
+    /// <summary>Where the leftovers (or the box itself) of a box in hand would be racked: the vanilla rack rule.</summary>
+    private static Vector3? StoragePoint(SearchHandler h, Box box)
+    {
+        int pid = ProductOf(box);
+        if (pid < 0) return null;
+        if ((h.IsMergeAvailableWithBox(box, out RackSlot rack) && rack != null)
+            || (h.HasSpaceInRackSlotForProduct(pid, out rack) && rack != null))
+        {
+            var ip = rack.m_InteractionPosition;
+            return ip != null ? ip.position : rack.transform.position;
+        }
+        return null;
+    }
+
     /// <summary>
-    /// Both boxes are in hand (<paramref name="cur"/> current, <paramref name="other"/> stashed): make the one
-    /// with the shorter walk to its destination the current one.
+    /// Walking length of the trip when <paramref name="a"/> is dealt with first, as the mod runs it:
+    /// here -> a's destination; if a is unpacked at a shelf the other box is set down there, a's leftovers or
+    /// empty box go to storage and the clerk comes back (twice the shelf-to-storage walk); then a's destination ->
+    /// b's destination; finally b's shelf -> storage. Storage legs are 0 when no rack place is known.
+    /// </summary>
+    private static float RouteLength(SearchHandler h, Vector3 here, Box a, Vector3 da, string wa, Box b, Vector3 db, string wb)
+    {
+        float len = PathLength(here, da);
+        if (wa == "shelf")
+        {
+            var sa = StoragePoint(h, a);
+            if (sa.HasValue) len += 2f * PathLength(da, sa.Value);
+        }
+        len += PathLength(da, db);
+        if (wb == "shelf")
+        {
+            var sb = StoragePoint(h, b);
+            if (sb.HasValue) len += PathLength(db, sb.Value);
+        }
+        return len;
+    }
+
+    /// <summary>
+    /// Both boxes are in hand (<paramref name="cur"/> current, <paramref name="other"/> stashed): plan the whole
+    /// trip (here -> first destination -> second destination -> storage, both orders, see
+    /// <see cref="RouteLength"/>) and make the box of the shorter plan the current one. A box with no destination
+    /// is handled by vanilla whenever it comes up, so the other box goes first.
     /// </summary>
     private static void ChooseOrder(SearchHandler h, ClerkT clerk, Plan plan, Box cur, Box other)
     {
         var here = clerk.transform.position;
         var dCur = Destination(h, clerk, plan, cur, out string wCur);
         var dOther = Destination(h, clerk, plan, other, out string wOther);
-        float lCur = dCur.HasValue ? PathLength(here, dCur.Value) : float.PositiveInfinity;
-        float lOther = dOther.HasValue ? PathLength(here, dOther.Value) : float.PositiveInfinity;
+        float lCur, lOther;
+        if (dCur.HasValue && dOther.HasValue)
+        {
+            lCur = RouteLength(h, here, cur, dCur.Value, wCur, other, dOther.Value, wOther);
+            lOther = RouteLength(h, here, other, dOther.Value, wOther, cur, dCur.Value, wCur);
+        }
+        else
+        {
+            lCur = dCur.HasValue ? PathLength(here, dCur.Value) : float.PositiveInfinity;
+            lOther = dOther.HasValue ? PathLength(here, dOther.Value) : float.PositiveInfinity;
+        }
         bool swap = lOther < lCur;
-        Info($"{Name(clerk)}: has both boxes: product {ProductOf(cur)} -> {wCur} ({Fmt(lCur)}), " +
-             $"product {ProductOf(other)} -> {wOther} ({Fmt(lOther)}); product {ProductOf(swap ? other : cur)} first");
+        Info($"{Name(clerk)}: has both boxes: product {ProductOf(cur)} -> {wCur}, product {ProductOf(other)} -> {wOther}; " +
+             $"whole trip {Fmt(lCur)} with product {ProductOf(cur)} first, {Fmt(lOther)} with product {ProductOf(other)} first; " +
+             $"product {ProductOf(swap ? other : cur)} first");
         if (swap) HandOver(clerk, other);
     }
 
