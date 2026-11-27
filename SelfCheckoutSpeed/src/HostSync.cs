@@ -75,6 +75,7 @@ internal static class HostSync
     {
         _sentSelf = _sentHelp = null;
         _nextCheck = 0f;
+        SelfCheckoutPatches.ClearPending();
     }
 
     /// <summary>Called every frame; publishes the host's values when they change (checked once a second).</summary>
@@ -82,6 +83,7 @@ internal static class HostSync
     {
         if (Plugin.Unloaded || Time.unscaledTime < _nextCheck) return;
         _nextCheck = Time.unscaledTime + 1f;
+        SelfCheckoutPatches.CheckLeftovers();
         if (!IsGuest) SelfCheckoutPatches.ClearGuestState();
         if (!PhotonNetwork.InRoom || PhotonNetwork.OfflineMode || !PhotonNetwork.IsMasterClient)
         {

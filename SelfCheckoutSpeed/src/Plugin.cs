@@ -12,7 +12,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.selfcheckoutspeed";
     public const string Name = "Self Checkout Speed";
-    public const string Version = "1.2.0";
+    public const string Version = "1.2.1";
 
     internal const float MaxMultiplier = 10f;
 

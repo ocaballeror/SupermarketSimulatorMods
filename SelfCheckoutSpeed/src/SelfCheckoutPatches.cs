@@ -168,6 +168,14 @@ internal static class SelfCheckoutPatches
             nameof(FinishSelfCheckoutOrderPrefix), "SelfCheckout.FinishSelfCheckout_Order");
         TryPatch(harmony, AccessTools.Method(typeof(NetworkCheckout), nameof(NetworkCheckout.FinishHelperCheckout_RPC)),
             nameof(FinishHelperCheckoutRpcPrefix), "NetworkCheckout.FinishHelperCheckout_RPC");
+        // Diagnostics only: every finished customer (self checkout, employee help, cashier; host and guest) ends here.
+        try
+        {
+            var done = AccessTools.Method(typeof(Checkout), nameof(Checkout.CashierCompletedCheckout));
+            if (done != null)
+                harmony.Patch(done, postfix: new HarmonyMethod(typeof(SelfCheckoutPatches), nameof(CompletedPostfix)));
+        }
+        catch (Exception e) { Plugin.Logger.LogWarning($"[SelfCheckout] leftover diagnostics not available: {e.Message}"); }
         return applied;
     }
 
@@ -328,4 +336,45 @@ internal static class SelfCheckoutPatches
         if (n > 0 && Plugin.VerboseLogging.Value)
             Plugin.Logger.LogInfo($"[SelfCheckout] host finished a {what} before this game did; scanning the rest at once");
     }
+
+    // ---- Leftover-product diagnostics (VerboseLogging only; no behaviour change) ----
+    // A few seconds after a customer is done, a checkout with nobody queued should have an empty belt.
+    // If it doesn't, log how many products are still on it and on which machine (host or guest).
+    private static readonly System.Collections.Generic.List<(Checkout Checkout, float Due)> Pending = new();
+
+    private static void CompletedPostfix(Checkout __instance)
+    {
+        try
+        {
+            if (!Plugin.VerboseLogging.Value || __instance == null || Pending.Count > 64) return;
+            Pending.Add((__instance, Time.unscaledTime + 4f));
+        }
+        catch (Exception) { }
+    }
+
+    /// <summary>Called from <see cref="HostSync.Tick"/> (once a second).</summary>
+    internal static void CheckLeftovers()
+    {
+        if (Pending.Count == 0) return;
+        float now = Time.unscaledTime;
+        for (int i = Pending.Count - 1; i >= 0; i--)
+        {
+            var (checkout, due) = Pending[i];
+            if (now < due) continue;
+            Pending.RemoveAt(i);
+            try
+            {
+                if (checkout == null) continue;
+                var products = checkout.m_Belt != null ? checkout.m_Belt.m_Products : null;
+                int left = products != null ? products.Count : 0;
+                int customers = checkout.m_Customers != null ? checkout.m_Customers.Count : 0;
+                if (left > 0 && customers == 0 && Plugin.VerboseLogging.Value)
+                    Plugin.Logger.LogInfo($"[SelfCheckout] {(HostSync.IsGuest ? "GUEST" : "HOST")}: {left} product(s) still on the belt " +
+                                          $"4 s after a customer finished at checkout {checkout.m_ID} (self checkout: {checkout.m_IsSelfCheckout})");
+            }
+            catch (Exception) { }
+        }
+    }
+
+    internal static void ClearPending() => Pending.Clear();
 }
