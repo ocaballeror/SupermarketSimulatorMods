@@ -1,6 +1,6 @@
 # TODO
 
-The requests below are written by the user. Agents only maintain each entry's **Status** block (states and rules: `CLAUDE.md`, section 1).
+The requests below are written by the user. Agents only maintain each entry's **Status** block (states and rules: `WORKFLOW.md`, section 1).
 
 # Bug Reports
 

@@ -2,57 +2,9 @@
 
 Read [README.md](README.md) for the project overview. This file covers how to work here.
 
-## 0. Where information lives
+**Main agent and review orchestrator:** also read [`WORKFLOW.md`](WORKFLOW.md) (sections 0, 1, 2b, 2c: where information lives, the `TODO.md` status workflow, subagent and review rules, commit rules). Implementer and reviewer subagents skip it; this file is everything they need.
 
-Each fact lives in one file. Look there first, and update it there.
-
-| File | What it holds | Written by |
-|---|---|---|
-| [`TODO.md`](TODO.md) | The user's requests, each with a **Status** block (state, code location, review record, what it waits on). The only place that tracks status. | The user writes the requests; agents maintain only the Status blocks |
-| [`README.md`](README.md) | Project overview, mods table, install and build, log collection | agents |
-| `CLAUDE.md` (this file) | How to work here: workflow, environment, tools, interop pitfalls, and the game systems that several mods share | agents |
-| `<Mod>/README.md` | What the mod does, for players and publishing: settings, who needs it in multiplayer, compatibility. **Required for every mod.** | agents |
-| `<Mod>/CLAUDE.md` | What agents would otherwise have to re-derive about that mod: mechanism, patches, multiplayer reasoning, pitfalls, test steps, and game knowledge only that mod uses. **Optional.** | agents |
-| Doc comment at the top of each patch file | The full root-cause analysis | agents |
-| [`REVIEW_ORCHESTRATOR.md`](REVIEW_ORCHESTRATOR.md) | An agent definition for the implement-and-review loop. Load it into a fresh session; it isn't general guidance. | the user |
-
-**When you work on a mod, read its `README.md` and, if it exists, its `CLAUDE.md` first.** Bug fixes all live in `SupermarketFixes/`, so read that mod's docs for any bug. This saves you re-deriving the mechanism from the dumps, and it tells you what is already known to work, fail or be untested.
-
-Per-mod information never goes in a root file.
-
-## 1. Always start with `TODO.md`
-
-[`TODO.md`](TODO.md) is the source of truth for what to work on. The user updates it over time, so **read it fresh at the start of every session**; don't rely on memory or older notes.
-
-Each entry is a heading (`## Bug #N: ...` or `## Improvement #N: ...`), a **Status** block, and the user's request. The block looks like this:
-
-```
-**Status:** reviewed
-**Code:** `SupermarketFixes/src/Patches/GhostHeldItemFix.cs`
-**Review:** 2026-11-15, 1 round, hash `d48d7436015a`
-**Waiting on:** In-game test + logs.
-```
-
-- `Status` is always present. `Code` is the patch file (bugs) or the mod folder (improvements), once there is code. `Review` appears once a review passed (it is only there after a manually requested review). `Waiting on` is one short line; anything longer goes in the mod's `CLAUDE.md`.
-- **Don't rewrite or reorder the user's request text, and don't add analysis to TODO.md.** Change only the Status block. Investigations and notes go in the mod's `CLAUDE.md` (for bugs, `SupermarketFixes/CLAUDE.md`).
-- If an entry is a question rather than a code task (Bug #4 asks how to collect logs), answer the user directly. The README's log section covers the common case.
-
-States, one per entry, in this lifecycle:
-
-| State | Meaning | Set by |
-|---|---|---|
-| `open` | No code yet | (initial) |
-| `in-progress` | Code is being written, or is only partly done. Continue from `Code`; don't start over. | the implementing agent |
-| `implemented` | An implementer finished it and it builds, docs included. **Not code-reviewed**; pending the user's in-game test, and optionally a review the user requests. | the implementing agent / main agent, right after the implementer reports |
-| `reviewed` | **Code review only**: a review the user asked for is finished and reviewer and implementer agreed. Pending the user's in-game test. | the review orchestrator, or the main agent after a requested review |
-| `needs-rework` | The in-game test failed, or the user asked for changes | whoever records the user's feedback |
-| `done YYYY-MM-DD` | **Tested in-game and accepted by the user** | only after the user confirms |
-
-Allowed moves: `open` → `in-progress` → `implemented` → `reviewed` → `done`, and also `implemented` → `done` directly when the user tests it in-game and it works (a review is optional, never required). Any state → `needs-rework` on failure or feedback; `needs-rework` → `in-progress`.
-
-- **Skip `done` entries.** `implemented` and `reviewed` are never `done`: a build or a code review isn't an in-game test.
-- **Stale reviews:** the `Review` line stores a hash of the reviewed code (`tools/modhash.sh <path in "Code">`). If the current hash differs, the code changed after the review: set the state back to `implemented`. A bug's hash covers only its patch file; shared files such as `Plugin.cs` aren't hashed.
-- Update the Status block in the same change as the work it describes.
+**When you work on a mod, read its `README.md` and, if it exists, its `CLAUDE.md` first.** Bug fixes all live in `SupermarketFixes/`, so read that mod's docs for any bug. This saves you re-deriving the mechanism from the dumps, and it tells you what is already known to work, fail or be untested. Per-mod information never goes in a root file (the table of what lives where is in `WORKFLOW.md` section 0).
 
 ## 2. Where each change goes
 
@@ -76,32 +28,6 @@ Reverse engineering is the expensive part of every task. When you learn somethin
 - **The mod's `README.md`** only for player-facing facts, and the patch doc comment for the root cause.
 
 Keep each entry short and only include facts you've verified in the dumps or in-game. If it hasn't been confirmed in-game yet, say so. If a script would save the next session work, put it in `tools/` and document it in section 4.
-
-## 2b. Subagents do the work; reviews only on request
-
-**The main agent (the one talking to the user) never changes mod code itself.** Every code change, whether a bug fix, an improvement, a review-round fix or a small tweak, is done by an **implementer subagent** launched with the Agent tool and `model: "sonnet"`. The main agent only reads, plans, briefs, relays and reports; it may edit docs and `TODO.md` Status blocks directly. This is what makes the model setting below enforceable.
-
-**Reviews are not automatic.** When the implementer has finished (it builds, and the mod's README, its CLAUDE.md if any, and the Status block in TODO.md are updated), set the entry to `implemented`, commit, and report to the user with the in-game test steps. **Don't launch a review subagent unless the user asks for one.** The user may request a review (then it goes `implemented` → `reviewed`) or just test in-game and mark it `done` (`implemented` → `done`).
-
-When the user does request a review (or loads `REVIEW_ORCHESTRATOR.md`, which runs this loop itself), launch a review subagent with the Agent tool:
-
-- **Models are fixed:** implementer agents always run on `sonnet`, reviewer agents always on `opus`. Pass `model: "sonnet"` or `model: "opus"` explicitly on every Agent call; never rely on the default.
-- **Brief it with the intent only.** Describe *what the change was meant to achieve*: the bug symptom or the feature, and the expected behaviour (including multiplayer expectations, if relevant). Name the mod or folder it lives in so the reviewer knows where to look, and tell it to read that mod's docs.
-- **Don't include implementation details or your reasoning.** No root-cause theory, no explanation of why you chose this approach, no list of the methods you patched, no "I think this is fine because...". The reviewer must form its own opinion from the code, not inherit your assumptions.
-- **Don't steer the verdict.** Don't say what to focus on or what to ignore, and don't hint that the change is safe or risky. Just ask for a review of whether the change correctly and safely achieves that intent, and for concrete findings ranked by severity.
-- **Act on the result.** Read the review critically, then apply the changes that are justified (through an implementer). If you disagree with a finding, say so in your final report to the user with your reason; don't silently drop it. Rebuild after applying changes.
-- When the review agrees, set `reviewed` with the `Review` line. Mention in your report what changed because of the review.
-
-## 2c. Commit often
-
-The repo is a git repo; commit as you go so every step is recoverable and the history shows what changed and why.
-
-- **Commit at each stable point:** a fix or improvement that builds, a requested review round applied, a docs or `TODO.md` update, a new tool. Don't batch unrelated work into one commit.
-- **One logical change per commit.** Keep a mod's code and its README/CLAUDE.md update in the same commit; keep changes to different mods in separate commits.
-- **Commit messages are a brief title only:** one short imperative line (for example `Fix rack move desync when guest joins`). No body, no trailers or attribution lines, and no type tags or prefixes such as `feat:`, `fix:` or `chore:`.
-- **Stage explicitly** (`git add <paths>`), never `git add -A` blindly. Don't commit `bin/`, `obj/`, `decompiled/` (all gitignored) or log files such as `bug-1/`.
-- Commit before starting a risky refactor and after a requested review loop (section 2b) applies its changes, so a bad change can be reverted cleanly.
-- Don't push, amend or rewrite history unless the user asks.
 
 ## 3. Environment
 

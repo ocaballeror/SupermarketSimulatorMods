@@ -1,6 +1,6 @@
 # Orchestrator: implement and review loop (prompt for the master agent)
 
-**This is the manual review request.** Reviews aren't part of the normal workflow (`CLAUDE.md` section 2b): implemented items sit at `implemented` until the user tests them or loads this file to have them reviewed.
+**This is the manual review request.** Reviews aren't part of the normal workflow (`WORKFLOW.md` section 2b): implemented items sit at `implemented` until the user tests them or loads this file to have them reviewed.
 
 Paste this whole file as the prompt of a fresh agent (or tell an agent to read it). It drives an implement-and-review loop over the work listed in `TODO.md`: items that are missing or only half done are implemented first, then every item goes through the review loop.
 
@@ -15,15 +15,14 @@ You are the **orchestrator** for the Supermarket Simulator mods repo (`/home/osc
 3. spawn a **reviewer** subagent, and relay messages between it and the implementer until they agree the implementation is correct,
 4. mark the item as reviewed in `TODO.md`.
 
-Read `/home/oscar/Stuff/mods/CLAUDE.md` and `README.md` first. They define the repo layout (bugs go in `SupermarketFixes/src/Patches/`, each improvement is its own top-level mod folder), where each kind of information lives, the status states in `TODO.md`, and the IL2CPP pitfalls. Don't restate them to the subagents; point them at the reading list below.
+Read `/home/oscar/Stuff/mods/WORKFLOW.md`, `CLAUDE.md` and `README.md` first. They define the repo layout (bugs go in `SupermarketFixes/src/Patches/`, each improvement is its own top-level mod folder), where each kind of information lives, the status states in `TODO.md`, and the IL2CPP pitfalls. Don't restate them to the subagents; point them at the reading list below.
 
 ### Reading list for subagents
 
-Every agent reading all of `CLAUDE.md` (about 12k tokens) and all of `TODO.md` is the largest fixed cost of a loop, so give each subagent only this:
+Every agent reading all of `TODO.md` and `WORKFLOW.md` is a large fixed cost of a loop, so give each subagent only this:
 
-- **Implementer:** `CLAUDE.md` sections 2, 2a, 4, 5 and 6, plus the part of section 8 (and the pointer in section 7) that matches the systems the item touches. Sections 0, 1 and 2b–2c are orchestrator and commit rules, which your prompt already states. It doesn't read `TODO.md`: paste the entry's request text, verbatim, into the prompt.
-- **Reviewer:** `CLAUDE.md` sections 5 and 6 and the part of section 8 that matches the systems the item touches. Not sections 0–4 and not `TODO.md`.
-- **Both:** the target mod's `README.md` and `CLAUDE.md` (if it has one). For a bug in `SupermarketFixes`, that mod's `CLAUDE.md` is large: read its overview and Status headings, then only the section for that bug and the "Game reference" sections the bug needs (find them with `grep -n '^#'`). The same applies to any other mod `CLAUDE.md` over about 20 KB (`EmployeeClothes`, `ExtraComputers`, `RestockerDoubleCarry`, `ClearTags`).
+- **Implementer and reviewer:** `CLAUDE.md`. It holds only what every agent needs (change placement, environment, tools, IL2CPP pitfalls, plugin conventions, game knowledge). `WORKFLOW.md` is orchestrator and commit workflow, which your prompt already states; subagents never read it. Sections 7 and 8 are reference: tell the subagent to read only the part that matches the systems the item touches. The implementer doesn't read `TODO.md`: paste the entry's request text, verbatim, into the prompt. The reviewer doesn't read `TODO.md` either.
+- **Also for both:** the target mod's `README.md` and `CLAUDE.md` (if it has one). For a bug in `SupermarketFixes`, that mod's `CLAUDE.md` is large: read its overview and Status headings, then only the section for that bug and the "Game reference" sections the bug needs (find them with `grep -n '^#'`). The same applies to any other mod `CLAUDE.md` over about 20 KB (`EmployeeClothes`, `ExtraComputers`, `RestockerDoubleCarry`, `ClearTags`).
 - Anything else, such as dumps, other mods' docs or `TODO.md`, only when the work needs it.
 
 ## Input
@@ -34,7 +33,7 @@ You receive one of:
 - **`start` or `continue`**: take the first actionable entry in `TODO.md` that is not yet reviewed (see below).
 - Nothing or something unclear: ask the user which item to review.
 
-Read `TODO.md` fresh every time: it holds the user's requests and, in each entry's **Status** block, the per-item state, code location and review record. The states and rules are in `CLAUDE.md` section 1.
+Read `TODO.md` fresh every time: it holds the user's requests and, in each entry's **Status** block, the per-item state, code location and review record. The states and rules are in `WORKFLOW.md` section 1.
 
 ### Item states
 
@@ -190,7 +189,7 @@ If the user asked for `start` or `continue`, finish after one item and wait for 
 - **Models are fixed:** every implementer runs on `sonnet` and every reviewer on `opus`. Always pass `model` explicitly on each Agent call, including respawns; never use the default.
 - Work on one item at a time. Two implementers editing the shared `SupermarketFixes/src/Plugin.cs` or the root `README.md` at once would conflict.
 - If the implementer changes code after you've recorded `reviewed`, the stored hash goes stale; the next run catches it.
-- Keep the reviewer's brief free of implementation details and verdict hints (CLAUDE.md section 2b). The implementer gets the findings, not your opinions.
+- Keep the reviewer's brief free of implementation details and verdict hints (`WORKFLOW.md` section 2b). The implementer gets the findings, not your opinions.
 - You can't run the game. A review pass is never confirmation that a fix works, so the item gets `reviewed`, not `done`.
 - If an implementer change would touch another mod, add cross-mod dependencies, or change plugin GUIDs or public settings in a breaking way, stop and ask the user.
 - If the loop uncovers new game knowledge that most future sessions would need, have the implementer add it to the root `CLAUDE.md` (per its section 2a). Knowledge about a single mod goes in that mod's docs.

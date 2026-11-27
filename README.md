@@ -67,7 +67,8 @@ Projects compile against the game's own `BepInEx/core` and `BepInEx/interop` DLL
 
 ```
 README.md                this file: project overview
-CLAUDE.md                instructions for coding agents: workflow, environment, tools, shared game knowledge
+CLAUDE.md                instructions for coding agents: environment, tools, shared game knowledge
+WORKFLOW.md              TODO status workflow, subagent, review and commit rules (main agent only)
 TODO.md                  the requests (bugs and improvements) and the status of each
 REVIEW_ORCHESTRATOR.md   agent definition for the implement-and-review loop
 SupermarketFixes/        the bug-fix mod (one BepInEx plugin, one patch file per bug)
