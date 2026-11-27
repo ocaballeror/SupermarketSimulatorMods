@@ -29,9 +29,10 @@
  * "Handled by someone else" uses the same checks as the notebook's "worked on by" label
  * (OrderNotebook.UpdateWorkedStatus): CourierManager.TryGetClaimStatus (a courier claimed it / is out
  * delivering it) and, online, NetworkOrderManager.IsBeingWorkedOn(id, ownUserId, out by) (another
- * player). Only a product the order still needs is capped. A product that isn't part of the order (or that the
- * bag already holds enough of) is not limited: the burst fills the bag like the crate does (v0.2.4; before, such a
- * click was swallowed silently, which looked like "shift-click does nothing" to the player).
+ * player). Rule: a product the order wants and still needs is capped at what it needs; a product the order wants
+ * and the bag already has in full gets no burst (the click is swallowed with the game's "paper bag is full" popup);
+ * a product that isn't part of the order is not limited and fills the bag like the crate (v0.2.4; before, every
+ * such click was swallowed silently, which looked like "shift-click does nothing" to the player).
  */
 using System;
 using HarmonyLib;
@@ -65,6 +66,13 @@ internal static class BagBulk
     {
         if (!Plugin.PaperBags || !(take ? Plugin.BulkTake : Plugin.BulkPlace)) return false;
         if (!Bulk.ModifierHeld()) return false;
+        // A burst of this interaction is running: ignore the click (the vanilla hold flag must not start, and a restart
+        // could change the limit mid-way). A stale burst is ended by Tick.
+        if (_active != null && Bulk.Same(_active.Oi, oi))
+        {
+            Bulk.Info($"bag {(take ? "take" : "place")}: ignored (a transfer is running)");
+            return true;
+        }
         // From here on the player asked for a bulk move: say why one doesn't start (the first in-game test
         // showed no bag burst at all and no clue why).
         string why = Refusal(oi, take);
@@ -85,11 +93,14 @@ internal static class BagBulk
             var order = ActiveOrder(oi, bag, out string orderWhy);
             if (order != null)
             {
-                int wanted = 0;
-                var od = order.GetOrderDataOfId(pid);
-                if (od != null) wanted = od.ProductCount;
+                int wanted = WantedOf(order, pid);
                 int needed = Math.Max(0, wanted - CountInBag(bag, pid));
-                if (needed > 0)
+                if (wanted == 0)
+                {
+                    // Not part of the order: same as the crate, fill the bag.
+                    orderNote = $", order #{order.ID} doesn't contain product {pid}: filling the bag";
+                }
+                else if (needed > 0)
                 {
                     // The order still needs this product: take exactly what it needs.
                     limit = needed;
@@ -97,8 +108,10 @@ internal static class BagBulk
                 }
                 else
                 {
-                    // Not part of the order (or already complete): same as the crate, fill the bag.
-                    orderNote = $", order #{order.ID} {(wanted == 0 ? "doesn't contain" : "already has enough of")} product {pid}: filling the bag";
+                    // The order wants this product and the bag already has all of it: take nothing, but say so.
+                    Bulk.Info($"bag take: not started (order #{order.ID} already has all {wanted} of product {pid})");
+                    Warn();
+                    return true;
                 }
             }
             else orderNote = $", no active order ({orderWhy}): filling the bag";
@@ -194,6 +207,27 @@ internal static class BagBulk
 
     private static bool IsRealOrder(OrderListData o) =>
         o != null && o.ID > 0 && o.OrderItems != null && o.OrderItems.Count > 0;
+
+    /// <summary>Total quantity of a product over all entries of the order (an entry per product is assumed, but not relied on).</summary>
+    private static int WantedOf(OrderListData order, int pid)
+    {
+        int n = 0;
+        var items = order.OrderItems;
+        for (int i = 0; items != null && i < items.Count; i++)
+            if (items[i] != null && items[i].ProductID == pid) n += items[i].ProductCount;
+        return n;
+    }
+
+    /// <summary>The game's "paper bag is full" popup: the only fitting warning, shown when the order already has all it wants of the product.</summary>
+    private static void Warn()
+    {
+        try
+        {
+            if (NoktaSingletonPunCallbacks<WarningSystem>.HasInstance)
+                NoktaSingletonPunCallbacks<WarningSystem>.Instance.RaiseInteractionWarning(InteractionWarningType.FULL_PAPERBAG, new string[0]);
+        }
+        catch (Exception e) { Bulk.Error("warning popup", e); }
+    }
 
     private static int CountInBag(OrderPaperBag bag, int pid)
     {
