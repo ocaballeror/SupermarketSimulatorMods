@@ -5,6 +5,7 @@ Improvement #9 (`TODO`). Modifier (LeftShift) + Take/Use moves every product bet
 
 ## Status
 
+- v0.2.4 (user finding after the 2026-11-27 session, verbose logging was off so the log has no `[Bulk]` lines): "shift-click to/from the paper bag does nothing". Cause found for the take direction: with an order in the notebook (`nb.CurrentOrder` is also set when the player only has the notebook open), a product not in that order, or already complete, got `limit == 0` and the click was swallowed silently (`bag take: nothing to do`). Now only a product the order still needs is capped (to what it needs); anything else fills the bag like the crate (no limit; `bag take: start ... filling the bag`). For the place direction (no order logic at all) no static defect was found in `OnlineOrderInteraction.OnUse`/`PlaceProductToDisplay`/`Refusal` (traced in the native dump); if it still fails, the `bag place: not started (<reason>)` line says why (needs VerboseLogging).
 - Review round 2 (docs only): README now states that an order another player views counts as "worked on" (game's own `IsBeingWorkedOn` signal), so co-op players on the same order lose the cap; no stronger signal checked.
 - v0.2.3 (review round 1 of Improvement #9): a bag place burst now ends quietly when the bag has no product left for the slot (`!bag.IsTargetProductExist(slot)` in the quiet end checks), so a mixed bag no longer ends with the game's "no matching product" warning; a box or bag burst is finished as stale when its interaction's `Update` hasn't run for 1 s (container thrown / put away mid-burst, then picked up again); `Plugin.AnimationSpeed` is `static readonly` (CS0162 warning); doc fixes (0.02 s interval, second-click behaviour).
 - v0.2.2: only the `SecondsBetweenItems` value change back to 0.02 (see below).
@@ -41,7 +42,7 @@ Improvement #9 (`TODO`). Modifier (LeftShift) + Take/Use moves every product bet
   the game's own `CheckTakeProductFromSlot` + `TryTakeProductFromSlot` / `CheckPlaceProductToSlot` +
   `TryPlaceProductToDisplay(Vector3)`, one per `SecondsBetweenItems` (const 0.02 s). Capped up front at
   min(available, room) from local state.
-- **Bag order cap:** `Burst.Limit` = order quantity of the slot's product (`OrderListData.GetOrderDataOfId(pid).ProductCount`) minus that product's count in `bag.m_SortedProducts`; -1 without an active order.
+- **Bag order cap:** `Burst.Limit` (only when the order still needs the product; otherwise -1 = fill) = order quantity of the slot's product (`OrderListData.GetOrderDataOfId(pid).ProductCount`) minus that product's count in `bag.m_SortedProducts`; -1 without an active order.
 - **Bag steps** (`OnlineOrderInteraction.Update` prefix): `OnlineOrderService.TryTakeProductIntoBag(slot, bag,
   m_MaxBagItemCount, pos, m_TakeProductBroadcast)` until status != Success / `PlaceProductToDisplay()` until the
   bag count stops changing.
@@ -102,7 +103,7 @@ Applied:
    Shift+left click on an empty or same-product slot -> slot fills until full/box empty. Try a wrong product
    (warning, nothing moves) and a full box (game's warning).
 2. Same with a paper bag (online order) and with the crate.
-2b. Paper bag with an order selected in the notebook (or a tagged bag) that needs, say, 3 of a product: Shift + right click on a slot with 10 takes exactly 3 (`... order #N ... needs 3 more`, `stopped (order has what it needs)`). Again on the same slot: nothing happens (`nothing to do (order #N already has enough ...)`). A product not in the order: nothing happens. An order being packed by the other player or claimed by a courier: fills the bag (`no active order (order #N is being packed by ...)`). If nothing happens at all, send the `bag ...: not started (...)` lines.
+2b. Paper bag with an order selected in the notebook (or a tagged bag) that needs, say, 3 of a product: Shift + right click on a slot with 10 takes exactly 3 (`... order #N ... needs 3 more`, `stopped (order has what it needs)`). Again on the same slot, or on a product not in the order: the bag is filled like with the crate (`... filling the bag`). Shift + left click on a slot of a product the bag holds: puts them all back (`bag place: ...`). An order being packed by the other player or claimed by a courier: fills the bag (`no active order (order #N is being packed by ...)`). If nothing happens at all, send the `bag ...: not started (...)` lines.
 3. Multiplayer, guest with the mod, host without: box take/place, check counts on both screens (no overfilled box).
    Right after a guest burst, try to drop/throw the box and to click again: should be ignored briefly
    (`waiting for the host ... ignored` lines), then work.

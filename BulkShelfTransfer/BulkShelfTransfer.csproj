@@ -4,7 +4,7 @@
     <TargetFramework>net6.0</TargetFramework>
     <AssemblyName>BulkShelfTransfer</AssemblyName>
     <RootNamespace>BulkShelfTransfer</RootNamespace>
-    <Version>0.2.3</Version>
+    <Version>0.2.4</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

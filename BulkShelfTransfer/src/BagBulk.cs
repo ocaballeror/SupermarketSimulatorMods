@@ -29,8 +29,9 @@
  * "Handled by someone else" uses the same checks as the notebook's "worked on by" label
  * (OrderNotebook.UpdateWorkedStatus): CourierManager.TryGetClaimStatus (a courier claimed it / is out
  * delivering it) and, online, NetworkOrderManager.IsBeingWorkedOn(id, ownUserId, out by) (another
- * player). An active order that doesn't contain the slot's product, or already has enough of it in the
- * bag, gets no burst: the click is swallowed (nothing to do).
+ * player). Only a product the order still needs is capped. A product that isn't part of the order (or that the
+ * bag already holds enough of) is not limited: the burst fills the bag like the crate does (v0.2.4; before, such a
+ * click was swallowed silently, which looked like "shift-click does nothing" to the player).
  */
 using System;
 using HarmonyLib;
@@ -76,7 +77,7 @@ internal static class BagBulk
 
         var bag = oi.m_CurrentOrderPaperBag;
         var slot = oi.m_CurrentDisplaySlot;
-        int limit = -1;
+        int limit = -1;   // -1 = as many as the bag holds
         string orderNote = "";
         if (take)
         {
@@ -87,13 +88,17 @@ internal static class BagBulk
                 int wanted = 0;
                 var od = order.GetOrderDataOfId(pid);
                 if (od != null) wanted = od.ProductCount;
-                limit = Math.Max(0, wanted - CountInBag(bag, pid));
-                orderNote = $", order #{order.ID} ({order.CustomerName}) needs {limit} more of product {pid}";
-                if (limit == 0)
+                int needed = Math.Max(0, wanted - CountInBag(bag, pid));
+                if (needed > 0)
                 {
-                    // Swallow the click: the vanilla take would add one (or, held, keep adding) beyond the order.
-                    Bulk.Info($"bag take: nothing to do (order #{order.ID} {(wanted == 0 ? "doesn't contain" : "already has enough of")} product {pid})");
-                    return true;
+                    // The order still needs this product: take exactly what it needs.
+                    limit = needed;
+                    orderNote = $", order #{order.ID} ({order.CustomerName}) needs {needed} more of product {pid}";
+                }
+                else
+                {
+                    // Not part of the order (or already complete): same as the crate, fill the bag.
+                    orderNote = $", order #{order.ID} {(wanted == 0 ? "doesn't contain" : "already has enough of")} product {pid}: filling the bag";
                 }
             }
             else orderNote = $", no active order ({orderWhy}): filling the bag";

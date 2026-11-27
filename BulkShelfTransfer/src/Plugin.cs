@@ -13,7 +13,7 @@ public class Plugin : BasePlugin
 {
     public const string Guid = "flamboyanthopper.bulkshelftransfer";
     public const string Name = "Bulk Shelf Transfer";
-    public const string Version = "0.2.3";
+    public const string Version = "0.2.4";
 
     internal static ManualLogSource Logger;
 
