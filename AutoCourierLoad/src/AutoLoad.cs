@@ -47,7 +47,7 @@ namespace AutoCourierLoad;
 ///    area hands it back to the master.
 ///  - An order's deadline: OrderListData.HasExpiration, ExpirationDay, ExpirationTime (game seconds of the
 ///    day, same axis as DayCycleManager.CurrentTime). The countdown on the note (OrderTimeDisplay.Update) is
-///    (ExpirationTime - CurrentTime) in game seconds, plus OrderManager.m_DayEndTime (46800) when
+///    (ExpirationTime - CurrentTime) in game seconds, plus OrderTimeDisplay.m_DayEndTime (46800, same value as OrderManager's) when
 ///    ExpirationDay is after the current day, divided by DayCycleManager.GameTimeScale = real seconds, shown
 ///    as MM:SS (yellow under 240 s, red under 120 s). OnlineOrderCustomer.CheckExpiration expires the order
 ///    when that reaches zero. "Less than a minute left" in this mod is that same number.
@@ -129,6 +129,8 @@ internal static class AutoLoad
     private static readonly Dictionary<int, Vector3> s_ignored = new();
     /// <summary>Bags a player took back out of a trunk: instance id -> that courier's park spot. Ignored until the bag has been farther than ScanRadius from it.</summary>
     private static readonly Dictionary<int, Vector3> s_takenBack = new();
+    /// <summary>Couriers (by pointer) that hold at least one bag this mod loaded and haven't been dispatched since; the idle watch gives them a visit again so the leave rules keep applying.</summary>
+    private static readonly HashSet<IntPtr> s_modLoaded = new();
     private static float s_next;
     private static float s_nextIdleWatch;
     private static readonly Dictionary<string, float> s_errorLoggedAt = new();
@@ -138,6 +140,7 @@ internal static class AutoLoad
         s_visits.Clear();
         s_ignored.Clear();
         s_takenBack.Clear();
+        s_modLoaded.Clear();
         s_nextIdleWatch = 0f;
         s_errorLoggedAt.Clear();
     }
@@ -275,6 +278,19 @@ internal static class AutoLoad
                 if (v.Ptr == c.Pointer) { has = true; break; }
             if (has) continue;
 
+            // A courier still holding bags the mod loaded whose visit was dropped (short state switch, error): resume
+            // watching so the leave rules (all covered, under a minute, full) still apply.
+            if (s_modLoaded.Contains(c.Pointer))
+            {
+                if (c.IsDispatched || c.ParcelCount <= 0) { s_modLoaded.Remove(c.Pointer); continue; }
+                if (IsIdle(c) && c.IsAvailableForHandOver)
+                {
+                    s_visits.Add(new Visit { Courier = c, Ptr = c.Pointer, ArmedAt = now, Loaded = 1, LastLoadAt = now - DepartDelay });
+                    Log($"courier #{c.EmployeeId} still holds {c.ParcelCount} bag(s) the mod loaded; watching the leave rules again");
+                }
+                continue;
+            }
+
             // Same readiness ReceiveBag demands.
             if (!IsIdle(c) || c.IsDispatched || !c.IsAvailableForHandOver) continue;
             if (c.ParcelCount >= Capacity(c) || c.IsFull) continue;
@@ -305,6 +321,7 @@ internal static class AutoLoad
         {
             if (c.IsDispatched || !idle)
             {
+                if (c.IsDispatched) s_modLoaded.Remove(v.Ptr);
                 Log($"courier #{c.EmployeeId} left or got busy; visit over ({v.Loaded} bag(s) loaded)");
                 return false;
             }
@@ -497,6 +514,7 @@ internal static class AutoLoad
             if (Load(c, cand, cap))
             {
                 v.Loaded++;
+                s_modLoaded.Add(v.Ptr);
                 v.LastLoadAt = now;
                 v.FirstSeen.Remove(cand.Bag.GetInstanceID());
             }
